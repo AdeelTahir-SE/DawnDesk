@@ -63,17 +63,24 @@ Visualize your output. See where your time goes and optimize your workflow.
 
 ## 🚀 Upcoming Features
 
-🎨 **Local Photoshop** *(Coming Soon)*  
-Built-in image editor. Crop, resize, filter, and edit images without leaving DawnDesk.
+### Rust Sub-Apps Roadmap
 
-🎬 **Video Editor** *(Coming Soon)*  
-Create, trim, and edit videos directly in your workspace.
+> Sub-apps are currently in planning/early development.  
+> **Important:** Rust sub-app modules are not working yet in production.
 
-🤖 **AI Assistant** *(Coming Soon)*  
-Smart suggestions, automated task generation, and intelligent insights.
+| Sub-App | Link | Status | Planned Version | Description |
+|---------|------|--------|-----------------|-------------|
+| Photo Editor | [dawndesk-photo](./src-tauri/src/sub-apps/photo-editor) | Planned | v0.1.0-alpha | Layer-based image editing: crop, resize, filters, export presets. |
+| Video Editor | [dawndesk-video](./src-tauri/src/sub-apps/video-editor) | Planned | v0.1.0-alpha | Timeline editing with trim, split, transitions, and local rendering. |
+| AI Assistant | [dawndesk-ai](./src-tauri/src/sub-apps/ai-assistant) | Planned | v0.1.0-alpha | Task suggestions, content drafting, and productivity insights inside DawnDesk. |
+| Workflow Automation | [dawndesk-automations](./src-tauri/src/sub-apps/workflow-automation) | Planned | v0.1.0-alpha | Visual workflow builder for recurring automations and rule-based actions. |
 
-🔄 **Workflow Automation** *(Coming Soon)*  
-Create custom workflows and automate repetitive tasks.
+### Release Notes for Sub-Apps
+
+- `Core host app`: active development.
+- `Rust sub-app runtime`: unstable and disabled by default.
+- `Versioning policy`: each sub-app follows independent semver, starting at `v0.1.0-alpha`.
+- `Compatibility target`: sub-app alpha releases will target the same minor version of DawnDesk host.
 
 
 ---
