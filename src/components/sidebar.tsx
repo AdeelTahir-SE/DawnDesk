@@ -1,11 +1,18 @@
-import { useState } from "react";
 import { NavLink } from "react-router-dom";
 
-export default function Sidebar() {
-    const [showItems, setShowItems] = useState(true);
+type SidebarProps = {
+    showItems: boolean;
+    onToggleItems: () => void;
+};
+
+export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
 
     return (
-        <aside className="fixed top-16 left-0 bottom-0 z-20  border-r border-neutral-800 bg-neutral-900 p-4 block ">
+        <aside
+            className={`fixed top-16 left-0 bottom-0 z-20 w-20 border-r border-neutral-800 bg-neutral-900 p-4 block transition-all duration-300 ${
+                showItems ? "md:w-44" : "md:w-20"
+            }`}
+        >
             <div className="mb-4 flex flex-row items-center justify-center w-full gap-6 ">
                 <div className={`text-xs uppercase tracking-[0.18em] text-white/40 ${showItems ? "hidden md:block" : "hidden"}`}>
                     Workspace
@@ -13,7 +20,7 @@ export default function Sidebar() {
                 <button
                     aria-label={showItems ? "Hide items" : "Show items"}
                     className="hidden md:inline-flex p-2 rounded-md hover:bg-neutral-800/70 transition-colors duration-150"
-                    onClick={() => setShowItems((prev) => !prev)}
+                    onClick={onToggleItems}
                     type="button"
                 >
                     <img
@@ -54,7 +61,7 @@ function SidebarLink({
                     isActive
                         ? "bg-neutral-800 text-yellow-300"
                         : "text-white/80 hover:bg-neutral-800/70 hover:text-white"
-                } gap-4 ${showItems ? "md:justify-center lg:justify-start" : "md:justify-center "}`
+                } gap-4 ${showItems ? "md:justify-start" : "md:justify-center"}`
             }
             to={to}
         >
@@ -65,7 +72,7 @@ function SidebarLink({
                         alt={`${label} icon`}
                         className={`h-5 w-5 ${isActive ? "brightness-0 invert" : " invert-[70%]"}`}
                     />
-                    <span className={showItems ? "hidden md:inline " : "hidden"}>{label}</span>
+                    <span className={showItems ? "hidden md:inline" : "hidden"}>{label}</span>
                 </>
             )}
         </NavLink>
