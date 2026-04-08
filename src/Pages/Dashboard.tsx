@@ -24,12 +24,7 @@ const kpis: KPI[] = [
     { label: "Active Tools", value: "6", change: "All healthy" },
 ];
 
-const quickActions = [
-    { label: "Open Photo Editor", to: "/photo-editor" },
-    { label: "Open Video Editor", to: "/video-editor" },
-    { label: "Open PDF Tools", to: "/pdf-tools" },
-    { label: "Open AI Workspace", to: "/ai" },
-];
+
 
 const activities: Activity[] = [
     { title: "Exported " + "Campaign Reel.mp4", time: "12 min ago" },
@@ -48,12 +43,6 @@ const storageBreakdown: StorageType[] = [
 
 const weeklyUsage = [52, 66, 61, 74, 69, 84, 72];
 
-const pinnedItems = [
-    "Brand Kit / 2026",
-    "Launch Plan / Spring",
-    "Client Notes / Aster",
-    "Draft Motion Assets",
-];
 
 export default function Dashboard() {
     return (
@@ -111,20 +100,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="xl:col-span-4 space-y-4">
-                    <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-                        <h2 className="text-lg font-semibold text-white">Quick Actions</h2>
-                        <div className="mt-4 grid grid-cols-1 gap-2">
-                            {quickActions.map((action) => (
-                                <Link
-                                    key={action.label}
-                                    to={action.to}
-                                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-white/85 transition-colors hover:bg-neutral-800"
-                                >
-                                    {action.label}
-                                </Link>
-                            ))}
-                        </div>
-                    </article>
+                    
 
                     <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
                         <h2 className="text-lg font-semibold text-white">Storage Snapshot</h2>
@@ -143,16 +119,7 @@ export default function Dashboard() {
                         </ul>
                     </article>
 
-                    <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-                        <h2 className="text-lg font-semibold text-white">Pinned Items</h2>
-                        <ul className="mt-4 space-y-2">
-                            {pinnedItems.map((name) => (
-                                <li key={name} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-white/85">
-                                    {name}
-                                </li>
-                            ))}
-                        </ul>
-                    </article>
+                   
                 </div>
             </section>
         </div>
