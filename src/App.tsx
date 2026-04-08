@@ -9,6 +9,7 @@ import VideoEditor from "./Pages/VideoEditor";
 import AI from "./Pages/AI";
 import Storage from "./Pages/Storage";
 import Loading from "./Pages/Loading";
+import PDFTools from "./Pages/PDFTools";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="ai" element={<AI />} />
         <Route path="storage" element={<Storage />} />
         <Route path="settings" element={<Settings />} />
+          <Route path="pdf-tools" element={<PDFTools />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

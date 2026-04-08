@@ -8,7 +8,7 @@ export default function AppShell() {
       <Navbar />
       <Sidebar />
 
-      <main className="pl-64 pt-16">
+      <main className="pt-16 md:pl-20 lg:pl-64">
         <div className="p-6">
           <Outlet />
         </div>

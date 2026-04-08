@@ -1,26 +1,73 @@
-import { Link } from "react-router-dom";
-export default function Sidebar() {
+import { useState } from "react";
+import { NavLink } from "react-router-dom";
 
+export default function Sidebar() {
+    const [showItems, setShowItems] = useState(true);
 
     return (
-        <aside className="fixed top-16 left-0 bottom-0 w-64 bg-neutral-900 border-r border-neutral-800 p-4 z-20">
-            <div className="text-xs uppercase tracking-[0.18em] text-white/40 mb-4">Workspace</div>
-            <nav className="space-y-2">
-                <SidebarLink icon="/sidebar/dashboard.svg" label="Dashboard" to="/dashboard" />
-                <SidebarLink icon="/sidebar/photo_editor.svg" label="Photo Editor" to="/photo-editor" />
-                <SidebarLink icon="/sidebar/video_editor.svg" label="Video Editor" to="/video-editor" />
-                <SidebarLink icon="/sidebar/ai.svg" label="AI" to="/ai" />
-                <SidebarLink icon="/sidebar/storage.svg" label="Storage" to="/storage" />
-                <SidebarLink icon="/sidebar/settings.svg" label="Settings" to="/settings" />
+        <aside className="fixed top-16 left-0 bottom-0 z-20  border-r border-neutral-800 bg-neutral-900 p-4 block ">
+            <div className="mb-4 flex flex-row items-center justify-center w-full gap-6 ">
+                <div className={`text-xs uppercase tracking-[0.18em] text-white/40 ${showItems ? "hidden md:block" : "hidden"}`}>
+                    Workspace
+                </div>
+                <button
+                    aria-label={showItems ? "Hide items" : "Show items"}
+                    className="hidden md:inline-flex p-2 rounded-md hover:bg-neutral-800/70 transition-colors duration-150"
+                    onClick={() => setShowItems((prev) => !prev)}
+                    type="button"
+                >
+                    <img
+                        src={showItems ? "/sidebar/close.svg" : "/sidebar/list.svg"}
+                        alt={showItems ? "Hide items" : "Show items"}
+                        className="h-5 w-5 filter invert"
+                    />
+                </button>
+            </div>
+            <nav className="flex flex-col items-start justify-center space-y-2">
+                <SidebarLink icon="/sidebar/dashboard.svg" label="Dashboard" to="/dashboard" showItems={showItems} />
+                <SidebarLink icon="/sidebar/file-pdf.svg" label="PDF Tools" to="/pdf-tools" showItems={showItems} />
+                <SidebarLink icon="/sidebar/photo-editor.svg" label="Photo Editor" to="/photo-editor" showItems={showItems} />
+                <SidebarLink icon="/sidebar/video-editor.svg" label="Video Editor" to="/video-editor" showItems={showItems} />
+                <SidebarLink icon="/sidebar/ai.svg" label="AI" to="/ai" showItems={showItems} />
+                <SidebarLink icon="/sidebar/storage.svg" label="Storage" to="/storage" showItems={showItems} />
+                <SidebarLink icon="/sidebar/settings.svg" label="Settings" to="/settings" showItems={showItems} />
             </nav>
         </aside>
     );
 }
 
-function SidebarLink({icon,label,to}:{icon:string,label:string,to:string}){
+function SidebarLink({
+    icon,
+    label,
+    to,
+    showItems,
+}: {
+    icon: string;
+    label: string;
+    to: string;
+    showItems: boolean;
+}) {
     return(
-        <Link className="flex flex-row items-center justify-center gap-2 " to={to}>
-            <img src={icon} alt={`${label} icon`} className="w-5 h-5" />
-            <span className="text-sm font-medium">{label}</span>
-        </Link>
-    )}
+        <NavLink
+            className={({ isActive }) =>
+                `flex flex-row items-center justify-start rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                        ? "bg-neutral-800 text-yellow-300"
+                        : "text-white/80 hover:bg-neutral-800/70 hover:text-white"
+                } gap-4 ${showItems ? "md:justify-center lg:justify-start" : "md:justify-center "}`
+            }
+            to={to}
+        >
+            {({ isActive }) => (
+                <>
+                    <img
+                        src={icon}
+                        alt={`${label} icon`}
+                        className={`h-5 w-5 ${isActive ? "brightness-0 invert" : " invert-[70%]"}`}
+                    />
+                    <span className={showItems ? "hidden md:inline " : "hidden"}>{label}</span>
+                </>
+            )}
+        </NavLink>
+    );
+}
