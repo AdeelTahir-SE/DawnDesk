@@ -10,7 +10,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![greet, sub_apps::storage::get_storage_data,sub_apps::storage::creation::create_file, sub_apps::storage::creation::create_folder, sub_apps::storage::deletion::delete_file, sub_apps::storage::deletion::delete_folder])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
