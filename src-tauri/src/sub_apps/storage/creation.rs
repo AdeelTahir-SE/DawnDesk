@@ -1,8 +1,6 @@
 use std::fs::{self, File};
-
 use tauri::AppHandle;
-
-use super::storage_root;
+use super::super::utils::{storage_root, validate_name};
 
 #[derive(serde::Deserialize)]
 pub struct CreateFilePayload {
@@ -11,17 +9,6 @@ pub struct CreateFilePayload {
     pub r#type: Option<String>,
 }
 
-fn validate_name(name: &str) -> Result<(), String> {
-    if name.trim().is_empty() {
-        return Err("Name cannot be empty".to_string());
-    }
-
-    if name.contains('/') || name.contains('\\') {
-        return Err("Name cannot contain path separators".to_string());
-    }
-
-    Ok(())
-}
 
 
 

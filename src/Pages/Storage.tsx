@@ -23,7 +23,7 @@ export default function Storage() {
     try {
       const result = await invoke<StorageData[]>("get_storage_data");
       console.log("Storage data received from Rust:", result);
-      setData(result);
+      setData(result.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Error fetching storage data:", error);
     }
@@ -136,6 +136,7 @@ export default function Storage() {
               name={item.name}
               data_type={item.data_type}
               icon={item.icon}
+              onDeleted={getData}
             />
           ))}
         </div>
@@ -144,21 +145,34 @@ export default function Storage() {
   }
 }
 
-function StorageElement({ name, data_type, icon }: StorageData) {
+function StorageElement({
+  name,
+  data_type,
+  icon,
+  onDeleted,
+}: StorageData & { onDeleted?: () => void | Promise<void> }) {
   return (
     <div className="w-full flex flex-row items-center justify-between rounded-lg bg-neutral-900/50 p-4">
       <div className="flex items-center gap-4 ">
-        <img
-          src="/file.svg"
-          alt={`${name} icon`}
-          className="h-8 w-8 filter invert"
-        />
+        <span className="text-2xl" aria-hidden="true">
+          {icon}
+        </span>
         <div>
           <div className="text-sm font-semibold text-white">{name}</div>
           <div className="text-xs text-white/60">{data_type}</div>
         </div>
       </div>
-      <button>
+      <button
+        onClick={async () => {
+          try {
+            const result = await invoke<string>("delete_file", { path: name });
+            alert(result);
+            await onDeleted?.();
+          } catch (error) {
+            alert(`Delete failed: ${String(error)}`);
+          }
+        }}
+      >
         <img src="/delete.svg" alt="View" className="h-5 w-5 filter invert" />
       </button>
     </div>
