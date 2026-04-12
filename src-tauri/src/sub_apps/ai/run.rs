@@ -13,12 +13,10 @@ use llama_cpp_4::{
 };
 
 use super::{
-    check_gguf_model_exists, check_model_exists, check_quantized_model_exists, gguf_file_path,
-    models_root, original_file_path, quantized_file_path,
+    check_quantized_model_exists, models_root, quantized_file_path,
 };
 
-/// Resolves the best available model artifact path.
-/// Priority: quantized -> gguf -> original.
+/// Resolves the quantized model artifact path.
 pub fn load_the_model_with_app(app: &AppHandle, model_name: &str) -> Result<String, String> {
     if model_name.trim().is_empty() {
         return Err("Model name cannot be empty".to_string());
@@ -27,15 +25,9 @@ pub fn load_the_model_with_app(app: &AppHandle, model_name: &str) -> Result<Stri
     if check_quantized_model_exists(app, model_name)? {
         return Ok(quantized_file_path(app, model_name)?.to_string_lossy().to_string());
     }
-    if check_gguf_model_exists(app, model_name)? {
-        return Ok(gguf_file_path(app, model_name)?.to_string_lossy().to_string());
-    }
-    if check_model_exists(app, model_name)? {
-        return Ok(original_file_path(app, model_name)?.to_string_lossy().to_string());
-    }
 
     Err(format!(
-        "Model '{}' not found in models/original|gguf|quantized",
+        "Quantized model '{}' not found in models/quantized",
         model_name
     ))
 }
@@ -66,6 +58,12 @@ pub fn chat_with_model_with_app(
 
     let model = LlamaModel::load_from_file(&backend, &model_path, &LlamaModelParams::default())
         .map_err(|e| format!("Failed to load GGUF model via llama_cpp_4: {e}"))?;
+    if !model.has_decoder() {
+        return Err(
+            "Selected model does not support text generation (decoder logits unavailable)."
+                .to_string(),
+        );
+    }
 
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(2048))

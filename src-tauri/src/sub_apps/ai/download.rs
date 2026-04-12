@@ -292,20 +292,19 @@ pub fn ai_delete_model(app: AppHandle, model_name: String) -> Result<String, Str
     Ok(format!("Deleted model '{}'", model))
 }
 
-/// Lists available model identifiers from `models/original/`.
+/// Lists available model identifiers from `models/quantized/`.
 #[tauri::command]
 pub fn ai_list_models(app: AppHandle) -> Result<Vec<String>, String> {
     ensure_model_layout(&app)?;
     let mut items = Vec::new();
-    for entry in fs::read_dir(models_root(&app)?.join("original")).map_err(|e| e.to_string())? {
+    for entry in fs::read_dir(models_root(&app)?.join("quantized")).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         if entry.path().is_file() {
             let name = entry.file_name().to_string_lossy().to_string();
-            let canonical = if name.contains('.') {
-                name.split('.').next().unwrap_or(&name).to_string()
-            } else {
-                name
-            };
+            let canonical = name
+                .trim_end_matches(".Q4_K_M.gguf")
+                .trim_end_matches(".gguf")
+                .to_string();
             items.push(canonical);
         }
     }
