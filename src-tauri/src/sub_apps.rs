@@ -5,4 +5,5 @@ pub mod todo;
 pub mod storage;
 pub mod utils;
 pub mod pdf_tools;
+pub mod settings;
 

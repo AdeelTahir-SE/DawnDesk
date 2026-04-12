@@ -10,6 +10,7 @@ import AI from "./Pages/AI";
 import Storage from "./Pages/Storage";
 import Loading from "./Pages/Loading";
 import PDFTools from "./Pages/PDFTools";
+import Todo from "./Pages/Todo";
 
 function App() {
   return (
@@ -23,7 +24,8 @@ function App() {
         <Route path="ai" element={<AI />} />
         <Route path="storage" element={<Storage />} />
         <Route path="settings" element={<Settings />} />
-          <Route path="pdf-tools" element={<PDFTools />} />
+        <Route path="pdf-tools" element={<PDFTools />} />
+        <Route path="todo" element={<Todo />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

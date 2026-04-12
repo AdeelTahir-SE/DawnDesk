@@ -8,7 +8,6 @@ pub fn convert_pdf_to_word(app: AppHandle, path: &str) -> Result<String, String>
 
     let base = storage_root(&app)?;
     let target = base.join(path);
-
     if !target.exists() {
         return Err(format!("File '{}' does not exist", path));
     }
@@ -19,5 +18,8 @@ pub fn convert_pdf_to_word(app: AppHandle, path: &str) -> Result<String, String>
     };
 
     // TODO: conversion logic can write output_name into app storage.
-    Ok(format!("File '{}' converted to Word successfully as '{}'", path, output_name))
+    Ok(format!(
+        "File '{}' converted to Word successfully as '{}'",
+        path, output_name
+    ))
 }

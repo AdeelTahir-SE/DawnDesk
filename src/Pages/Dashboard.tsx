@@ -1,6 +1,8 @@
 
 import { Link } from "react-router-dom";
-
+import { invoke } from "@tauri-apps/api/core";
+import { useState,useEffect } from "react";
+import { TodoItem } from "../utils/types";
 type KPI = {
     label: string;
     value: string;
@@ -44,7 +46,24 @@ const storageBreakdown: StorageType[] = [
 const weeklyUsage = [52, 66, 61, 74, 69, 84, 72];
 
 
+    
+
 export default function Dashboard() {
+
+    const [pendingTodos, setPendingTodos] = useState<TodoItem[]>([]);
+    async function getPendingTodos(){
+    try {
+        const result = await invoke<TodoItem[]>("get_pending_todos");
+        console.log("Pending todos from Rust:", result);
+        setPendingTodos(result);
+    } catch (error) {
+        console.error("Error fetching pending todos:", error);
+    }
+}
+useEffect(() => {
+    getPendingTodos();
+}, []);
+
     return (
         <div className="p-8 mx-auto w-full max-w-7xl space-y-6">
             <section className="rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6">
@@ -67,6 +86,56 @@ export default function Dashboard() {
 
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
                 <div className="xl:col-span-8 space-y-4">
+
+                            <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <h2 className="text-lg font-semibold text-white">Latest Pending Tasks</h2>
+                                                        <p className="mt-1 text-xs text-white/50">Track your newest todo items at a glance</p>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs font-semibold text-yellow-300">
+                                                            {pendingTodos.length} items
+                                                        </span>
+                                                        <Link
+                                                            to="/todo"
+                                                            className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-semibold text-white/80 transition-colors hover:bg-neutral-800 hover:text-white"
+                                                        >
+                                                            Open Todo
+                                                        </Link>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/60">
+                                                    {pendingTodos && pendingTodos.length > 0 ? (
+                                                        <ul className="divide-y divide-neutral-800">
+                                                            {pendingTodos.map((item) => (
+                                                                <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                                                                    <div className="min-w-0">
+                                                                        <p className="truncate text-sm font-medium text-white/90">{item.title}</p>
+                                                                        <p className="mt-1 text-xs text-white/45">Task #{item.id}</p>
+                                                                    </div>
+
+                                                                    <span
+                                                                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                                            item.completed
+                                                                                ? "bg-green-500/10 text-green-300"
+                                                                                : "bg-yellow-500/10 text-yellow-300"
+                                                                        }`}
+                                                                    >
+                                                                        {item.completed ? "Completed" : "Pending"}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : (
+                                                        <div className="px-4 py-6 text-sm text-white/60">
+                                                            No pending tasks right now. Create one from the Todo page to keep track of it here.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                        </article>
                     <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
                         <div className="flex items-center justify-between">
                             <h2 className="text-lg font-semibold text-white">Productivity (7 Days)</h2>
@@ -86,17 +155,7 @@ export default function Dashboard() {
                         </div>
                     </article>
 
-                    <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-                        <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-                        <ul className="mt-4 space-y-3">
-                            {activities.map((item) => (
-                                <li key={item.title} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                                    <span className="text-sm text-white/85">{item.title}</span>
-                                    <span className="text-xs text-white/50">{item.time}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </article>
+                    
                 </div>
 
                 <div className="xl:col-span-4 space-y-4">
@@ -118,6 +177,17 @@ export default function Dashboard() {
                             ))}
                         </ul>
                     </article>
+                                  <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
+                        <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+                        <ul className="mt-4 space-y-3">
+                            {activities.map((item) => (
+                                <li key={item.title} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
+                                    <span className="text-sm text-white/85">{item.title}</span>
+                                    <span className="text-xs text-white/50">{item.time}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </article>  
 
                    
                 </div>

@@ -1,6 +1,6 @@
+use super::utils::storage_root;
 use std::fs;
-use super::utils::{storage_root};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 pub mod creation;
 pub mod deletion;
@@ -11,10 +11,6 @@ pub struct StorageData {
     pub data_type: String,
     pub icon: String,
 }
-
-
-
-
 
 #[tauri::command]
 pub fn get_storage_data(app: AppHandle) -> Result<Vec<StorageData>, String> {
@@ -42,4 +38,3 @@ pub fn get_storage_data(app: AppHandle) -> Result<Vec<StorageData>, String> {
 
     Ok(storage_data)
 }
-
