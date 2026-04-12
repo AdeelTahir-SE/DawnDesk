@@ -30,6 +30,12 @@ type DownloadProgress = {
     percent?: number;
 };
 
+type PipelineProgress = {
+    model_name: string;
+    stage: string;
+    percent: number;
+};
+
 export default function AI() {
     const isTauri = "__TAURI_INTERNALS__" in window;
     const [models, setModels] = useState<string[]>([]);
@@ -46,6 +52,9 @@ export default function AI() {
 
     const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
     const [downloadPercent, setDownloadPercent] = useState<number>(0);
+    const [pipelineStage, setPipelineStage] = useState<string | null>(null);
+    const [pipelinePercent, setPipelinePercent] = useState<number>(0);
+    const [lastDownloadLink, setLastDownloadLink] = useState<Record<string, string>>({});
 
     const activeThread = useMemo(
         () => threads.find((t) => t.id === activeChatId) ?? null,
@@ -86,6 +95,8 @@ export default function AI() {
 
         let unlistenProgress: (() => void) | undefined;
         let unlistenComplete: (() => void) | undefined;
+        let unlistenStopped: (() => void) | undefined;
+        let unlistenPipeline: (() => void) | undefined;
 
         (async () => {
             try {
@@ -103,6 +114,15 @@ export default function AI() {
                     setDownloadPercent(100);
                     void loadModelsAndRecommended();
                 });
+
+                unlistenStopped = await listen<DownloadProgress>("ai://download-stopped", () => {
+                    setDownloadingModel(null);
+                });
+
+                unlistenPipeline = await listen<PipelineProgress>("ai://pipeline-progress", (event) => {
+                    setPipelineStage(event.payload.stage);
+                    setPipelinePercent(event.payload.percent ?? 0);
+                });
             } catch (e) {
                 setError(e instanceof Error ? e.message : String(e));
             }
@@ -114,6 +134,12 @@ export default function AI() {
             }
             if (unlistenComplete) {
                 unlistenComplete();
+            }
+            if (unlistenStopped) {
+                unlistenStopped();
+            }
+            if (unlistenPipeline) {
+                unlistenPipeline();
             }
         };
     }, []);
@@ -196,6 +222,9 @@ export default function AI() {
         try {
             setError(null);
             setDownloadingModel(item.model_name);
+            setPipelineStage(null);
+            setPipelinePercent(0);
+            setLastDownloadLink((prev) => ({ ...prev, [item.model_name]: item.file_url }));
             await invoke<string>("ai_download_model", {
                 modelLink: item.file_url,
                 modelName: item.model_name,
@@ -208,13 +237,59 @@ export default function AI() {
         }
     }
 
+    async function stopDownload() {
+        if (!downloadingModel) {
+            return;
+        }
+        try {
+            await invoke<string>("ai_stop_model_download", { modelName: downloadingModel });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+    }
+
+    async function resumeDownload(modelName: string) {
+        const link = lastDownloadLink[modelName] || recommended.find((m) => m.model_name === modelName)?.file_url;
+        if (!link) {
+            setError("No download link available for resume.");
+            return;
+        }
+        try {
+            setDownloadingModel(modelName);
+            await invoke<string>("ai_resume_model_download", {
+                modelLink: link,
+                modelName,
+            });
+            await loadModelsAndRecommended();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+            setDownloadingModel(null);
+        }
+    }
+
+    async function deleteModel(modelName: string) {
+        if (!window.confirm(`Delete model ${modelName}?`)) {
+            return;
+        }
+        try {
+            await invoke<string>("ai_delete_model", { modelName });
+            if (selectedModel === modelName) {
+                setSelectedModel("");
+            }
+            await loadModelsAndRecommended();
+            await loadThreads();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+    }
+
     if (!isTauri) {
         return <div className="p-8 text-white">Run this page in Tauri: npm run tauri dev</div>;
     }
 
     return (
         <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden text-white">
-            <aside className="w-80 shrink-0 border-r border-neutral-800 bg-neutral-950 p-4">
+            <aside className="w-80 shrink-0 border-r border-neutral-800 bg-neutral-950 p-4 overflow-y-scroll">
                 <button
                     type="button"
                     onClick={createChat}
@@ -260,8 +335,57 @@ export default function AI() {
                             <div className="h-2 rounded bg-yellow-400" style={{ width: `${Math.max(0, Math.min(100, downloadPercent))}%` }} />
                         </div>
                         <p className="mt-1 text-xs text-white/70">{downloadPercent.toFixed(1)}%</p>
+                        <div className="mt-2 flex gap-2">
+                            <button
+                                type="button"
+                                onClick={stopDownload}
+                                className="rounded-md border border-red-500/60 px-2 py-1 text-xs text-red-200"
+                            >
+                                Stop
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void resumeDownload(downloadingModel)}
+                                className="rounded-md border border-neutral-600 px-2 py-1 text-xs text-white/80"
+                            >
+                                Resume
+                            </button>
+                        </div>
                     </div>
                 )}
+
+                {pipelineStage && (
+                    <div className="mt-3 rounded-lg border border-blue-400/30 bg-blue-400/10 p-3">
+                        <p className="text-xs text-blue-200 capitalize">{pipelineStage} progress</p>
+                        <div className="mt-2 h-2 w-full rounded bg-neutral-800">
+                            <div className="h-2 rounded bg-blue-400" style={{ width: `${Math.max(0, Math.min(100, pipelinePercent))}%` }} />
+                        </div>
+                        <p className="mt-1 text-xs text-white/70">{pipelinePercent.toFixed(1)}%</p>
+                    </div>
+                )}
+
+                <div className="mt-4 space-y-2">
+                    <p className="text-xs text-white/60">Downloaded models</p>
+                    {models.map((m) => (
+                        <div key={m} className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-2">
+                            <span className="min-w-0 flex-1 truncate text-xs text-white/85">{m}</span>
+                            <button
+                                type="button"
+                                onClick={() => void resumeDownload(m)}
+                                className="rounded-md border border-neutral-600 px-2 py-1 text-[10px]"
+                            >
+                                Resume
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void deleteModel(m)}
+                                className="rounded-md border border-red-600/70 px-2 py-1 text-[10px] text-red-200"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    ))}
+                </div>
 
                 <div className="mt-4 space-y-2 overflow-y-auto">
                     {threads.map((chat) => (
