@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEditor } from '../../engine/photo-editor/EditorContext';
-import { drawStrokeBetween, floodFill, sampleColor, hexToRGBA } from '../../engine/photo-editor/drawingTools';
+import { drawStrokeBetween, sampleColor } from '../../engine/photo-editor/drawingTools';
 import { applyAllAdjustments } from '../../engine/photo-editor/filters';
 import type { StrokePoint } from '../../engine/photo-editor/drawingTools';
 
@@ -18,6 +18,8 @@ export default function PhotoEditorCanvas() {
   const lastPoint = useRef<StrokePoint | null>(null);
   const lastPan = useRef({ x: 0, y: 0 });
   const drawCanvas = useRef<HTMLCanvasElement | null>(null);
+  const cloneSource = useRef<{ x: number; y: number } | null>(null);
+  const lassoPoints = useRef<{ x: number; y: number }[]>([]);
 
   // Selection state
   const [selStart, setSelStart] = useState<{ x: number; y: number } | null>(null);
@@ -80,9 +82,11 @@ export default function PhotoEditorCanvas() {
 
     // Apply pending adjustments for live preview
     const adj = activeDocument.pendingAdjustments;
-    const hasAdj = adj.exposure !== 0 || adj.contrast !== 0 || adj.brightness !== 0 ||
-      adj.highlights !== 0 || adj.shadows !== 0 || adj.whites !== 0 || adj.blacks !== 0 ||
-      adj.hue !== 0 || adj.saturation !== 0 || adj.lightness !== 0;
+    const hasAdj = Object.entries(adj).some(([key, value]) => {
+      if (key === 'levelsMid') return value !== 1;
+      if (key === 'levelsWhite') return value !== 255;
+      return value !== 0;
+    });
 
     if (hasAdj) {
       const adjusted = applyAllAdjustments(activeDocument.imageData, adj);
@@ -125,7 +129,17 @@ export default function PhotoEditorCanvas() {
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
 
-      if (state.selection.type === 'rect') {
+      if (state.selection.points?.length) {
+        ctx.beginPath();
+        state.selection.points.forEach((point, index) => {
+          const px = left + point.x * zoom;
+          const py = top + point.y * zoom;
+          if (index === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        if (state.selection.type === 'polygon') ctx.closePath();
+        ctx.stroke();
+      } else if (state.selection.type === 'rect') {
         ctx.strokeRect(sx, sy, sw, sh);
       } else {
         ctx.beginPath();
@@ -135,7 +149,17 @@ export default function PhotoEditorCanvas() {
 
       ctx.strokeStyle = '#000';
       ctx.lineDashOffset = -(Date.now() / 50 + 4) % 8;
-      if (state.selection.type === 'rect') {
+      if (state.selection.points?.length) {
+        ctx.beginPath();
+        state.selection.points.forEach((point, index) => {
+          const px = left + point.x * zoom;
+          const py = top + point.y * zoom;
+          if (index === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        if (state.selection.type === 'polygon') ctx.closePath();
+        ctx.stroke();
+      } else if (state.selection.type === 'rect') {
         ctx.strokeRect(sx, sy, sw, sh);
       } else {
         ctx.beginPath();
@@ -256,6 +280,7 @@ export default function PhotoEditorCanvas() {
 
       switch (state.activeTool) {
         case 'brush':
+        case 'pencil':
         case 'eraser': {
           isDrawing.current = true;
           lastPoint.current = coords;
@@ -267,7 +292,9 @@ export default function PhotoEditorCanvas() {
           tmpCtx.putImageData(activeDocument.imageData, 0, 0);
           drawCanvas.current = tmpCanvas;
 
-          const { size, hardness, opacity } = state.brushOptions;
+          const { opacity } = state.brushOptions;
+          const size = state.activeTool === 'pencil' ? 1 : state.brushOptions.size;
+          const hardness = state.activeTool === 'pencil' ? 100 : state.brushOptions.hardness;
           const color = state.activeTool === 'eraser' ? '#000' : state.foregroundColor;
           drawStrokeBetween(tmpCtx, coords, coords, size, hardness, color, opacity, state.activeTool === 'eraser');
 
@@ -278,6 +305,31 @@ export default function PhotoEditorCanvas() {
           break;
         }
 
+        case 'clone-stamp':
+        case 'healing-brush': {
+          if (e.altKey) {
+            cloneSource.current = coords;
+            break;
+          }
+          if (!cloneSource.current) break;
+          isDrawing.current = true;
+          lastPoint.current = coords;
+          const tmpCanvas = document.createElement('canvas');
+          tmpCanvas.width = activeDocument.width;
+          tmpCanvas.height = activeDocument.height;
+          const tmpCtx = tmpCanvas.getContext('2d')!;
+          tmpCtx.putImageData(activeDocument.imageData, 0, 0);
+          drawCanvas.current = tmpCanvas;
+          paintClone(tmpCtx, activeDocument.imageData, cloneSource.current, coords, state.brushOptions.size, state.activeTool === 'healing-brush');
+          break;
+        }
+
+        case 'spot-heal': {
+          const healed = spotHeal(activeDocument.imageData, coords.x, coords.y, state.brushOptions.size);
+          dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: healed, label: 'Spot Heal' } });
+          break;
+        }
+
         case 'eyedropper': {
           const color = sampleColor(activeDocument.imageData, coords.x, coords.y);
           dispatch({ type: 'SET_FOREGROUND_COLOR', payload: color });
@@ -285,17 +337,34 @@ export default function PhotoEditorCanvas() {
         }
 
         case 'gradient': {
-          const rgba = hexToRGBA(state.foregroundColor);
-          const filled = floodFill(activeDocument.imageData, coords.x, coords.y, rgba);
-          dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: filled, label: 'Fill' } });
+          isSelecting.current = true;
+          setSelStart(coords);
           break;
         }
 
+        case 'crop':
         case 'marquee-rect':
         case 'marquee-ellipse': {
           isSelecting.current = true;
           setSelStart(coords);
           dispatch({ type: 'SET_SELECTION', payload: null });
+          break;
+        }
+
+        case 'lasso':
+        case 'quick-selection': {
+          isSelecting.current = true;
+          lassoPoints.current = [coords];
+          dispatch({ type: 'SET_SELECTION', payload: null });
+          break;
+        }
+
+        case 'magic-wand': {
+          const bounds = magicWandBounds(activeDocument.imageData, coords.x, coords.y, 32);
+          dispatch({
+            type: 'SET_SELECTION',
+            payload: bounds ? { type: 'rect', ...bounds, active: true } : null,
+          });
           break;
         }
 
@@ -307,6 +376,15 @@ export default function PhotoEditorCanvas() {
 
         case 'shape-rect':
         case 'shape-ellipse': {
+          isSelecting.current = true;
+          setSelStart(coords);
+          break;
+        }
+
+        case 'line':
+        case 'pen-path':
+        case 'polygon':
+        case 'custom-shape': {
           isSelecting.current = true;
           setSelStart(coords);
           break;
@@ -340,7 +418,9 @@ export default function PhotoEditorCanvas() {
 
       if (isDrawing.current && lastPoint.current && drawCanvas.current) {
         const tmpCtx = drawCanvas.current.getContext('2d')!;
-        const { size, hardness, opacity } = state.brushOptions;
+        const { opacity } = state.brushOptions;
+        const size = state.activeTool === 'pencil' ? 1 : state.brushOptions.size;
+        const hardness = state.activeTool === 'pencil' ? 100 : state.brushOptions.hardness;
         const color = state.activeTool === 'eraser' ? '#000' : state.foregroundColor;
         drawStrokeBetween(tmpCtx, lastPoint.current, coords, size, hardness, color, opacity, state.activeTool === 'eraser');
         lastPoint.current = coords;
@@ -351,6 +431,17 @@ export default function PhotoEditorCanvas() {
             tmpCtx.getImageData(0, 0, drawCanvas.current.width, drawCanvas.current.height), 0, 0
           );
         }
+      }
+
+      if (isDrawing.current && lastPoint.current && drawCanvas.current && (state.activeTool === 'clone-stamp' || state.activeTool === 'healing-brush') && cloneSource.current) {
+        const tmpCtx = drawCanvas.current.getContext('2d')!;
+        const dx = coords.x - lastPoint.current.x;
+        const dy = coords.y - lastPoint.current.y;
+        cloneSource.current = { x: cloneSource.current.x + dx, y: cloneSource.current.y + dy };
+        paintClone(tmpCtx, activeDocument.imageData, cloneSource.current, coords, state.brushOptions.size, state.activeTool === 'healing-brush');
+        lastPoint.current = coords;
+        const renderCtx = renderCanvasRef.current?.getContext('2d');
+        if (renderCtx) renderCtx.putImageData(tmpCtx.getImageData(0, 0, drawCanvas.current.width, drawCanvas.current.height), 0, 0);
       }
 
       if (isSelecting.current && selStart) {
@@ -368,6 +459,20 @@ export default function PhotoEditorCanvas() {
             },
           });
         }
+
+        if (state.activeTool === 'crop') {
+          dispatch({ type: 'SET_CROP_STATE', payload: { active: true, x, y, width: w, height: h } });
+          dispatch({ type: 'SET_SELECTION', payload: { type: 'rect', x, y, width: w, height: h, active: true } });
+        }
+      }
+
+      if (isSelecting.current && (state.activeTool === 'lasso' || state.activeTool === 'quick-selection')) {
+        lassoPoints.current = [...lassoPoints.current, coords];
+        const bounds = boundsFromPoints(lassoPoints.current);
+        dispatch({
+          type: 'SET_SELECTION',
+          payload: { type: 'lasso', ...bounds, active: true, points: lassoPoints.current },
+        });
       }
     },
     [activeDocument, panOffset, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, selStart]
@@ -385,7 +490,7 @@ export default function PhotoEditorCanvas() {
           type: 'APPLY_TOOL_RESULT',
           payload: {
             imageData: newImageData,
-            label: state.activeTool === 'eraser' ? 'Eraser' : 'Brush Stroke',
+            label: state.activeTool === 'eraser' ? 'Eraser' : state.activeTool === 'pencil' ? 'Pencil' : state.activeTool === 'clone-stamp' ? 'Clone Stamp' : state.activeTool === 'healing-brush' ? 'Healing Brush' : 'Brush Stroke',
           },
         });
         isDrawing.current = false;
@@ -396,7 +501,13 @@ export default function PhotoEditorCanvas() {
       if (isSelecting.current) {
         isSelecting.current = false;
 
-        if ((state.activeTool === 'shape-rect' || state.activeTool === 'shape-ellipse') && selStart && activeDocument?.imageData) {
+        if (state.activeTool === 'gradient' && selStart && activeDocument?.imageData) {
+          const coords = getImageCoords(e);
+          const gradient = drawGradient(activeDocument.imageData, selStart, coords, state.foregroundColor, state.backgroundColor);
+          dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: gradient, label: 'Gradient Fill' } });
+        }
+
+        if ((state.activeTool === 'shape-rect' || state.activeTool === 'shape-ellipse' || state.activeTool === 'line' || state.activeTool === 'pen-path' || state.activeTool === 'polygon' || state.activeTool === 'custom-shape') && selStart && activeDocument?.imageData) {
           const coords = getImageCoords(e);
           const x = Math.min(selStart.x, coords.x);
           const y = Math.min(selStart.y, coords.y);
@@ -414,7 +525,16 @@ export default function PhotoEditorCanvas() {
             ctx.strokeStyle = state.shapeOptions.strokeColor;
             ctx.lineWidth = state.shapeOptions.strokeWidth;
 
-            if (state.shapeOptions.shapeType === 'rect' || state.activeTool === 'shape-rect') {
+            if (state.activeTool === 'line' || state.activeTool === 'pen-path') {
+              ctx.beginPath();
+              ctx.moveTo(selStart.x, selStart.y);
+              ctx.lineTo(coords.x, coords.y);
+              ctx.stroke();
+            } else if (state.activeTool === 'polygon' || state.activeTool === 'custom-shape') {
+              drawPolygon(ctx, x + w / 2, y + h / 2, w / 2, h / 2, state.shapeOptions.sides, state.shapeOptions.star);
+              ctx.fill();
+              if (state.shapeOptions.strokeWidth > 0) ctx.stroke();
+            } else if (state.shapeOptions.shapeType === 'rect' || state.activeTool === 'shape-rect') {
               if (state.shapeOptions.cornerRadius > 0) {
                 roundRect(ctx, x, y, w, h, state.shapeOptions.cornerRadius);
                 ctx.fill();
@@ -434,7 +554,7 @@ export default function PhotoEditorCanvas() {
               type: 'APPLY_TOOL_RESULT',
               payload: {
                 imageData: ctx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height),
-                label: state.activeTool === 'shape-rect' ? 'Rectangle' : 'Ellipse',
+                label: state.activeTool === 'line' ? 'Line' : state.activeTool === 'polygon' ? 'Polygon' : state.activeTool === 'shape-rect' ? 'Rectangle' : 'Ellipse',
               },
             });
           }
@@ -615,5 +735,144 @@ function roundRect(
   ctx.quadraticCurveTo(x, y + h, x, y + h - r);
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function boundsFromPoints(points: { x: number; y: number }[]) {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.max(...xs) - x),
+    height: Math.max(1, Math.max(...ys) - y),
+  };
+}
+
+function magicWandBounds(imageData: ImageData, startX: number, startY: number, tolerance: number) {
+  const { width, height, data } = imageData;
+  const sx = Math.round(startX);
+  const sy = Math.round(startY);
+  if (sx < 0 || sx >= width || sy < 0 || sy >= height) return null;
+
+  const startIdx = (sy * width + sx) * 4;
+  const target = [data[startIdx], data[startIdx + 1], data[startIdx + 2], data[startIdx + 3]];
+  const visited = new Uint8Array(width * height);
+  const stack = [sx, sy];
+  let minX = sx, maxX = sx, minY = sy, maxY = sy;
+
+  const matches = (idx: number) =>
+    Math.abs(data[idx] - target[0]) <= tolerance &&
+    Math.abs(data[idx + 1] - target[1]) <= tolerance &&
+    Math.abs(data[idx + 2] - target[2]) <= tolerance &&
+    Math.abs(data[idx + 3] - target[3]) <= tolerance;
+
+  while (stack.length > 0) {
+    const y = stack.pop()!;
+    const x = stack.pop()!;
+    if (x < 0 || x >= width || y < 0 || y >= height) continue;
+    const pixelIdx = y * width + x;
+    if (visited[pixelIdx]) continue;
+    visited[pixelIdx] = 1;
+    if (!matches(pixelIdx * 4)) continue;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+  }
+
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+function drawGradient(
+  imageData: ImageData,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  foreground: string,
+  background: string
+) {
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.putImageData(imageData, 0, 0);
+  const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+  gradient.addColorStop(0, foreground);
+  gradient.addColorStop(1, background);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function paintClone(
+  ctx: CanvasRenderingContext2D,
+  sourceData: ImageData,
+  source: { x: number; y: number },
+  target: { x: number; y: number },
+  size: number,
+  heal: boolean
+) {
+  const radius = Math.max(1, Math.round(size / 2));
+  const src = sourceData.data;
+  const targetData = ctx.getImageData(0, 0, sourceData.width, sourceData.height);
+  const out = targetData.data;
+
+  for (let y = -radius; y <= radius; y++) {
+    for (let x = -radius; x <= radius; x++) {
+      if (x * x + y * y > radius * radius) continue;
+      const sx = Math.round(source.x + x);
+      const sy = Math.round(source.y + y);
+      const tx = Math.round(target.x + x);
+      const ty = Math.round(target.y + y);
+      if (sx < 0 || sx >= sourceData.width || sy < 0 || sy >= sourceData.height || tx < 0 || tx >= sourceData.width || ty < 0 || ty >= sourceData.height) continue;
+      const sIdx = (sy * sourceData.width + sx) * 4;
+      const tIdx = (ty * sourceData.width + tx) * 4;
+      for (let c = 0; c < 3; c++) {
+        out[tIdx + c] = heal ? out[tIdx + c] * 0.35 + src[sIdx + c] * 0.65 : src[sIdx + c];
+      }
+      out[tIdx + 3] = src[sIdx + 3];
+    }
+  }
+
+  ctx.putImageData(targetData, 0, 0);
+}
+
+function spotHeal(imageData: ImageData, x: number, y: number, size: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.putImageData(imageData, 0, 0);
+  const radius = Math.max(2, Math.round(size / 2));
+  const sample = ctx.getImageData(
+    Math.max(0, Math.round(x - radius * 2)),
+    Math.max(0, Math.round(y - radius * 2)),
+    Math.min(imageData.width, radius * 4),
+    Math.min(imageData.height, radius * 4)
+  ).data;
+  let r = 0, g = 0, b = 0, count = 0;
+  for (let i = 0; i < sample.length; i += 4) {
+    r += sample[i]; g += sample[i + 1]; b += sample[i + 2]; count++;
+  }
+  ctx.fillStyle = `rgb(${r / count}, ${g / count}, ${b / count})`;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  return ctx.getImageData(0, 0, imageData.width, imageData.height);
+}
+
+function drawPolygon(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, sides: number, star: boolean) {
+  const count = Math.max(3, Math.min(12, Math.round(sides)));
+  const points = star ? count * 2 : count;
+  ctx.beginPath();
+  for (let i = 0; i < points; i++) {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * i) / points;
+    const scale = star && i % 2 === 1 ? 0.5 : 1;
+    const x = cx + Math.cos(angle) * rx * scale;
+    const y = cy + Math.sin(angle) * ry * scale;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
   ctx.closePath();
 }

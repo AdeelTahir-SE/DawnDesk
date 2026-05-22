@@ -5,16 +5,18 @@ interface ToolButtonProps {
   type: ToolType;
   name: string;
   shortcut: string;
+  description: string;
   isActive: boolean;
   onClick: () => void;
 }
 
-export default function ToolButton({ type, name, shortcut, isActive, onClick }: ToolButtonProps) {
+export default function ToolButton({ type, name, shortcut, description, isActive, onClick }: ToolButtonProps) {
   return (
     <button
       className={`pe-tool-btn ${isActive ? 'pe-tool-btn--active' : ''}`}
       onClick={onClick}
-      title={`${name} (${shortcut})`}
+      title={`${name} (${shortcut}) - ${description}`}
+      data-tooltip={`${name} (${shortcut}): ${description}`}
     >
       <span className="pe-tool-btn__icon">
         <ToolIcon type={type} />

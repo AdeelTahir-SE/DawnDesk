@@ -36,6 +36,13 @@ const initialState: EditorState = {
     strokeColor: '#FFFFFF',
     strokeWidth: 2,
     cornerRadius: 0,
+    sides: 6,
+    star: false,
+  },
+  exportOptions: {
+    format: 'png',
+    quality: 0.92,
+    scale: 1,
   },
   cropState: {
     active: false,
@@ -44,7 +51,10 @@ const initialState: EditorState = {
     width: 0,
     height: 0,
     aspectRatio: null,
+    straighten: 0,
   },
+  layers: [],
+  activeLayerId: null,
   selection: null,
   history: [],
   historyIndex: -1,
@@ -162,16 +172,63 @@ function flipImageData(imageData: ImageData, direction: 'horizontal' | 'vertical
   return new ImageData(dst, width, height);
 }
 
+function cropImageData(imageData: ImageData, crop: { x: number; y: number; width: number; height: number }): ImageData {
+  const x = Math.max(0, Math.floor(crop.x));
+  const y = Math.max(0, Math.floor(crop.y));
+  const width = Math.max(1, Math.min(imageData.width - x, Math.round(crop.width)));
+  const height = Math.max(1, Math.min(imageData.height - y, Math.round(crop.height)));
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.putImageData(imageData, 0, 0);
+
+  const out = document.createElement('canvas');
+  out.width = width;
+  out.height = height;
+  out.getContext('2d')!.drawImage(canvas, x, y, width, height, 0, 0, width, height);
+  return out.getContext('2d')!.getImageData(0, 0, width, height);
+}
+
+function resizeImageData(imageData: ImageData, width: number, height: number): ImageData {
+  const nextW = Math.max(1, Math.round(width));
+  const nextH = Math.max(1, Math.round(height));
+  const source = document.createElement('canvas');
+  source.width = imageData.width;
+  source.height = imageData.height;
+  source.getContext('2d')!.putImageData(imageData, 0, 0);
+
+  const out = document.createElement('canvas');
+  out.width = nextW;
+  out.height = nextH;
+  const ctx = out.getContext('2d')!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, 0, 0, nextW, nextH);
+  return ctx.getImageData(0, 0, nextW, nextH);
+}
+
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'OPEN_DOCUMENT': {
+      const baseLayer = {
+        id: `background-${action.payload.id}`,
+        name: 'Background',
+        visible: true,
+        locked: true,
+        opacity: 100,
+        blendMode: 'normal',
+        thumbnail: action.payload.thumbnail,
+      };
       // Push initial history entry for the new document
       const newState = {
         ...state,
         documents: [...state.documents, action.payload],
         activeDocumentId: action.payload.id,
+        layers: [baseLayer],
+        activeLayerId: baseLayer.id,
       };
       if (action.payload.imageData) {
         return pushHistory(newState, 'Open Image');
@@ -297,10 +354,81 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         shapeOptions: { ...state.shapeOptions, ...action.payload },
       };
 
+    case 'SET_EXPORT_OPTIONS':
+      return {
+        ...state,
+        exportOptions: { ...state.exportOptions, ...action.payload },
+      };
+
     case 'SET_CROP_STATE':
       return {
         ...state,
         cropState: { ...state.cropState, ...action.payload },
+      };
+
+    case 'APPLY_CROP': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      const crop = state.cropState;
+      if (!doc?.imageData || crop.width < 2 || crop.height < 2) return state;
+
+      const stateWithHistory = pushHistory(state, 'Crop');
+      const cropped = cropImageData(doc.imageData, crop);
+      return {
+        ...stateWithHistory,
+        cropState: { ...stateWithHistory.cropState, active: false, x: 0, y: 0, width: 0, height: 0 },
+        selection: null,
+        documents: stateWithHistory.documents.map((d) =>
+          d.id === stateWithHistory.activeDocumentId
+            ? { ...d, imageData: cropped, width: cropped.width, height: cropped.height, isDirty: true }
+            : d
+        ),
+      };
+    }
+
+    case 'RESIZE_ACTIVE_DOCUMENT': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc?.imageData) return state;
+      const stateWithHistory = pushHistory(state, 'Resize Image');
+      const resized = resizeImageData(doc.imageData, action.payload.width, action.payload.height);
+      return {
+        ...stateWithHistory,
+        documents: stateWithHistory.documents.map((d) =>
+          d.id === stateWithHistory.activeDocumentId
+            ? { ...d, imageData: resized, width: resized.width, height: resized.height, isDirty: true }
+            : d
+        ),
+      };
+    }
+
+    case 'ADD_LAYER': {
+      const layer = {
+        id: `layer-${Date.now()}`,
+        name: `Layer ${state.layers.length + 1}`,
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        thumbnail: null,
+      };
+      return { ...state, layers: [layer, ...state.layers], activeLayerId: layer.id };
+    }
+
+    case 'DELETE_ACTIVE_LAYER': {
+      const layer = state.layers.find((l) => l.id === state.activeLayerId);
+      if (!layer || layer.locked) return state;
+      const layers = state.layers.filter((l) => l.id !== layer.id);
+      return { ...state, layers, activeLayerId: layers[0]?.id ?? null };
+    }
+
+    case 'SET_ACTIVE_LAYER':
+      return { ...state, activeLayerId: action.payload };
+
+    case 'UPDATE_LAYER':
+      return {
+        ...state,
+        layers: state.layers.map((layer) =>
+          layer.id === action.payload.id ? { ...layer, ...action.payload.changes } : layer
+        ),
       };
 
     case 'SET_SHOW_TRANSFORM_CONTROLS':

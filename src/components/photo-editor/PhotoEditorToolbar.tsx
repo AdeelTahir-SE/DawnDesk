@@ -16,6 +16,7 @@ export default function PhotoEditorToolbar() {
             type={tool.type}
             name={tool.name}
             shortcut={tool.shortcut}
+            description={tool.description}
             isActive={state.activeTool === tool.type}
             onClick={() => dispatch({ type: 'SET_TOOL', payload: tool.type })}
           />

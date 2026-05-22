@@ -10,19 +10,41 @@ interface SliderDef {
   format?: (v: number) => string;
 }
 
+const signed = (v: number) => (v >= 0 ? `+${v}` : `${v}`);
+
 const LIGHT_SLIDERS: SliderDef[] = [
   { key: 'exposure', label: 'Exposure', min: -5, max: 5, step: 0.05, format: (v) => (v >= 0 ? `+${v.toFixed(2)}` : v.toFixed(2)) },
-  { key: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
-  { key: 'highlights', label: 'Highlights', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
-  { key: 'shadows', label: 'Shadows', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
-  { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
-  { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
+  { key: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1, format: signed },
+  { key: 'highlights', label: 'Highlights', min: -100, max: 100, step: 1, format: signed },
+  { key: 'shadows', label: 'Shadows', min: -100, max: 100, step: 1, format: signed },
+  { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1, format: signed },
+  { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1, format: signed },
 ];
 
 const COLOR_SLIDERS: SliderDef[] = [
-  { key: 'hue', label: 'Hue', min: -180, max: 180, step: 1, format: (v) => `${v}°` },
-  { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
-  { key: 'brightness', label: 'Brightness', min: -100, max: 100, step: 1, format: (v) => (v >= 0 ? `+${v}` : `${v}`) },
+  { key: 'hue', label: 'Hue', min: -180, max: 180, step: 1, format: (v) => `${v} deg` },
+  { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1, format: signed },
+  { key: 'brightness', label: 'Brightness', min: -100, max: 100, step: 1, format: signed },
+  { key: 'vibrance', label: 'Vibrance', min: -100, max: 100, step: 1, format: signed },
+];
+
+const LEVEL_SLIDERS: SliderDef[] = [
+  { key: 'levelsBlack', label: 'Black', min: 0, max: 254, step: 1 },
+  { key: 'levelsMid', label: 'Gamma', min: 0.1, max: 4, step: 0.05, format: (v) => v.toFixed(2) },
+  { key: 'levelsWhite', label: 'White', min: 1, max: 255, step: 1 },
+  { key: 'curveAmount', label: 'Curve', min: -100, max: 100, step: 1, format: signed },
+];
+
+const BALANCE_SLIDERS: SliderDef[] = [
+  { key: 'colorBalanceCyanRed', label: 'Cyan / Red', min: -100, max: 100, step: 1, format: signed },
+  { key: 'colorBalanceMagentaGreen', label: 'Magenta / Green', min: -100, max: 100, step: 1, format: signed },
+  { key: 'colorBalanceYellowBlue', label: 'Yellow / Blue', min: -100, max: 100, step: 1, format: signed },
+];
+
+const SELECTIVE_SLIDERS: SliderDef[] = [
+  { key: 'selectiveRed', label: 'Reds', min: -100, max: 100, step: 1, format: signed },
+  { key: 'selectiveGreen', label: 'Greens', min: -100, max: 100, step: 1, format: signed },
+  { key: 'selectiveBlue', label: 'Blues', min: -100, max: 100, step: 1, format: signed },
 ];
 
 export default function AdjustmentsPanel() {
@@ -39,14 +61,14 @@ export default function AdjustmentsPanel() {
         <span className="pe-adj-section__title">{title}</span>
         <button
           className="pe-adj-section__more"
-          title="More options"
+          title="Reset adjustments"
           onClick={() => dispatch({ type: 'RESET_ADJUSTMENTS' })}
         >
-          ···
+          ...
         </button>
       </div>
       {sliders.map((s) => {
-        const value = adjustments?.[s.key] ?? 0;
+        const value = adjustments?.[s.key] ?? (s.key === 'levelsMid' ? 1 : s.key === 'levelsWhite' ? 255 : 0);
         return (
           <div key={s.key} className="pe-adj-slider">
             <span className="pe-adj-slider__label">{s.label}</span>
@@ -73,6 +95,18 @@ export default function AdjustmentsPanel() {
     <div className="pe-adjustments">
       {renderSliderGroup('Light', LIGHT_SLIDERS)}
       {renderSliderGroup('Color', COLOR_SLIDERS)}
+      {renderSliderGroup('Levels & Curves', LEVEL_SLIDERS)}
+      {renderSliderGroup('Color Balance', BALANCE_SLIDERS)}
+      {renderSliderGroup('Selective Color', SELECTIVE_SLIDERS)}
+      <div className="pe-adj-section" style={{ padding: '8px 12px' }}>
+        <button
+          className="pe-action-button pe-action-button--primary"
+          disabled={!activeDocument}
+          onClick={() => dispatch({ type: 'COMMIT_ADJUSTMENT' })}
+        >
+          Apply Adjustments
+        </button>
+      </div>
     </div>
   );
 }

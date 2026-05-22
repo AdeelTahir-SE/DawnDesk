@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext';
 import { openImageFromDisk, calculateFitZoom } from '../engine/photo-editor/importImage';
-import { exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
+import { exportBatchToFiles, exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
+import { applyAllAdjustments } from '../engine/photo-editor/filters';
 import PhotoEditorMenuBar from '../components/photo-editor/PhotoEditorMenuBar';
 import PhotoEditorToolbar from '../components/photo-editor/PhotoEditorToolbar';
 import PhotoEditorOptionsBar from '../components/photo-editor/PhotoEditorOptionsBar';
@@ -15,6 +16,8 @@ import '../components/photo-editor/photo-editor.css';
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [integrationMessage, setIntegrationMessage] = useState<string | null>(null);
 
   // ─── Open Image Handler ───────────────────────────────────────
   const handleOpenImage = useCallback(async () => {
@@ -42,10 +45,23 @@ function PhotoEditorInner() {
   // ─── Export Handler ───────────────────────────────────────────
   const handleExport = useCallback(async () => {
     if (!activeDocument?.imageData) return;
-    const format = activeDocument.fileName.match(/\.jpe?g$/i) ? 'jpeg' as const : 'png' as const;
-    await exportImageToFile(activeDocument.imageData, activeDocument.fileName, format);
+    const { format, quality, scale } = state.exportOptions;
+    const renderedImageData = applyAllAdjustments(activeDocument.imageData, activeDocument.pendingAdjustments);
+    await exportImageToFile(renderedImageData, activeDocument.fileName, format, quality, scale);
     dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: activeDocument.id, dirty: false } });
-  }, [activeDocument, dispatch]);
+  }, [activeDocument, dispatch, state.exportOptions]);
+
+  const handleBatchExport = useCallback(async () => {
+    const { format, quality, scale } = state.exportOptions;
+    const renderedDocuments = state.documents.map((doc) => ({
+      ...doc,
+      imageData: doc.imageData ? applyAllAdjustments(doc.imageData, doc.pendingAdjustments) : null,
+    }));
+    await exportBatchToFiles(renderedDocuments, format, quality, scale);
+    state.documents.forEach((doc) => {
+      dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: doc.id, dirty: false } });
+    });
+  }, [dispatch, state.documents, state.exportOptions]);
 
   // ─── Copy to Clipboard ────────────────────────────────────────
   const handleCopyToClipboard = useCallback(async () => {
@@ -92,7 +108,8 @@ function PhotoEditorInner() {
       // Ctrl+S: Save / Export
       if (ctrl && e.key === 's') {
         e.preventDefault();
-        handleExport();
+        if (e.shiftKey) setShowExportDialog(true);
+        else handleExport();
         return;
       }
 
@@ -151,8 +168,9 @@ function PhotoEditorInner() {
       if (!ctrl && !e.altKey) {
         const toolMap: Record<string, string> = {
           v: 'move', m: 'marquee-rect', l: 'lasso', w: 'magic-wand',
-          c: 'crop', i: 'eyedropper', b: 'brush', e: 'eraser',
-          g: 'gradient', s: 'clone-stamp', t: 'text', u: 'shape-rect',
+          q: 'quick-selection', c: 'crop', i: 'eyedropper', b: 'brush',
+          n: 'pencil', e: 'eraser', g: 'gradient', s: 'clone-stamp',
+          j: 'healing-brush', k: 'spot-heal', t: 'text', u: 'shape-rect',
           h: 'hand', z: 'zoom',
         };
         const tool = toolMap[e.key.toLowerCase()];
@@ -236,6 +254,11 @@ function PhotoEditorInner() {
       <PhotoEditorMenuBar
         onOpenImage={handleOpenImage}
         onExport={handleExport}
+        onExportDialog={() => setShowExportDialog(true)}
+        onBatchExport={handleBatchExport}
+        onCopyToClipboard={handleCopyToClipboard}
+        onSendToNotes={() => setIntegrationMessage('The current image is ready to insert into DawnDesk Notes once the Notes handoff API is connected.')}
+        onSendToEmail={() => setIntegrationMessage('The current image is ready to attach to DawnDesk Mail once the Mail compose handoff API is connected.')}
         onRotate={handleRotate}
         onFlip={handleFlip}
         onApplyFilter={applyFilter}
@@ -265,6 +288,74 @@ function PhotoEditorInner() {
 
       {/* Bottom filmstrip */}
       <FilmStrip onOpenImage={handleOpenImage} />
+
+      {showExportDialog && activeDocument && (
+        <div className="pe-modal-backdrop" onMouseDown={() => setShowExportDialog(false)}>
+          <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="pe-modal__header">
+              <strong>Export Image</strong>
+              <button className="pe-modal__close" onClick={() => setShowExportDialog(false)} data-tooltip="Close the export dialog without saving.">x</button>
+            </div>
+            <label className="pe-field">
+              <span>Format</span>
+              <select
+                className="pe-options-bar__select"
+                value={state.exportOptions.format}
+                onChange={(e) => dispatch({ type: 'SET_EXPORT_OPTIONS', payload: { format: e.target.value as any } })}
+                data-tooltip="Choose the exported file format. PNG preserves transparency, JPG is widely compatible, WebP is smaller for web use."
+              >
+                <option value="png">PNG</option>
+                <option value="jpeg">JPG</option>
+                <option value="webp">WebP</option>
+              </select>
+            </label>
+            <label className="pe-field">
+              <span>Quality {Math.round(state.exportOptions.quality * 100)}%</span>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.01"
+                value={state.exportOptions.quality}
+                disabled={state.exportOptions.format === 'png'}
+                onChange={(e) => dispatch({ type: 'SET_EXPORT_OPTIONS', payload: { quality: Number(e.target.value) } })}
+                data-tooltip="Control JPG/WebP compression quality. Higher quality makes a larger file."
+              />
+            </label>
+            <label className="pe-field">
+              <span>Scale {Math.round(state.exportOptions.scale * 100)}%</span>
+              <input
+                type="range"
+                min="0.1"
+                max="2"
+                step="0.05"
+                value={state.exportOptions.scale}
+                onChange={(e) => dispatch({ type: 'SET_EXPORT_OPTIONS', payload: { scale: Number(e.target.value) } })}
+                data-tooltip="Resize the exported copy without changing the open document."
+              />
+            </label>
+            <div className="pe-modal__actions">
+              <button className="pe-action-button" onClick={handleBatchExport} data-tooltip="Export every open image tab with these settings.">Batch Export Tabs</button>
+              <button
+                className="pe-action-button pe-action-button--primary"
+                data-tooltip="Export the active image with pending adjustments included."
+                onClick={async () => {
+                  await handleExport();
+                  setShowExportDialog(false);
+                }}
+              >
+                Export
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {integrationMessage && (
+        <div className="pe-toast" onClick={() => setIntegrationMessage(null)}>
+          {integrationMessage}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
-import { applyGrayscale, applyInvert, applyBlurFast, applySharpen } from '../../engine/photo-editor/filters';
+import {
+  applyDenoise,
+  applyGrayscale,
+  applyInvert,
+  applyBlurFast,
+  applyMotionBlur,
+  applyNoise,
+  applySepia,
+  applySharpen,
+  applySmartSharpen,
+  applyVignette,
+} from '../../engine/photo-editor/filters';
 
 interface MenuBarProps {
   onOpenImage: () => void;
   onExport: () => void;
+  onExportDialog?: () => void;
+  onBatchExport?: () => void;
+  onCopyToClipboard?: () => void;
+  onSendToNotes?: () => void;
+  onSendToEmail?: () => void;
   onRotate: (deg: 90 | -90 | 180) => void;
   onFlip: (dir: 'horizontal' | 'vertical') => void;
   onApplyFilter: (name: string, fn: (data: ImageData) => ImageData) => void;
@@ -14,6 +30,7 @@ interface MenuBarProps {
 interface MenuItem {
   label: string;
   shortcut?: string;
+  description?: string;
   action?: () => void;
   separator?: boolean;
 }
@@ -24,7 +41,7 @@ interface MenuDef {
 }
 
 export default function PhotoEditorMenuBar({
-  onOpenImage, onExport, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
+  onOpenImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -45,16 +62,22 @@ export default function PhotoEditorMenuBar({
     {
       label: 'File',
       items: [
-        { label: 'Open Image...', shortcut: 'Ctrl+O', action: () => { onOpenImage(); setOpenMenu(null); } },
+        { label: 'Open Image...', shortcut: 'Ctrl+O', description: 'Import an image into a new editor tab.', action: () => { onOpenImage(); setOpenMenu(null); } },
         { separator: true, label: '' },
-        { label: 'Export As PNG/JPG', shortcut: 'Ctrl+S', action: () => { onExport(); setOpenMenu(null); } },
+        { label: 'Quick Export', shortcut: 'Ctrl+S', description: 'Save the active image using current export settings.', action: () => { onExport(); setOpenMenu(null); } },
+        { label: 'Export...', shortcut: 'Ctrl+Shift+S', description: 'Choose format, quality, and scale before exporting.', action: () => { onExportDialog?.(); setOpenMenu(null); } },
+        { label: 'Batch Export Open Tabs...', description: 'Export every open image tab with shared settings.', action: () => { onBatchExport?.(); setOpenMenu(null); } },
+        { separator: true, label: '' },
+        { label: 'Copy Image', shortcut: 'Ctrl+C', description: 'Copy the active image to the system clipboard.', action: () => { onCopyToClipboard?.(); setOpenMenu(null); } },
+        { label: 'Send to Notes', description: 'Prepare the active image for DawnDesk Notes.', action: () => { onSendToNotes?.(); setOpenMenu(null); } },
+        { label: 'Send to Email', description: 'Prepare the active image for a DawnDesk Mail attachment.', action: () => { onSendToEmail?.(); setOpenMenu(null); } },
       ],
     },
     {
       label: 'Edit',
       items: [
-        { label: 'Undo', shortcut: 'Ctrl+Z', action: () => { onUndo(); setOpenMenu(null); } },
-        { label: 'Redo', shortcut: 'Ctrl+Y', action: () => { onRedo(); setOpenMenu(null); } },
+        { label: 'Undo', shortcut: 'Ctrl+Z', description: 'Step back through recent edits.', action: () => { onUndo(); setOpenMenu(null); } },
+        { label: 'Redo', shortcut: 'Ctrl+Y', description: 'Restore the next undone edit.', action: () => { onRedo(); setOpenMenu(null); } },
       ],
     },
     {
@@ -79,12 +102,19 @@ export default function PhotoEditorMenuBar({
     {
       label: 'Filters',
       items: [
-        { label: 'Grayscale', action: () => { onApplyFilter('Grayscale', applyGrayscale); setOpenMenu(null); } },
-        { label: 'Invert Colors', action: () => { onApplyFilter('Invert', applyInvert); setOpenMenu(null); } },
+        { label: 'Grayscale', description: 'Convert the image to black and white.', action: () => { onApplyFilter('Grayscale', applyGrayscale); setOpenMenu(null); } },
+        { label: 'Sepia Tone', description: 'Apply a warm vintage brown tone.', action: () => { onApplyFilter('Sepia', applySepia); setOpenMenu(null); } },
+        { label: 'Invert Colors', description: 'Flip all colors to their opposite values.', action: () => { onApplyFilter('Invert', applyInvert); setOpenMenu(null); } },
+        { label: 'Vignette', description: 'Darken the edges to pull attention inward.', action: () => { onApplyFilter('Vignette', (d) => applyVignette(d, 45)); setOpenMenu(null); } },
         { separator: true, label: '' },
         { label: 'Blur (Radius 3)', action: () => { onApplyFilter('Blur', (d) => applyBlurFast(d, 3)); setOpenMenu(null); } },
         { label: 'Blur (Radius 8)', action: () => { onApplyFilter('Blur', (d) => applyBlurFast(d, 8)); setOpenMenu(null); } },
+        { label: 'Motion Blur', action: () => { onApplyFilter('Motion Blur', (d) => applyMotionBlur(d, 12, 0)); setOpenMenu(null); } },
         { label: 'Sharpen', action: () => { onApplyFilter('Sharpen', (d) => applySharpen(d, 50)); setOpenMenu(null); } },
+        { label: 'Smart Sharpen', action: () => { onApplyFilter('Smart Sharpen', (d) => applySmartSharpen(d, 65)); setOpenMenu(null); } },
+        { separator: true, label: '' },
+        { label: 'Add Noise', action: () => { onApplyFilter('Add Noise', (d) => applyNoise(d, 18)); setOpenMenu(null); } },
+        { label: 'Reduce Noise', action: () => { onApplyFilter('Reduce Noise', applyDenoise); setOpenMenu(null); } },
       ],
     },
     {
@@ -106,6 +136,7 @@ export default function PhotoEditorMenuBar({
             className="pe-menu-bar__item"
             onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}
             onMouseEnter={() => openMenu && setOpenMenu(menu.label)}
+            data-tooltip={`Open ${menu.label} commands.`}
             style={openMenu === menu.label ? { background: 'var(--pe-bg-active)', color: 'var(--pe-text-primary)' } : undefined}
           >
             {menu.label}
@@ -140,6 +171,8 @@ export default function PhotoEditorMenuBar({
                   <button
                     key={idx}
                     onClick={item.action}
+                    title={item.description ? `${item.label}: ${item.description}` : item.label}
+                    data-tooltip={item.description ? `${item.label}: ${item.description}` : item.label}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -181,14 +214,16 @@ export default function PhotoEditorMenuBar({
         className="pe-menu-bar__item"
         onClick={onOpenImage}
         title="Open Image (Ctrl+O)"
+        data-tooltip="Open or import an image into the editor."
         style={{ color: 'var(--pe-text-primary)' }}
       >
         📂 Open
       </button>
       <button
         className="pe-menu-bar__item"
-        onClick={onExport}
+        onClick={onExportDialog ?? onExport}
         title="Export (Ctrl+S)"
+        data-tooltip="Export the active image with format and quality options."
         style={{
           background: 'var(--pe-accent)',
           color: '#000',

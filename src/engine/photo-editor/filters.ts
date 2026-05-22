@@ -67,6 +67,93 @@ export function applyHueSaturation(
   return new ImageData(data, imageData.width, imageData.height);
 }
 
+export function applyLevels(imageData: ImageData, black: number, mid: number, white: number): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const inBlack = Math.max(0, Math.min(254, black));
+  const inWhite = Math.max(inBlack + 1, Math.min(255, white));
+  const gamma = Math.max(0.1, Math.min(9.99, mid));
+
+  for (let i = 0; i < data.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const normalized = Math.max(0, Math.min(1, (data[i + c] - inBlack) / (inWhite - inBlack)));
+      data[i + c] = Math.pow(normalized, 1 / gamma) * 255;
+    }
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applyCurve(imageData: ImageData, amount: number): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const strength = Math.max(-1, Math.min(1, amount / 100));
+
+  for (let i = 0; i < data.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const x = data[i + c] / 255;
+      const sCurve = x * x * (3 - 2 * x);
+      const inverted = x + (x - sCurve);
+      const y = strength >= 0
+        ? x + (sCurve - x) * strength
+        : x + (inverted - x) * -strength;
+      data[i + c] = Math.max(0, Math.min(255, y * 255));
+    }
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applyColorBalance(imageData: ImageData, cyanRed: number, magentaGreen: number, yellowBlue: number): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const rShift = cyanRed * 1.28;
+  const gShift = magentaGreen * 1.28;
+  const bShift = yellowBlue * 1.28;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const luma = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+    const midtoneMask = 1 - Math.abs(luma - 0.5) * 1.4;
+    const mask = Math.max(0.25, Math.min(1, midtoneMask));
+    data[i] = Math.max(0, Math.min(255, data[i] + rShift * mask));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + gShift * mask));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + bShift * mask));
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applyVibrance(imageData: ImageData, vibrance: number): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const factor = vibrance / 100;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const skinHue = h > 0.03 && h < 0.13;
+    const protection = skinHue ? 0.55 : 1;
+    const boost = (1 - s) * factor * protection;
+    const newS = Math.max(0, Math.min(1, s + boost));
+    const [r, g, b] = hslToRgb(h, newS, l);
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applySelectiveColor(imageData: ImageData, red: number, green: number, blue: number): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const shifts = [red / 100, green / 100, blue / 100];
+
+  for (let i = 0; i < data.length; i += 4) {
+    const total = data[i] + data[i + 1] + data[i + 2] || 1;
+    for (let c = 0; c < 3; c++) {
+      const dominance = data[i + c] / total;
+      data[i + c] = Math.max(0, Math.min(255, data[i + c] + 90 * shifts[c] * dominance));
+    }
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
 // ─── Filters ──────────────────────────────────────────────────────────────────
 
 export function applyGrayscale(imageData: ImageData): ImageData {
@@ -104,6 +191,80 @@ export function applySepia(imageData: ImageData): ImageData {
   }
 
   return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applyVignette(imageData: ImageData, amount = 45): ImageData {
+  const { width, height } = imageData;
+  const data = new Uint8ClampedArray(imageData.data);
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxDist = Math.sqrt(cx * cx + cy * cy);
+  const strength = amount / 100;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxDist;
+      const fade = 1 - Math.max(0, dist - 0.35) * strength;
+      const idx = (y * width + x) * 4;
+      data[idx] *= fade;
+      data[idx + 1] *= fade;
+      data[idx + 2] *= fade;
+    }
+  }
+
+  return new ImageData(data, width, height);
+}
+
+export function applyMotionBlur(imageData: ImageData, distance = 12, angle = 0): ImageData {
+  const { width, height, data: src } = imageData;
+  const dst = new Uint8ClampedArray(src.length);
+  const steps = Math.max(1, Math.round(distance));
+  const radians = (angle * Math.PI) / 180;
+  const dx = Math.cos(radians);
+  const dy = Math.sin(radians);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const sums = [0, 0, 0, 0];
+      let count = 0;
+      for (let step = -steps; step <= steps; step++) {
+        const sx = Math.round(x + dx * step);
+        const sy = Math.round(y + dy * step);
+        if (sx < 0 || sx >= width || sy < 0 || sy >= height) continue;
+        const idx = (sy * width + sx) * 4;
+        sums[0] += src[idx];
+        sums[1] += src[idx + 1];
+        sums[2] += src[idx + 2];
+        sums[3] += src[idx + 3];
+        count++;
+      }
+      const out = (y * width + x) * 4;
+      dst[out] = sums[0] / count;
+      dst[out + 1] = sums[1] / count;
+      dst[out + 2] = sums[2] / count;
+      dst[out + 3] = sums[3] / count;
+    }
+  }
+
+  return new ImageData(dst, width, height);
+}
+
+export function applyNoise(imageData: ImageData, amount = 18): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const range = amount * 2.55;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const n = (Math.random() - 0.5) * range;
+    data[i] = Math.max(0, Math.min(255, data[i] + n));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + n));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + n));
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applyDenoise(imageData: ImageData): ImageData {
+  return applyBlurFast(imageData, 1);
 }
 
 /**
@@ -191,6 +352,22 @@ export function applySharpen(imageData: ImageData, amount: number): ImageData {
   return new ImageData(result, imageData.width, imageData.height);
 }
 
+export function applySmartSharpen(imageData: ImageData, amount = 65): ImageData {
+  const sharpened = applySharpen(imageData, amount);
+  const src = imageData.data;
+  const out = new Uint8ClampedArray(sharpened.data);
+
+  for (let i = 0; i < src.length; i += 4) {
+    const contrast = Math.max(src[i], src[i + 1], src[i + 2]) - Math.min(src[i], src[i + 1], src[i + 2]);
+    const mask = Math.min(1, contrast / 64);
+    for (let c = 0; c < 3; c++) {
+      out[i + c] = src[i + c] + (out[i + c] - src[i + c]) * mask;
+    }
+  }
+
+  return new ImageData(out, imageData.width, imageData.height);
+}
+
 // ─── Highlights / Shadows / Whites / Blacks ───────────────────────────────────
 
 export function applyToneAdjustments(
@@ -243,18 +420,7 @@ export function applyToneAdjustments(
  */
 export function applyAllAdjustments(
   source: ImageData,
-  adjustments: {
-    exposure: number;
-    contrast: number;
-    highlights: number;
-    shadows: number;
-    whites: number;
-    blacks: number;
-    brightness: number;
-    hue: number;
-    saturation: number;
-    lightness: number;
-  }
+  adjustments: import('./types').AdjustmentState
 ): ImageData {
   let result = source;
 
@@ -270,6 +436,21 @@ export function applyAllAdjustments(
   }
   if (adjustments.hue !== 0 || adjustments.saturation !== 0 || adjustments.lightness !== 0) {
     result = applyHueSaturation(result, adjustments.hue, adjustments.saturation, adjustments.lightness);
+  }
+  if (adjustments.levelsBlack !== 0 || adjustments.levelsMid !== 1 || adjustments.levelsWhite !== 255) {
+    result = applyLevels(result, adjustments.levelsBlack, adjustments.levelsMid, adjustments.levelsWhite);
+  }
+  if (adjustments.curveAmount !== 0) {
+    result = applyCurve(result, adjustments.curveAmount);
+  }
+  if (adjustments.colorBalanceCyanRed !== 0 || adjustments.colorBalanceMagentaGreen !== 0 || adjustments.colorBalanceYellowBlue !== 0) {
+    result = applyColorBalance(result, adjustments.colorBalanceCyanRed, adjustments.colorBalanceMagentaGreen, adjustments.colorBalanceYellowBlue);
+  }
+  if (adjustments.vibrance !== 0) {
+    result = applyVibrance(result, adjustments.vibrance);
+  }
+  if (adjustments.selectiveRed !== 0 || adjustments.selectiveGreen !== 0 || adjustments.selectiveBlue !== 0) {
+    result = applySelectiveColor(result, adjustments.selectiveRed, adjustments.selectiveGreen, adjustments.selectiveBlue);
   }
 
   return result;
