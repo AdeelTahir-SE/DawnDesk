@@ -57,6 +57,26 @@ function PhotoEditorInner() {
     }
   }, [activeDocument]);
 
+  // ─── Filter & Transform Handlers ──────────────────────────────
+  const applyFilter = useCallback(
+    (name: string, fn: (data: ImageData) => ImageData) => {
+      if (!activeDocument?.imageData) return;
+      const result = fn(activeDocument.imageData);
+      dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: result, label: name } });
+    },
+    [activeDocument, dispatch]
+  );
+
+  const handleRotate = useCallback(
+    (deg: 90 | -90 | 180) => dispatch({ type: 'ROTATE', payload: deg }),
+    [dispatch]
+  );
+
+  const handleFlip = useCallback(
+    (dir: 'horizontal' | 'vertical') => dispatch({ type: 'FLIP', payload: dir }),
+    [dispatch]
+  );
+
   // ─── Keyboard Shortcuts ───────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -213,7 +233,15 @@ function PhotoEditorInner() {
   return (
     <div ref={containerRef} className="pe-layout" style={{ height: 'calc(100vh - 64px)' }}>
       {/* Top menu bar */}
-      <PhotoEditorMenuBar onOpenImage={handleOpenImage} onExport={handleExport} />
+      <PhotoEditorMenuBar
+        onOpenImage={handleOpenImage}
+        onExport={handleExport}
+        onRotate={handleRotate}
+        onFlip={handleFlip}
+        onApplyFilter={applyFilter}
+        onUndo={() => dispatch({ type: 'UNDO' })}
+        onRedo={() => dispatch({ type: 'REDO' })}
+      />
 
       {/* Left toolbar */}
       <PhotoEditorToolbar />

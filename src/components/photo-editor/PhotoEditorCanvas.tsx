@@ -32,6 +32,23 @@ export default function PhotoEditorCanvas() {
   const imgWidth = activeDocument?.width ?? 0;
   const imgHeight = activeDocument?.height ?? 0;
 
+  // ─── Compute image position in viewport coordinates ─────────────
+  // The image is centered in the viewport. panOffset shifts it.
+  // Returns the top-left corner of the image in viewport pixel coords.
+  const getImageRect = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !activeDocument) return { left: 0, top: 0, w: 0, h: 0, vpW: 0, vpH: 0 };
+
+    const vpW = viewport.clientWidth;
+    const vpH = viewport.clientHeight;
+    const scaledW = imgWidth * zoom;
+    const scaledH = imgHeight * zoom;
+    const left = (vpW - scaledW) / 2 + panOffset.x;
+    const top = (vpH - scaledH) / 2 + panOffset.y;
+
+    return { left, top, w: scaledW, h: scaledH, vpW, vpH };
+  }, [activeDocument, zoom, panOffset, imgWidth, imgHeight]);
+
   // ─── Get image coordinates from mouse event ─────────────────────
   const getImageCoords = useCallback(
     (e: React.MouseEvent): { x: number; y: number } => {
@@ -42,20 +59,13 @@ export default function PhotoEditorCanvas() {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Center of viewport
-      const cx = rect.width / 2 + panOffset.x;
-      const cy = rect.height / 2 + panOffset.y;
-
-      // Image top-left in viewport coords
-      const imgLeft = cx - (imgWidth * zoom) / 2;
-      const imgTop = cy - (imgHeight * zoom) / 2;
-
+      const { left, top } = getImageRect();
       return {
-        x: (mouseX - imgLeft) / zoom,
-        y: (mouseY - imgTop) / zoom,
+        x: (mouseX - left) / zoom,
+        y: (mouseY - top) / zoom,
       };
     },
-    [activeDocument, zoom, panOffset, imgWidth, imgHeight]
+    [activeDocument, zoom, getImageRect]
   );
 
   // ─── Draw Image on Canvas (with adjustments preview) ────────────
@@ -92,26 +102,24 @@ export default function PhotoEditorCanvas() {
     const viewport = viewportRef.current;
     if (!overlay || !viewport) return;
 
-    overlay.width = viewport.clientWidth;
-    overlay.height = viewport.clientHeight;
+    const vpW = viewport.clientWidth;
+    const vpH = viewport.clientHeight;
+    overlay.width = vpW;
+    overlay.height = vpH;
     const ctx = overlay.getContext('2d');
     if (!ctx || !activeDocument) return;
 
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    ctx.clearRect(0, 0, vpW, vpH);
 
     // Draw selection
     if (state.selection?.active) {
-      const cx = overlay.width / 2 + panOffset.x;
-      const cy = overlay.height / 2 + panOffset.y;
-      const imgLeft = cx - (imgWidth * zoom) / 2;
-      const imgTop = cy - (imgHeight * zoom) / 2;
+      const { left, top } = getImageRect();
 
-      const sx = imgLeft + state.selection.x * zoom;
-      const sy = imgTop + state.selection.y * zoom;
+      const sx = left + state.selection.x * zoom;
+      const sy = top + state.selection.y * zoom;
       const sw = state.selection.width * zoom;
       const sh = state.selection.height * zoom;
 
-      // Marching ants
       ctx.setLineDash([4, 4]);
       ctx.lineDashOffset = -(Date.now() / 50) % 8;
       ctx.strokeStyle = '#fff';
@@ -125,7 +133,6 @@ export default function PhotoEditorCanvas() {
         ctx.stroke();
       }
 
-      // Inner dashed line (black for contrast)
       ctx.strokeStyle = '#000';
       ctx.lineDashOffset = -(Date.now() / 50 + 4) % 8;
       if (state.selection.type === 'rect') {
@@ -138,7 +145,7 @@ export default function PhotoEditorCanvas() {
 
       ctx.setLineDash([]);
     }
-  }, [activeDocument, state.selection, zoom, panOffset, imgWidth, imgHeight]);
+  }, [activeDocument, state.selection, zoom, getImageRect]);
 
   // Animate marching ants
   useEffect(() => {
@@ -155,11 +162,8 @@ export default function PhotoEditorCanvas() {
   // ─── Resize overlay canvas to match viewport ────────────────────
   useEffect(() => {
     const viewport = viewportRef.current;
-    const overlay = overlayCanvasRef.current;
-    if (!viewport || !overlay) return;
+    if (!viewport) return;
     const ro = new ResizeObserver(() => {
-      overlay.width = viewport.clientWidth;
-      overlay.height = viewport.clientHeight;
       drawOverlay();
       drawRulers();
     });
@@ -169,6 +173,9 @@ export default function PhotoEditorCanvas() {
 
   // ─── Draw Rulers ─────────────────────────────────────────────────
   const drawRulers = useCallback(() => {
+    const { left, top } = getImageRect();
+
+    // Horizontal ruler
     const hCanvas = rulerHRef.current;
     if (hCanvas) {
       const parent = hCanvas.parentElement;
@@ -183,12 +190,14 @@ export default function PhotoEditorCanvas() {
         ctx.textAlign = 'center';
         const step = Math.max(50, Math.round(100 / zoom));
         for (let px = 0; px <= imgWidth; px += step) {
-          const screenX = (px * zoom) + panOffset.x + (hCanvas.width / 2) - (imgWidth * zoom / 2);
+          const screenX = left + px * zoom;
           ctx.beginPath(); ctx.moveTo(screenX, 18); ctx.lineTo(screenX, 24); ctx.stroke();
           ctx.fillText(String(Math.round(px)), screenX, 14);
         }
       }
     }
+
+    // Vertical ruler
     const vCanvas = rulerVRef.current;
     if (vCanvas) {
       const parent = vCanvas.parentElement;
@@ -202,7 +211,7 @@ export default function PhotoEditorCanvas() {
         ctx.font = '9px monospace';
         const step = Math.max(50, Math.round(100 / zoom));
         for (let py = 0; py <= imgHeight; py += step) {
-          const screenY = (py * zoom) + panOffset.y + (vCanvas.height / 2) - (imgHeight * zoom / 2);
+          const screenY = top + py * zoom;
           ctx.beginPath(); ctx.moveTo(18, screenY); ctx.lineTo(24, screenY); ctx.stroke();
           ctx.save(); ctx.translate(10, screenY); ctx.rotate(-Math.PI / 2);
           ctx.textAlign = 'center'; ctx.fillText(String(Math.round(py)), 0, 0);
@@ -210,7 +219,7 @@ export default function PhotoEditorCanvas() {
         }
       }
     }
-  }, [zoom, panOffset, imgWidth, imgHeight]);
+  }, [zoom, imgWidth, imgHeight, getImageRect]);
 
   useEffect(() => { drawRulers(); }, [drawRulers]);
 
@@ -251,7 +260,6 @@ export default function PhotoEditorCanvas() {
           isDrawing.current = true;
           lastPoint.current = coords;
 
-          // Create a temp canvas for the stroke
           const tmpCanvas = document.createElement('canvas');
           tmpCanvas.width = activeDocument.width;
           tmpCanvas.height = activeDocument.height;
@@ -259,12 +267,10 @@ export default function PhotoEditorCanvas() {
           tmpCtx.putImageData(activeDocument.imageData, 0, 0);
           drawCanvas.current = tmpCanvas;
 
-          // Draw initial stamp
           const { size, hardness, opacity } = state.brushOptions;
           const color = state.activeTool === 'eraser' ? '#000' : state.foregroundColor;
           drawStrokeBetween(tmpCtx, coords, coords, size, hardness, color, opacity, state.activeTool === 'eraser');
-          
-          // Update render canvas
+
           const renderCtx = renderCanvasRef.current?.getContext('2d');
           if (renderCtx) {
             renderCtx.putImageData(tmpCtx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height), 0, 0);
@@ -278,7 +284,7 @@ export default function PhotoEditorCanvas() {
           break;
         }
 
-        case 'fill': {
+        case 'gradient': {
           const rgba = hexToRGBA(state.foregroundColor);
           const filled = floodFill(activeDocument.imageData, coords.x, coords.y, rgba);
           dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: filled, label: 'Fill' } });
@@ -332,7 +338,6 @@ export default function PhotoEditorCanvas() {
       if (!activeDocument?.imageData) return;
       const coords = getImageCoords(e);
 
-      // Brush / Eraser drawing
       if (isDrawing.current && lastPoint.current && drawCanvas.current) {
         const tmpCtx = drawCanvas.current.getContext('2d')!;
         const { size, hardness, opacity } = state.brushOptions;
@@ -340,7 +345,6 @@ export default function PhotoEditorCanvas() {
         drawStrokeBetween(tmpCtx, lastPoint.current, coords, size, hardness, color, opacity, state.activeTool === 'eraser');
         lastPoint.current = coords;
 
-        // Update render canvas live
         const renderCtx = renderCanvasRef.current?.getContext('2d');
         if (renderCtx) {
           renderCtx.putImageData(
@@ -349,7 +353,6 @@ export default function PhotoEditorCanvas() {
         }
       }
 
-      // Selection dragging
       if (isSelecting.current && selStart) {
         const x = Math.min(selStart.x, coords.x);
         const y = Math.min(selStart.y, coords.y);
@@ -375,7 +378,6 @@ export default function PhotoEditorCanvas() {
     (e: React.MouseEvent) => {
       isPanning.current = false;
 
-      // Commit brush/eraser stroke
       if (isDrawing.current && drawCanvas.current && activeDocument) {
         const tmpCtx = drawCanvas.current.getContext('2d')!;
         const newImageData = tmpCtx.getImageData(0, 0, drawCanvas.current.width, drawCanvas.current.height);
@@ -391,11 +393,9 @@ export default function PhotoEditorCanvas() {
         lastPoint.current = null;
       }
 
-      // Commit selection
       if (isSelecting.current) {
         isSelecting.current = false;
 
-        // If it was a shape tool, draw the shape
         if ((state.activeTool === 'shape-rect' || state.activeTool === 'shape-ellipse') && selStart && activeDocument?.imageData) {
           const coords = getImageCoords(e);
           const x = Math.min(selStart.x, coords.x);
@@ -479,12 +479,18 @@ export default function PhotoEditorCanvas() {
     [activeDocument, state.textOptions, dispatch, textInput]
   );
 
-  // ─── Canvas Style ───────────────────────────────────────────────
-  const canvasStyle: React.CSSProperties = activeDocument
+  // ─── Canvas Style — Simple left/top positioning ─────────────────
+  // Instead of translate(-50%,-50%) + translate(pan) + scale(zoom),
+  // we use explicit pixel positioning so the image is always findable.
+  const { left: imgLeft, top: imgTop } = getImageRect();
+
+  const containerStyle: React.CSSProperties = activeDocument
     ? {
-        width: imgWidth,
-        height: imgHeight,
-        transform: `translate(-50%, -50%) translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+        left: imgLeft,
+        top: imgTop,
+        width: imgWidth * zoom,
+        height: imgHeight * zoom,
+        position: 'absolute' as const,
       }
     : {};
 
@@ -516,15 +522,30 @@ export default function PhotoEditorCanvas() {
       >
         {activeDocument ? (
           <>
-            <div className="pe-viewport__canvas-container" style={canvasStyle}>
+            {/* Image wrapper: positioned absolutely, no CSS transform needed */}
+            <div className="pe-viewport__canvas-wrapper" style={containerStyle}>
               <canvas
                 ref={renderCanvasRef}
                 className="pe-render-canvas"
                 width={imgWidth}
                 height={imgHeight}
+                style={{ width: '100%', height: '100%' }}
               />
-              <canvas ref={overlayCanvasRef} className="pe-overlay-canvas" />
             </div>
+
+            {/* Overlay canvas spans the entire viewport for selections etc. */}
+            <canvas
+              ref={overlayCanvasRef}
+              className="pe-overlay-canvas"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+              }}
+            />
 
             {/* Floating text input */}
             {textInput.visible && (
@@ -533,8 +554,8 @@ export default function PhotoEditorCanvas() {
                 type="text"
                 style={{
                   position: 'absolute',
-                  left: `calc(50% + ${panOffset.x + (textInput.x - imgWidth / 2) * zoom}px)`,
-                  top: `calc(50% + ${panOffset.y + (textInput.y - imgHeight / 2) * zoom}px)`,
+                  left: imgLeft + textInput.x * zoom,
+                  top: imgTop + textInput.y * zoom,
                   fontSize: state.textOptions.fontSize * zoom,
                   fontFamily: state.textOptions.fontFamily,
                   fontWeight: state.textOptions.fontWeight,
