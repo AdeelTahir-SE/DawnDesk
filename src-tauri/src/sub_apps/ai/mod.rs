@@ -1,5 +1,6 @@
 use kalosm::language::*;
 use serde::Serialize;
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Serialize, Clone)]
@@ -28,50 +29,16 @@ pub async fn generate_response(app: AppHandle, input: String) -> Result<String, 
 
     let app_for_progress = app.clone();
 
-    let model = Llama::builder()
-        // Smaller model to reduce download size and startup time.
-        .with_source(LlamaSource::tiny_llama_1_1b_chat())
-        .build_with_loading_handler(move |progress| match progress {
-            ModelLoadingProgress::Downloading { source, progress } => {
-                let downloaded_bytes = progress.progress.saturating_sub(progress.cached_size);
-                let downloaded = if progress.size == 0 {
-                    0.0
-                } else {
-                    (downloaded_bytes as f64 / progress.size as f64) * 100.0
-                }
-                .clamp(0.0, 100.0);
-                let remaining = (100.0_f64 - downloaded).clamp(0.0, 100.0);
-                let elapsed = progress.start_time.elapsed().as_secs_f32();
-                let _ = app_for_progress.emit(
-                    "ai://model-progress",
-                    ModelProgressEvent {
-                        stage: "download".to_string(),
-                        message: format!(
-                            "Downloading {source}: {:.1}% done, {:.1}% remaining ({elapsed:.1}s)",
-                            downloaded, remaining
-                        ),
-                        done_percent: Some(downloaded),
-                        remaining_percent: Some(remaining),
-                    },
-                );
-            }
-            ModelLoadingProgress::Loading { progress } => {
-                let loaded = (progress as f64 * 100.0).clamp(0.0, 100.0);
-                let remaining = (100.0_f64 - loaded).clamp(0.0, 100.0);
-                let _ = app_for_progress.emit(
-                    "ai://model-progress",
-                    ModelProgressEvent {
-                        stage: "loading".to_string(),
-                        message: format!(
-                            "Loading model into memory: {:.1}% done, {:.1}% remaining",
-                            loaded, remaining
-                        ),
-                        done_percent: Some(loaded),
-                        remaining_percent: Some(remaining),
-                    },
-                );
-            }
-        })
+    let _ = app.emit(
+        "ai://model-progress",
+        ModelProgressEvent {stage: "loading".to_string(),
+            message: "Loading Llama 3.1 8B chat model...".to_string(),
+            done_percent: Some(50.0),
+            remaining_percent: Some(50.0),
+        },
+    );
+
+    let model = Llama::new_chat()
         .await
         .map_err(|e| {
             let message = format!("Failed to load model: {e}");

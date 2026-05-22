@@ -8,7 +8,7 @@ import Settings from "./Pages/Settings";
 import VideoEditor from "./Pages/VideoEditor";
 import AI from "./Pages/AI";
 import Storage from "./Pages/Storage";
-import Loading from "./Pages/Loading";
+// import Loading from "./Pages/Loading";
 import PDFTools from "./Pages/PDFTools";
 import Todo from "./Pages/Todo";
 
