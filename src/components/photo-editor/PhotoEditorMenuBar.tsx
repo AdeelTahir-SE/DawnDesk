@@ -5,6 +5,7 @@ import {
   applyInvert,
   applyBlurFast,
   applyMotionBlur,
+  applyLiquifyWarp,
   applyNoise,
   applySepia,
   applySharpen,
@@ -14,12 +15,14 @@ import {
 
 interface MenuBarProps {
   onOpenImage: () => void;
+  onResizeImage?: () => void;
   onExport: () => void;
   onExportDialog?: () => void;
   onBatchExport?: () => void;
   onCopyToClipboard?: () => void;
   onSendToNotes?: () => void;
   onSendToEmail?: () => void;
+  onOpenHelp?: () => void;
   onRotate: (deg: 90 | -90 | 180) => void;
   onFlip: (dir: 'horizontal' | 'vertical') => void;
   onApplyFilter: (name: string, fn: (data: ImageData) => ImageData) => void;
@@ -41,7 +44,7 @@ interface MenuDef {
 }
 
 export default function PhotoEditorMenuBar({
-  onOpenImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
+  onOpenImage, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -95,6 +98,8 @@ export default function PhotoEditorMenuBar({
         { label: 'Rotate 90° CCW', action: () => { onRotate(-90); setOpenMenu(null); } },
         { label: 'Rotate 180°', action: () => { onRotate(180); setOpenMenu(null); } },
         { separator: true, label: '' },
+        { label: 'Resize Image...', description: 'Change canvas and layer dimensions.', action: () => { onResizeImage?.(); setOpenMenu(null); } },
+        { separator: true, label: '' },
         { label: 'Flip Horizontal', action: () => { onFlip('horizontal'); setOpenMenu(null); } },
         { label: 'Flip Vertical', action: () => { onFlip('vertical'); setOpenMenu(null); } },
       ],
@@ -115,13 +120,16 @@ export default function PhotoEditorMenuBar({
         { separator: true, label: '' },
         { label: 'Add Noise', action: () => { onApplyFilter('Add Noise', (d) => applyNoise(d, 18)); setOpenMenu(null); } },
         { label: 'Reduce Noise', action: () => { onApplyFilter('Reduce Noise', applyDenoise); setOpenMenu(null); } },
+        { separator: true, label: '' },
+        { label: 'Liquify Warp', description: 'Apply an experimental v3 center warp effect.', action: () => { onApplyFilter('Liquify Warp', (d) => applyLiquifyWarp(d, 18)); setOpenMenu(null); } },
       ],
     },
     {
       label: 'Help',
       items: [
-        { label: 'Keyboard Shortcuts', action: () => setOpenMenu(null) },
-        { label: 'About Photo Editor', action: () => setOpenMenu(null) },
+        { label: 'How to Use Photo Editor', description: 'Open the full user guide for every editor feature.', action: () => { onOpenHelp?.(); setOpenMenu(null); } },
+        { label: 'Keyboard Shortcuts', description: 'Shortcut reference is included in the How to Use guide.', action: () => { onOpenHelp?.(); setOpenMenu(null); } },
+        { label: 'About Photo Editor', description: 'Learn what this built-in DawnDesk editor is for.', action: () => { onOpenHelp?.(); setOpenMenu(null); } },
       ],
     },
   ];

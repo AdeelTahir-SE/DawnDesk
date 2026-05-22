@@ -4,6 +4,7 @@ import AppShell from "./components/AppShell";
 import Home from "./Pages/Home";
 import Dashboard from "./Pages/Dashboard";
 import PhotoEditor from "./Pages/PhotoEditor";
+import PhotoEditorHelp from "./Pages/PhotoEditorHelp";
 import Settings from "./Pages/Settings";
 import VideoEditor from "./Pages/VideoEditor";
 import AI from "./Pages/AI";
@@ -20,6 +21,7 @@ function App() {
       <Route path="/*" element={<AppShell />}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="photo-editor" element={<PhotoEditor />} />
+        <Route path="photo-editor/help" element={<PhotoEditorHelp />} />
         <Route path="video-editor" element={<VideoEditor />} />
         <Route path="ai" element={<AI />} />
         <Route path="storage" element={<Storage />} />

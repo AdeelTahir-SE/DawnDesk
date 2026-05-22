@@ -3,6 +3,17 @@ import { useEditor } from '../../engine/photo-editor/EditorContext';
 import { drawStrokeBetween, sampleColor } from '../../engine/photo-editor/drawingTools';
 import { applyAllAdjustments } from '../../engine/photo-editor/filters';
 import type { StrokePoint } from '../../engine/photo-editor/drawingTools';
+import type { LayerInfo } from '../../engine/photo-editor/types';
+
+type LayerBounds = { x: number; y: number; width: number; height: number };
+type TransformMode = 'move' | 'nw' | 'ne' | 'se' | 'sw';
+type TransformDrag = {
+  mode: TransformMode;
+  start: { x: number; y: number };
+  originalBounds: LayerBounds;
+  currentBounds: LayerBounds;
+  imageData: ImageData;
+};
 
 export default function PhotoEditorCanvas() {
   const { state, dispatch, activeDocument } = useEditor();
@@ -20,9 +31,11 @@ export default function PhotoEditorCanvas() {
   const drawCanvas = useRef<HTMLCanvasElement | null>(null);
   const cloneSource = useRef<{ x: number; y: number } | null>(null);
   const lassoPoints = useRef<{ x: number; y: number }[]>([]);
+  const transformDrag = useRef<TransformDrag | null>(null);
 
   // Selection state
   const [selStart, setSelStart] = useState<{ x: number; y: number } | null>(null);
+  const [previewLayerBounds, setPreviewLayerBounds] = useState<LayerBounds | null>(null);
   const isSelecting = useRef(false);
 
   // Text input state
@@ -33,6 +46,10 @@ export default function PhotoEditorCanvas() {
   const panOffset = activeDocument?.panOffset ?? { x: 0, y: 0 };
   const imgWidth = activeDocument?.width ?? 0;
   const imgHeight = activeDocument?.height ?? 0;
+  const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+  const editableLayer = activeLayer && !activeLayer.locked ? activeLayer : null;
+  const editImageData = editableLayer?.imageData ?? null;
+  const activeLayerBounds = previewLayerBounds ?? getLayerBounds(editableLayer?.imageData ?? null);
 
   // ─── Compute image position in viewport coordinates ─────────────
   // The image is centered in the viewport. panOffset shifts it.
@@ -88,17 +105,29 @@ export default function PhotoEditorCanvas() {
       return value !== 0;
     });
 
-    if (hasAdj) {
-      const adjusted = applyAllAdjustments(activeDocument.imageData, adj);
+    if (hasAdj && editableLayer?.imageData) {
+      const adjustedLayer = applyAllAdjustments(editableLayer.imageData, adj);
+      const adjusted = compositeImageLayers(
+        state.layers.map((layer) =>
+          layer.id === editableLayer.id ? { ...layer, imageData: adjustedLayer } : layer
+        ),
+        activeDocument.width,
+        activeDocument.height
+      );
       ctx.putImageData(adjusted, 0, 0);
     } else {
       ctx.putImageData(activeDocument.imageData, 0, 0);
     }
-  }, [activeDocument]);
+  }, [activeDocument, editableLayer, state.layers]);
 
   useEffect(() => {
     drawImage();
   }, [drawImage]);
+
+  useEffect(() => {
+    setPreviewLayerBounds(null);
+    transformDrag.current = null;
+  }, [state.activeLayerId, activeDocument?.id]);
 
   // ─── Draw overlay (selection, marching ants) ────────────────────
   const drawOverlay = useCallback(() => {
@@ -252,20 +281,38 @@ export default function PhotoEditorCanvas() {
     (e: React.WheelEvent) => {
       if (!activeDocument) return;
       e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        dispatch({ type: 'SET_ZOOM', payload: Math.max(0.05, Math.min(32, zoom * delta)) });
-      } else {
+      if (e.shiftKey) {
         dispatch({ type: 'SET_PAN', payload: { x: panOffset.x - e.deltaX, y: panOffset.y - e.deltaY } });
+        return;
       }
+
+      const viewport = viewportRef.current;
+      const rect = viewport?.getBoundingClientRect();
+      const mouseX = rect ? e.clientX - rect.left : 0;
+      const mouseY = rect ? e.clientY - rect.top : 0;
+      const currentRect = getImageRect();
+      const imageX = (mouseX - currentRect.left) / zoom;
+      const imageY = (mouseY - currentRect.top) / zoom;
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const nextZoom = Math.max(0.05, Math.min(32, zoom * delta));
+      const nextScaledW = imgWidth * nextZoom;
+      const nextScaledH = imgHeight * nextZoom;
+      const nextLeft = mouseX - imageX * nextZoom;
+      const nextTop = mouseY - imageY * nextZoom;
+      const nextPan = {
+        x: nextLeft - ((currentRect.vpW - nextScaledW) / 2),
+        y: nextTop - ((currentRect.vpH - nextScaledH) / 2),
+      };
+      dispatch({ type: 'SET_ZOOM', payload: nextZoom });
+      dispatch({ type: 'SET_PAN', payload: nextPan });
     },
-    [activeDocument, zoom, panOffset, dispatch]
+    [activeDocument, zoom, panOffset, dispatch, getImageRect, imgWidth, imgHeight]
   );
 
   // ─── Pointer Down ───────────────────────────────────────────────
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (!activeDocument?.imageData) return;
+      if (!activeDocument) return;
       const coords = getImageCoords(e);
 
       // Pan (middle click or hand tool)
@@ -278,10 +325,25 @@ export default function PhotoEditorCanvas() {
 
       if (e.button !== 0) return;
 
+      if (state.activeTool === 'move' && editImageData && activeLayerBounds) {
+        if (pointInBounds(coords, activeLayerBounds)) {
+          transformDrag.current = {
+            mode: 'move',
+            start: coords,
+            originalBounds: activeLayerBounds,
+            currentBounds: activeLayerBounds,
+            imageData: cloneImageData(editImageData),
+          };
+          setPreviewLayerBounds(activeLayerBounds);
+        }
+        return;
+      }
+
       switch (state.activeTool) {
         case 'brush':
         case 'pencil':
         case 'eraser': {
+          if (!editImageData) break;
           isDrawing.current = true;
           lastPoint.current = coords;
 
@@ -289,7 +351,7 @@ export default function PhotoEditorCanvas() {
           tmpCanvas.width = activeDocument.width;
           tmpCanvas.height = activeDocument.height;
           const tmpCtx = tmpCanvas.getContext('2d')!;
-          tmpCtx.putImageData(activeDocument.imageData, 0, 0);
+          tmpCtx.putImageData(editImageData, 0, 0);
           drawCanvas.current = tmpCanvas;
 
           const { opacity } = state.brushOptions;
@@ -307,6 +369,7 @@ export default function PhotoEditorCanvas() {
 
         case 'clone-stamp':
         case 'healing-brush': {
+          if (!editImageData) break;
           if (e.altKey) {
             cloneSource.current = coords;
             break;
@@ -318,25 +381,28 @@ export default function PhotoEditorCanvas() {
           tmpCanvas.width = activeDocument.width;
           tmpCanvas.height = activeDocument.height;
           const tmpCtx = tmpCanvas.getContext('2d')!;
-          tmpCtx.putImageData(activeDocument.imageData, 0, 0);
+          tmpCtx.putImageData(editImageData, 0, 0);
           drawCanvas.current = tmpCanvas;
-          paintClone(tmpCtx, activeDocument.imageData, cloneSource.current, coords, state.brushOptions.size, state.activeTool === 'healing-brush');
+          paintClone(tmpCtx, editImageData, cloneSource.current, coords, state.brushOptions.size, state.activeTool === 'healing-brush');
           break;
         }
 
         case 'spot-heal': {
-          const healed = spotHeal(activeDocument.imageData, coords.x, coords.y, state.brushOptions.size);
+          if (!editImageData) break;
+          const healed = spotHeal(editImageData, coords.x, coords.y, state.brushOptions.size);
           dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: healed, label: 'Spot Heal' } });
           break;
         }
 
         case 'eyedropper': {
+          if (!activeDocument.imageData) break;
           const color = sampleColor(activeDocument.imageData, coords.x, coords.y);
           dispatch({ type: 'SET_FOREGROUND_COLOR', payload: color });
           break;
         }
 
         case 'gradient': {
+          if (!editImageData) break;
           isSelecting.current = true;
           setSelStart(coords);
           break;
@@ -360,6 +426,7 @@ export default function PhotoEditorCanvas() {
         }
 
         case 'magic-wand': {
+          if (!activeDocument.imageData) break;
           const bounds = magicWandBounds(activeDocument.imageData, coords.x, coords.y, 32);
           dispatch({
             type: 'SET_SELECTION',
@@ -369,6 +436,7 @@ export default function PhotoEditorCanvas() {
         }
 
         case 'text': {
+          if (!editImageData) break;
           setTextInput({ x: coords.x, y: coords.y, visible: true });
           setTimeout(() => textInputRef.current?.focus(), 50);
           break;
@@ -376,6 +444,7 @@ export default function PhotoEditorCanvas() {
 
         case 'shape-rect':
         case 'shape-ellipse': {
+          if (!editImageData) break;
           isSelecting.current = true;
           setSelStart(coords);
           break;
@@ -385,6 +454,7 @@ export default function PhotoEditorCanvas() {
         case 'pen-path':
         case 'polygon':
         case 'custom-shape': {
+          if (!editImageData) break;
           isSelecting.current = true;
           setSelStart(coords);
           break;
@@ -399,12 +469,20 @@ export default function PhotoEditorCanvas() {
         }
       }
     },
-    [activeDocument, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, zoom]
+    [activeDocument, activeLayerBounds, editImageData, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, zoom]
   );
 
   // ─── Pointer Move ───────────────────────────────────────────────
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      if (transformDrag.current) {
+        const coords = getImageCoords(e);
+        const drag = transformDrag.current;
+        drag.currentBounds = nextTransformBounds(drag.mode, drag.originalBounds, drag.start, coords);
+        setPreviewLayerBounds(drag.currentBounds);
+        return;
+      }
+
       if (isPanning.current) {
         const dx = e.clientX - lastPan.current.x;
         const dy = e.clientY - lastPan.current.y;
@@ -413,7 +491,7 @@ export default function PhotoEditorCanvas() {
         return;
       }
 
-      if (!activeDocument?.imageData) return;
+      if (!editImageData || !activeDocument?.imageData) return;
       const coords = getImageCoords(e);
 
       if (isDrawing.current && lastPoint.current && drawCanvas.current) {
@@ -438,7 +516,7 @@ export default function PhotoEditorCanvas() {
         const dx = coords.x - lastPoint.current.x;
         const dy = coords.y - lastPoint.current.y;
         cloneSource.current = { x: cloneSource.current.x + dx, y: cloneSource.current.y + dy };
-        paintClone(tmpCtx, activeDocument.imageData, cloneSource.current, coords, state.brushOptions.size, state.activeTool === 'healing-brush');
+        paintClone(tmpCtx, editImageData, cloneSource.current, coords, state.brushOptions.size, state.activeTool === 'healing-brush');
         lastPoint.current = coords;
         const renderCtx = renderCanvasRef.current?.getContext('2d');
         if (renderCtx) renderCtx.putImageData(tmpCtx.getImageData(0, 0, drawCanvas.current.width, drawCanvas.current.height), 0, 0);
@@ -475,13 +553,22 @@ export default function PhotoEditorCanvas() {
         });
       }
     },
-    [activeDocument, panOffset, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, selStart]
+    [activeDocument, editImageData, panOffset, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, selStart]
   );
 
   // ─── Pointer Up ─────────────────────────────────────────────────
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
       isPanning.current = false;
+
+      if (transformDrag.current && activeDocument) {
+        const drag = transformDrag.current;
+        const transformed = transformLayerImageData(drag.imageData, drag.originalBounds, drag.currentBounds, activeDocument.width, activeDocument.height);
+        dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: transformed, label: 'Transform Layer' } });
+        transformDrag.current = null;
+        setPreviewLayerBounds(null);
+        return;
+      }
 
       if (isDrawing.current && drawCanvas.current && activeDocument) {
         const tmpCtx = drawCanvas.current.getContext('2d')!;
@@ -501,13 +588,13 @@ export default function PhotoEditorCanvas() {
       if (isSelecting.current) {
         isSelecting.current = false;
 
-        if (state.activeTool === 'gradient' && selStart && activeDocument?.imageData) {
+        if (state.activeTool === 'gradient' && selStart && editImageData) {
           const coords = getImageCoords(e);
-          const gradient = drawGradient(activeDocument.imageData, selStart, coords, state.foregroundColor, state.backgroundColor);
+          const gradient = drawGradient(editImageData, selStart, coords, state.foregroundColor, state.backgroundColor);
           dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: gradient, label: 'Gradient Fill' } });
         }
 
-        if ((state.activeTool === 'shape-rect' || state.activeTool === 'shape-ellipse' || state.activeTool === 'line' || state.activeTool === 'pen-path' || state.activeTool === 'polygon' || state.activeTool === 'custom-shape') && selStart && activeDocument?.imageData) {
+        if ((state.activeTool === 'shape-rect' || state.activeTool === 'shape-ellipse' || state.activeTool === 'line' || state.activeTool === 'pen-path' || state.activeTool === 'polygon' || state.activeTool === 'custom-shape') && selStart && activeDocument && editImageData) {
           const coords = getImageCoords(e);
           const x = Math.min(selStart.x, coords.x);
           const y = Math.min(selStart.y, coords.y);
@@ -519,7 +606,7 @@ export default function PhotoEditorCanvas() {
             tmpCanvas.width = activeDocument.width;
             tmpCanvas.height = activeDocument.height;
             const ctx = tmpCanvas.getContext('2d')!;
-            ctx.putImageData(activeDocument.imageData, 0, 0);
+            ctx.putImageData(editImageData, 0, 0);
 
             ctx.fillStyle = state.shapeOptions.fillColor;
             ctx.strokeStyle = state.shapeOptions.strokeColor;
@@ -563,13 +650,13 @@ export default function PhotoEditorCanvas() {
         setSelStart(null);
       }
     },
-    [activeDocument, state.activeTool, state.shapeOptions, dispatch, getImageCoords, selStart]
+    [activeDocument, editImageData, state.activeTool, state.shapeOptions, dispatch, getImageCoords, selStart]
   );
 
   // ─── Text commit handler ────────────────────────────────────────
   const commitText = useCallback(
     (text: string) => {
-      if (!activeDocument?.imageData || !text.trim()) {
+      if (!editImageData || !activeDocument || !text.trim()) {
         setTextInput({ x: 0, y: 0, visible: false });
         return;
       }
@@ -578,7 +665,7 @@ export default function PhotoEditorCanvas() {
       tmpCanvas.width = activeDocument.width;
       tmpCanvas.height = activeDocument.height;
       const ctx = tmpCanvas.getContext('2d')!;
-      ctx.putImageData(activeDocument.imageData, 0, 0);
+      ctx.putImageData(editImageData, 0, 0);
 
       const { fontFamily, fontSize, fontWeight, fontStyle, color } = state.textOptions;
       ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
@@ -596,7 +683,7 @@ export default function PhotoEditorCanvas() {
 
       setTextInput({ x: 0, y: 0, visible: false });
     },
-    [activeDocument, state.textOptions, dispatch, textInput]
+    [activeDocument, editImageData, state.textOptions, dispatch, textInput]
   );
 
   // ─── Canvas Style — Simple left/top positioning ─────────────────
@@ -622,6 +709,21 @@ export default function PhotoEditorCanvas() {
     if (state.activeTool === 'move') return 'move';
     if (state.activeTool === 'eyedropper') return 'crosshair';
     return 'crosshair';
+  };
+
+  const startLayerResize = (mode: TransformMode, e: React.MouseEvent) => {
+    if (!editImageData || !activeLayerBounds) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const coords = getImageCoords(e);
+    transformDrag.current = {
+      mode,
+      start: coords,
+      originalBounds: activeLayerBounds,
+      currentBounds: activeLayerBounds,
+      imageData: cloneImageData(editImageData),
+    };
+    setPreviewLayerBounds(activeLayerBounds);
   };
 
   return (
@@ -667,6 +769,27 @@ export default function PhotoEditorCanvas() {
               }}
             />
 
+            {state.activeTool === 'move' && activeLayerBounds && editableLayer && (
+              <div
+                className="pe-layer-transform"
+                style={{
+                  left: imgLeft + activeLayerBounds.x * zoom,
+                  top: imgTop + activeLayerBounds.y * zoom,
+                  width: activeLayerBounds.width * zoom,
+                  height: activeLayerBounds.height * zoom,
+                }}
+              >
+                {(['nw', 'ne', 'se', 'sw'] as TransformMode[]).map((handle) => (
+                  <button
+                    key={handle}
+                    className={`pe-layer-transform__handle pe-layer-transform__handle--${handle}`}
+                    onMouseDown={(e) => startLayerResize(handle, e)}
+                    title="Drag to resize layer"
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Floating text input */}
             {textInput.visible && (
               <input
@@ -689,6 +812,7 @@ export default function PhotoEditorCanvas() {
                   zIndex: 10,
                 }}
                 onKeyDown={(e) => {
+                  e.stopPropagation();
                   if (e.key === 'Enter') {
                     commitText((e.target as HTMLInputElement).value);
                   }
@@ -749,6 +873,144 @@ function boundsFromPoints(points: { x: number; y: number }[]) {
     width: Math.max(1, Math.max(...xs) - x),
     height: Math.max(1, Math.max(...ys) - y),
   };
+}
+
+function cloneImageData(imageData: ImageData) {
+  return new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+}
+
+function getLayerBounds(imageData: ImageData | null): LayerBounds | null {
+  if (!imageData) return null;
+  let minX = imageData.width;
+  let minY = imageData.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < imageData.height; y++) {
+    for (let x = 0; x < imageData.width; x++) {
+      const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
+      if (alpha === 0) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < 0 || maxY < 0) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+function pointInBounds(point: { x: number; y: number }, bounds: LayerBounds) {
+  return point.x >= bounds.x &&
+    point.x <= bounds.x + bounds.width &&
+    point.y >= bounds.y &&
+    point.y <= bounds.y + bounds.height;
+}
+
+function nextTransformBounds(
+  mode: TransformMode,
+  bounds: LayerBounds,
+  start: { x: number; y: number },
+  current: { x: number; y: number }
+): LayerBounds {
+  const dx = current.x - start.x;
+  const dy = current.y - start.y;
+
+  if (mode === 'move') {
+    return {
+      x: Math.round(bounds.x + dx),
+      y: Math.round(bounds.y + dy),
+      width: bounds.width,
+      height: bounds.height,
+    };
+  }
+
+  const next = { ...bounds };
+  if (mode.includes('n')) {
+    next.y = Math.round(bounds.y + dy);
+    next.height = Math.round(bounds.height - dy);
+  }
+  if (mode.includes('s')) {
+    next.height = Math.round(bounds.height + dy);
+  }
+  if (mode.includes('w')) {
+    next.x = Math.round(bounds.x + dx);
+    next.width = Math.round(bounds.width - dx);
+  }
+  if (mode.includes('e')) {
+    next.width = Math.round(bounds.width + dx);
+  }
+
+  if (next.width < 8) {
+    next.x = mode.includes('w') ? bounds.x + bounds.width - 8 : next.x;
+    next.width = 8;
+  }
+  if (next.height < 8) {
+    next.y = mode.includes('n') ? bounds.y + bounds.height - 8 : next.y;
+    next.height = 8;
+  }
+  return next;
+}
+
+function transformLayerImageData(
+  imageData: ImageData,
+  from: LayerBounds,
+  to: LayerBounds,
+  canvasWidth: number,
+  canvasHeight: number
+) {
+  const source = document.createElement('canvas');
+  source.width = imageData.width;
+  source.height = imageData.height;
+  source.getContext('2d')!.putImageData(imageData, 0, 0);
+
+  const out = document.createElement('canvas');
+  out.width = canvasWidth;
+  out.height = canvasHeight;
+  const ctx = out.getContext('2d')!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(
+    source,
+    from.x,
+    from.y,
+    from.width,
+    from.height,
+    to.x,
+    to.y,
+    to.width,
+    to.height
+  );
+  return ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+}
+
+function compositeImageLayers(layers: LayerInfo[], width: number, height: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  const ctx = canvas.getContext('2d')!;
+
+  [...layers].reverse().forEach((layer) => {
+    if (!layer.visible || !layer.imageData) return;
+    const source = document.createElement('canvas');
+    source.width = layer.imageData.width;
+    source.height = layer.imageData.height;
+    source.getContext('2d')!.putImageData(layer.imageData, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity / 100));
+    ctx.globalCompositeOperation = layer.blendMode === 'soft-light'
+      ? 'soft-light'
+      : layer.blendMode === 'color'
+        ? 'color'
+        : ['multiply', 'screen', 'overlay'].includes(layer.blendMode)
+          ? layer.blendMode as GlobalCompositeOperation
+          : 'source-over';
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  });
+
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
 function magicWandBounds(imageData: ImageData, startX: number, startY: number, tolerance: number) {

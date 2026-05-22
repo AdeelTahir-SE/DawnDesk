@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext';
 import { openImageFromDisk, calculateFitZoom } from '../engine/photo-editor/importImage';
 import { exportBatchToFiles, exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
@@ -15,9 +16,20 @@ import '../components/photo-editor/photo-editor.css';
 
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [resizeValues, setResizeValues] = useState({ width: 0, height: 0, lockRatio: true });
+  const [panelWidths, setPanelWidths] = useState({ left: 140, right: 300 });
   const [integrationMessage, setIntegrationMessage] = useState<string | null>(null);
+  const [exportPresets, setExportPresets] = useState<Array<{ name: string; format: 'png' | 'jpeg' | 'webp'; quality: number; scale: number }>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('dawndesk.photoEditor.exportPresets') ?? '[]');
+    } catch {
+      return [];
+    }
+  });
 
   // ─── Open Image Handler ───────────────────────────────────────
   const handleOpenImage = useCallback(async () => {
@@ -42,6 +54,12 @@ function PhotoEditorInner() {
     dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
   }, [dispatch]);
 
+  const openResizeDialog = useCallback(() => {
+    if (!activeDocument) return;
+    setResizeValues({ width: activeDocument.width, height: activeDocument.height, lockRatio: true });
+    setShowResizeDialog(true);
+  }, [activeDocument]);
+
   // ─── Export Handler ───────────────────────────────────────────
   const handleExport = useCallback(async () => {
     if (!activeDocument?.imageData) return;
@@ -63,6 +81,17 @@ function PhotoEditorInner() {
     });
   }, [dispatch, state.documents, state.exportOptions]);
 
+  const saveExportPreset = useCallback(() => {
+    const name = window.prompt('Preset name');
+    if (!name?.trim()) return;
+    const next = [
+      ...exportPresets.filter((preset) => preset.name !== name.trim()),
+      { name: name.trim(), ...state.exportOptions },
+    ];
+    setExportPresets(next);
+    localStorage.setItem('dawndesk.photoEditor.exportPresets', JSON.stringify(next));
+  }, [exportPresets, state.exportOptions]);
+
   // ─── Copy to Clipboard ────────────────────────────────────────
   const handleCopyToClipboard = useCallback(async () => {
     if (!activeDocument?.imageData) return;
@@ -77,10 +106,12 @@ function PhotoEditorInner() {
   const applyFilter = useCallback(
     (name: string, fn: (data: ImageData) => ImageData) => {
       if (!activeDocument?.imageData) return;
-      const result = fn(activeDocument.imageData);
+      const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+      if (!activeLayer?.imageData || activeLayer.locked) return;
+      const result = fn(activeLayer.imageData);
       dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: result, label: name } });
     },
-    [activeDocument, dispatch]
+    [activeDocument, dispatch, state.activeLayerId, state.layers]
   );
 
   const handleRotate = useCallback(
@@ -93,10 +124,40 @@ function PhotoEditorInner() {
     [dispatch]
   );
 
+  const startPanelResize = useCallback((side: 'left' | 'right', startX: number) => {
+    const start = panelWidths[side];
+    const onMove = (event: PointerEvent) => {
+      const delta = event.clientX - startX;
+      setPanelWidths((prev) => ({
+        ...prev,
+        [side]: Math.max(
+          side === 'left' ? 56 : 240,
+          Math.min(side === 'left' ? 220 : 420, start + (side === 'left' ? delta : -delta))
+        ),
+      }));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [panelWidths]);
+
   // ─── Keyboard Shortcuts ───────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        Boolean(target?.isContentEditable);
+
+      if (isTyping && !(ctrl && ['s', 'o', 'z', 'y', 'c'].includes(e.key.toLowerCase()))) {
+        return;
+      }
 
       // Ctrl+O: Open
       if (ctrl && e.key === 'o') {
@@ -237,7 +298,18 @@ function PhotoEditorInner() {
         );
       }
 
-      dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+      if (activeDocument?.imageData && doc.imageData) {
+        dispatch({
+          type: 'ADD_IMAGE_LAYER',
+          payload: {
+            imageData: doc.imageData,
+            name: file.name.replace(/\.[^.]+$/, '') || 'Image Layer',
+            thumbnail: doc.thumbnail,
+          },
+        });
+      } else {
+        dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+      }
     };
 
     container.addEventListener('dragover', handleDragOver);
@@ -246,19 +318,29 @@ function PhotoEditorInner() {
       container.removeEventListener('dragover', handleDragOver);
       container.removeEventListener('drop', handleDrop);
     };
-  }, [dispatch]);
+  }, [activeDocument, dispatch]);
 
   return (
-    <div ref={containerRef} className="pe-layout" style={{ height: 'calc(100vh - 64px)' }}>
+    <div
+      ref={containerRef}
+      className="pe-layout"
+      style={{
+        height: 'calc(100vh - 64px)',
+        '--pe-toolbar-width': `${panelWidths.left}px`,
+        '--pe-right-panel-width': `${panelWidths.right}px`,
+      } as React.CSSProperties}
+    >
       {/* Top menu bar */}
       <PhotoEditorMenuBar
         onOpenImage={handleOpenImage}
+        onResizeImage={openResizeDialog}
         onExport={handleExport}
         onExportDialog={() => setShowExportDialog(true)}
         onBatchExport={handleBatchExport}
         onCopyToClipboard={handleCopyToClipboard}
         onSendToNotes={() => setIntegrationMessage('The current image is ready to insert into DawnDesk Notes once the Notes handoff API is connected.')}
         onSendToEmail={() => setIntegrationMessage('The current image is ready to attach to DawnDesk Mail once the Mail compose handoff API is connected.')}
+        onOpenHelp={() => navigate('/photo-editor/help')}
         onRotate={handleRotate}
         onFlip={handleFlip}
         onApplyFilter={applyFilter}
@@ -268,6 +350,13 @@ function PhotoEditorInner() {
 
       {/* Left toolbar */}
       <PhotoEditorToolbar />
+      <div
+        className="pe-panel-resizer pe-panel-resizer--left"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          startPanelResize('left', e.clientX);
+        }}
+      />
 
       {/* Top options bar (context-sensitive) */}
       <PhotoEditorOptionsBar />
@@ -281,6 +370,13 @@ function PhotoEditorInner() {
       </div>
 
       {/* Right panel: Adjustments + Layers + Histogram */}
+      <div
+        className="pe-panel-resizer pe-panel-resizer--right"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          startPanelResize('right', e.clientX);
+        }}
+      />
       <PhotoEditorRightPanel />
 
       {/* Bottom status bar */}
@@ -296,6 +392,29 @@ function PhotoEditorInner() {
               <strong>Export Image</strong>
               <button className="pe-modal__close" onClick={() => setShowExportDialog(false)} data-tooltip="Close the export dialog without saving.">x</button>
             </div>
+            <label className="pe-field">
+              <span>Preset</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select
+                  className="pe-options-bar__select"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const preset = exportPresets.find((item) => item.name === e.target.value);
+                    if (preset) {
+                      const { format, quality, scale } = preset;
+                      dispatch({ type: 'SET_EXPORT_OPTIONS', payload: { format, quality, scale } });
+                    }
+                  }}
+                  data-tooltip="Load a saved export configuration."
+                >
+                  <option value="">Custom</option>
+                  {exportPresets.map((preset) => (
+                    <option key={preset.name} value={preset.name}>{preset.name}</option>
+                  ))}
+                </select>
+                <button className="pe-action-button" onClick={saveExportPreset} data-tooltip="Save the current format, quality, and scale as a reusable v3 export preset.">Save Preset</button>
+              </div>
+            </label>
             <label className="pe-field">
               <span>Format</span>
               <select
@@ -345,6 +464,71 @@ function PhotoEditorInner() {
                 }}
               >
                 Export
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResizeDialog && activeDocument && (
+        <div className="pe-modal-backdrop" onMouseDown={() => setShowResizeDialog(false)}>
+          <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="pe-modal__header">
+              <strong>Resize Image</strong>
+              <button className="pe-modal__close" onClick={() => setShowResizeDialog(false)} data-tooltip="Close the resize dialog.">x</button>
+            </div>
+            <label className="pe-field">
+              <span>Width</span>
+              <input
+                className="pe-number-input pe-number-input--wide"
+                type="number"
+                min="1"
+                max="20000"
+                value={resizeValues.width}
+                onChange={(e) => {
+                  const width = Math.max(1, Number(e.target.value));
+                  const height = resizeValues.lockRatio
+                    ? Math.max(1, Math.round(width * activeDocument.height / activeDocument.width))
+                    : resizeValues.height;
+                  setResizeValues((prev) => ({ ...prev, width, height }));
+                }}
+              />
+            </label>
+            <label className="pe-field">
+              <span>Height</span>
+              <input
+                className="pe-number-input pe-number-input--wide"
+                type="number"
+                min="1"
+                max="20000"
+                value={resizeValues.height}
+                onChange={(e) => {
+                  const height = Math.max(1, Number(e.target.value));
+                  const width = resizeValues.lockRatio
+                    ? Math.max(1, Math.round(height * activeDocument.width / activeDocument.height))
+                    : resizeValues.width;
+                  setResizeValues((prev) => ({ ...prev, width, height }));
+                }}
+              />
+            </label>
+            <label className="pe-options-bar__checkbox">
+              <input
+                type="checkbox"
+                checked={resizeValues.lockRatio}
+                onChange={(e) => setResizeValues((prev) => ({ ...prev, lockRatio: e.target.checked }))}
+              />
+              Keep aspect ratio
+            </label>
+            <div className="pe-modal__actions">
+              <button className="pe-action-button" onClick={() => setShowResizeDialog(false)}>Cancel</button>
+              <button
+                className="pe-action-button pe-action-button--primary"
+                onClick={() => {
+                  dispatch({ type: 'RESIZE_ACTIVE_DOCUMENT', payload: { width: resizeValues.width, height: resizeValues.height } });
+                  setShowResizeDialog(false);
+                }}
+              >
+                Resize
               </button>
             </div>
           </div>

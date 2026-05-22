@@ -59,6 +59,13 @@ export interface AdjustmentState {
   selectiveRed: number; // -100 to +100
   selectiveGreen: number;
   selectiveBlue: number;
+  channelRedFromGreen: number;   // -100 to +100
+  channelRedFromBlue: number;
+  channelGreenFromRed: number;
+  channelGreenFromBlue: number;
+  channelBlueFromRed: number;
+  channelBlueFromGreen: number;
+  lutPreset: number;             // 0 none, 1 cinema, 2 matte, 3 cool
 }
 
 export const DEFAULT_ADJUSTMENTS: AdjustmentState = {
@@ -83,6 +90,13 @@ export const DEFAULT_ADJUSTMENTS: AdjustmentState = {
   selectiveRed: 0,
   selectiveGreen: 0,
   selectiveBlue: 0,
+  channelRedFromGreen: 0,
+  channelRedFromBlue: 0,
+  channelGreenFromRed: 0,
+  channelGreenFromBlue: 0,
+  channelBlueFromRed: 0,
+  channelBlueFromGreen: 0,
+  lutPreset: 0,
 };
 
 // ─── Image Document ───────────────────────────────────────────────────────────
@@ -127,6 +141,7 @@ export interface LayerInfo {
   opacity: number;
   blendMode: string;
   thumbnail: string | null;
+  imageData: ImageData | null;
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────
@@ -137,6 +152,8 @@ export interface HistoryEntry {
   timestamp: number;
   selection: SelectionState | null;
   adjustments: AdjustmentState;
+  layers: LayerInfo[];
+  activeLayerId: string | null;
 }
 
 // ─── Brush / Tool Options ─────────────────────────────────────────────────────
@@ -240,9 +257,11 @@ export type EditorAction =
   | { type: 'APPLY_CROP' }
   | { type: 'RESIZE_ACTIVE_DOCUMENT'; payload: { width: number; height: number } }
   | { type: 'ADD_LAYER' }
+  | { type: 'ADD_IMAGE_LAYER'; payload: { imageData: ImageData; name: string; thumbnail?: string | null } }
   | { type: 'DELETE_ACTIVE_LAYER' }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
   | { type: 'UPDATE_LAYER'; payload: { id: string; changes: Partial<LayerInfo> } }
+  | { type: 'REORDER_LAYER'; payload: { fromIndex: number; toIndex: number } }
   | { type: 'SET_SHOW_TRANSFORM_CONTROLS'; payload: boolean }
   | { type: 'SET_AUTO_SELECT'; payload: boolean }
   | { type: 'SET_RIGHT_TAB'; payload: 'adjustments' | 'properties' }

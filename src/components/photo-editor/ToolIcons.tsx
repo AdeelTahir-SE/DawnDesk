@@ -18,10 +18,24 @@ export function ToolIcon({ type }: { type: ToolType }) {
         </svg>
       );
     case 'lasso':
+    case 'polygon-lasso':
+    case 'quick-selection':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M7 19c-2.2 0-4-1.8-4-4 0-3.3 4-8 9-13 5 5 9 9.7 9 13 0 2.2-1.8 4-4 4" />
-          <circle cx="7" cy="19" r="2" fill="currentColor" />
+          {type === 'polygon-lasso' ? (
+            <path d="m5 6 7-3 7 5-2 9-8 4-5-6 1-9Z" />
+          ) : type === 'quick-selection' ? (
+            <>
+              <path d="M5 18c4-9 9-13 14-12-1 5-4 10-13 14" />
+              <path d="M8 17l-4 4" />
+              <path d="M16 4v4M14 6h4" />
+            </>
+          ) : (
+            <>
+              <path d="M7 19c-2.2 0-4-1.8-4-4 0-3.3 4-8 9-13 5 5 9 9.7 9 13 0 2.2-1.8 4-4 4" />
+              <circle cx="7" cy="19" r="2" fill="currentColor" />
+            </>
+          )}
         </svg>
       );
     case 'magic-wand':
@@ -48,10 +62,20 @@ export function ToolIcon({ type }: { type: ToolType }) {
         </svg>
       );
     case 'brush':
+    case 'pencil':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M18 3L8 13H5v3h3l10-10z" />
-          <path d="M5 16c-2 2-3 4-3 6 2 0 4-1 6-3" />
+          {type === 'pencil' ? (
+            <>
+              <path d="M16 3l5 5L8 21H3v-5L16 3Z" />
+              <path d="M14 5l5 5" />
+            </>
+          ) : (
+            <>
+              <path d="M18 3L8 13H5v3h3l10-10z" />
+              <path d="M5 16c-2 2-3 4-3 6 2 0 4-1 6-3" />
+            </>
+          )}
         </svg>
       );
     case 'eraser':
@@ -73,12 +97,23 @@ export function ToolIcon({ type }: { type: ToolType }) {
         </svg>
       );
     case 'clone-stamp':
+    case 'healing-brush':
+    case 'spot-heal':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="12" cy="10" r="6" />
-          <path d="M12 16v4" />
-          <path d="M8 22h8" />
-          <circle cx="12" cy="10" r="2" />
+          {type === 'clone-stamp' ? (
+            <>
+              <circle cx="12" cy="10" r="6" />
+              <path d="M12 16v4" />
+              <path d="M8 22h8" />
+              <circle cx="12" cy="10" r="2" />
+            </>
+          ) : (
+            <>
+              <path d="M12 21s7-4.4 7-11a4 4 0 0 0-7-2.6A4 4 0 0 0 5 10c0 6.6 7 11 7 11Z" />
+              <path d="M12 8v6M9 11h6" />
+            </>
+          )}
         </svg>
       );
     case 'text':
@@ -89,9 +124,13 @@ export function ToolIcon({ type }: { type: ToolType }) {
       );
     case 'shape-rect':
     case 'shape-ellipse':
+    case 'line':
+    case 'pen-path':
+    case 'polygon':
+    case 'custom-shape':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="9" />
+          {type === 'line' ? <path d="M4 20 20 4" /> : type === 'polygon' || type === 'custom-shape' ? <path d="m12 3 9 7-3.5 11h-11L3 10l9-7Z" /> : type === 'pen-path' ? <path d="m12 19 7-7-7-7-7 7 7 7Z" /> : type === 'shape-rect' ? <rect x="4" y="5" width="16" height="14" rx="2" /> : <circle cx="12" cy="12" r="9" />}
         </svg>
       );
     case 'hand':

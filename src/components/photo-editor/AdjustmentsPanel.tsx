@@ -47,9 +47,20 @@ const SELECTIVE_SLIDERS: SliderDef[] = [
   { key: 'selectiveBlue', label: 'Blues', min: -100, max: 100, step: 1, format: signed },
 ];
 
+const CHANNEL_SLIDERS: SliderDef[] = [
+  { key: 'channelRedFromGreen', label: 'Red from Green', min: -100, max: 100, step: 1, format: signed },
+  { key: 'channelRedFromBlue', label: 'Red from Blue', min: -100, max: 100, step: 1, format: signed },
+  { key: 'channelGreenFromRed', label: 'Green from Red', min: -100, max: 100, step: 1, format: signed },
+  { key: 'channelGreenFromBlue', label: 'Green from Blue', min: -100, max: 100, step: 1, format: signed },
+  { key: 'channelBlueFromRed', label: 'Blue from Red', min: -100, max: 100, step: 1, format: signed },
+  { key: 'channelBlueFromGreen', label: 'Blue from Green', min: -100, max: 100, step: 1, format: signed },
+];
+
 export default function AdjustmentsPanel() {
-  const { activeDocument, dispatch } = useEditor();
+  const { state, activeDocument, dispatch } = useEditor();
   const adjustments = activeDocument?.pendingAdjustments;
+  const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+  const canEditLayer = Boolean(activeDocument && activeLayer && !activeLayer.locked);
 
   const handleChange = (key: keyof AdjustmentState, value: number) => {
     dispatch({ type: 'UPDATE_ADJUSTMENT', payload: { key, value } });
@@ -80,7 +91,7 @@ export default function AdjustmentsPanel() {
               step={s.step}
               value={value}
               onChange={(e) => handleChange(s.key, Number(e.target.value))}
-              disabled={!activeDocument}
+              disabled={!canEditLayer}
             />
             <span className="pe-adj-slider__value">
               {s.format ? s.format(value) : value}
@@ -98,10 +109,32 @@ export default function AdjustmentsPanel() {
       {renderSliderGroup('Levels & Curves', LEVEL_SLIDERS)}
       {renderSliderGroup('Color Balance', BALANCE_SLIDERS)}
       {renderSliderGroup('Selective Color', SELECTIVE_SLIDERS)}
+      <div className="pe-adj-section">
+        <div className="pe-adj-section__header">
+          <span className="pe-adj-section__title">LUT / Color Lookup</span>
+          <button className="pe-adj-section__more" title="Reset adjustments" onClick={() => dispatch({ type: 'RESET_ADJUSTMENTS' })}>...</button>
+        </div>
+        <div className="pe-adj-slider">
+          <span className="pe-adj-slider__label">Preset</span>
+          <select
+            className="pe-options-bar__select"
+            value={adjustments?.lutPreset ?? 0}
+            onChange={(e) => handleChange('lutPreset', Number(e.target.value))}
+            disabled={!canEditLayer}
+          >
+            <option value={0}>None</option>
+            <option value={1}>Cinema Warm</option>
+            <option value={2}>Matte Fade</option>
+            <option value={3}>Cool Steel</option>
+          </select>
+          <span className="pe-adj-slider__value">v3</span>
+        </div>
+      </div>
+      {renderSliderGroup('Channel Mixer', CHANNEL_SLIDERS)}
       <div className="pe-adj-section" style={{ padding: '8px 12px' }}>
         <button
           className="pe-action-button pe-action-button--primary"
-          disabled={!activeDocument}
+          disabled={!canEditLayer}
           onClick={() => dispatch({ type: 'COMMIT_ADJUSTMENT' })}
         >
           Apply Adjustments

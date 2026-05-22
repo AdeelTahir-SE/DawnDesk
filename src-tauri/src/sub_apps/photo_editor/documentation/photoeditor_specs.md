@@ -25,6 +25,7 @@ This document lists all 100 planned features, grouped by functional area, and as
 ## 3. Expected UI Layout
 
 The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language with a three-panel layout:
+The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language with a three-panel layout:
 
 ```
  src_tauri/sub_apps/photo_editor/documentation/expected_ui.png
@@ -40,13 +41,13 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 | # | Feature | Description | Version | Status |
 |---|---------|-------------|---------|--------|
 | 1 | Open / Import Image | Open JPG, PNG, WebP, TIFF from disk or DawnDesk file manager | `v0.1` | ✅ DONE |
-| 2 | Canvas Zoom & Pan | Mouse-wheel zoom and drag-to-pan for navigating large images | `v0.1` | ✅ DONE |
+| 2 | Canvas Zoom & Pan | Mouse-wheel/touchpad zoom, zoom shortcuts, and drag/shift-wheel pan for navigating large images | `v0.1` | ✅ DONE |
 | 3 | Undo / Redo Stack | 30-step undo/redo for all destructive edits | `v0.1` | ✅ DONE |
 | 4 | Save & Export (PNG/JPG) | One-click save back to DawnDesk storage or download locally | `v0.1` | ✅ DONE |
 | 5 | Dark Canvas Theme | Editor chrome matches DawnDesk black/yellow design system | `v0.1` | ✅ DONE |
 | 6 | Crop & Straighten | Freeform and aspect-ratio crop with auto-straighten slider | `v0.1` | ⏳ Partial (UI only) |
 | 7 | Rotate & Flip | 90° rotate, arbitrary angle rotate, horizontal/vertical flip | `v0.1` | ✅ DONE |
-| 8 | Image Resize | Resize by pixel dimensions or percentage with aspect-lock | `v0.1` | ⏳ Pending Rust backend |
+| 8 | Image Resize | Resize by pixel dimensions or percentage with aspect-lock | `v0.1` | ✅ DONE (frontend high-quality canvas resize) |
 | 9 | Full-Screen Focus Mode | Hides DawnDesk sidebar for distraction-free editing | `v1.0` | — |
 | 10 | Multi-Tab Images | Open multiple images as tabs inside the Photo Editor app | `v1.0` | ✅ DONE (early) |
 
@@ -77,11 +78,11 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 | 22 | Eraser Tool | Erase pixels to transparency; hard/soft edge toggle | `v0.1` | ✅ DONE |
 | 23 | Fill / Paint Bucket | Flood-fill a contiguous region with the chosen foreground color | `v0.1` | ✅ DONE |
 | 24 | Color Picker (Eyedropper) | Sample any pixel on canvas as the active foreground color | `v0.1` | ✅ DONE |
-| 25 | Pencil Tool | Hard pixel-level drawing for precise line work | `v1.0` | — |
-| 26 | Gradient Fill Tool | Linear, radial, and conical gradients between two colors | `v1.0` | — |
-| 27 | Clone Stamp | Paint over flaws by sampling from another part of the image | `v2.0` | — |
-| 28 | Healing Brush | Blend-based repair of blemishes using surrounding texture | `v2.0` | — |
-| 29 | Spot Heal | One-click auto-removal of small imperfections | `v2.0` | — |
+| 25 | Pencil Tool | Hard pixel-level drawing for precise line work | `v1.0` | ✅ DONE |
+| 26 | Gradient Fill Tool | Linear, radial, and conical gradients between two colors | `v1.0` | ⏳ Partial (linear gradient) |
+| 27 | Clone Stamp | Paint over flaws by sampling from another part of the image | `v2.0` | ✅ DONE |
+| 28 | Healing Brush | Blend-based repair of blemishes using surrounding texture | `v2.0` | ✅ DONE (basic blend) |
+| 29 | Spot Heal | One-click auto-removal of small imperfections | `v2.0` | ✅ DONE (basic local fill) |
 | 30 | Mixer Brush | Wet-paint mixing simulation for digital painting workflows | `v3.0` | — |
 
 ---
@@ -93,13 +94,13 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 | 31 | Brightness & Contrast | Simple sliders to lift/lower overall brightness and contrast | `v0.1` | ✅ DONE |
 | 32 | Hue / Saturation | Shift global hue, boost or drain saturation, adjust lightness | `v0.1` | ✅ DONE |
 | 33 | Exposure | Simulate camera exposure change; affects highlights most | `v0.1` | ✅ DONE |
-| 34 | Levels | Set black, grey, and white points on a live histogram | `v1.0` | — |
-| 35 | Curves | Free-point adjustment curve for tone and per-channel color | `v1.0` | — |
-| 36 | Color Balance | Adjust shadow/midtone/highlight color bias independently | `v1.0` | — |
-| 37 | Vibrance | Boost muted colors while protecting skin-tone saturation | `v2.0` | — |
-| 38 | Selective Color | Tweak CMYK components inside individual color ranges | `v2.0` | — |
-| 39 | Channel Mixer | Blend RGB source channels for custom grayscale or toning | `v3.0` | — |
-| 40 | LUT / Color Lookup | Apply cinematic 3D LUT files for instant color grading | `v3.0` | — |
+| 34 | Levels | Set black, grey, and white points on a live histogram | `v1.0` | ✅ DONE |
+| 35 | Curves | Free-point adjustment curve for tone and per-channel color | `v1.0` | ⏳ Partial (curve amount slider) |
+| 36 | Color Balance | Adjust shadow/midtone/highlight color bias independently | `v1.0` | ✅ DONE |
+| 37 | Vibrance | Boost muted colors while protecting skin-tone saturation | `v2.0` | ✅ DONE |
+| 38 | Selective Color | Tweak CMYK components inside individual color ranges | `v2.0` | ⏳ Partial (RGB selective controls) |
+| 39 | Channel Mixer | Blend RGB source channels for custom grayscale or toning | `v3.0` | ✅ DONE |
+| 40 | LUT / Color Lookup | Apply cinematic 3D LUT files for instant color grading | `v3.0` | ⏳ Partial (built-in presets) |
 
 ---
 
@@ -111,12 +112,12 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 | 42 | Gaussian Blur | Smooth, even blur; strength controlled by radius slider | `v0.1` | ✅ DONE (frontend box blur) |
 | 43 | Sharpen | Edge-enhancement sharpening with amount and radius controls | `v0.1` | ✅ DONE (unsharp mask) |
 | 44 | Invert Colors | Flip all color values to their opposites for negative effect | `v0.1` | ✅ DONE |
-| 45 | Sepia Tone | Apply classic warm brownish sepia colour-wash to photos | `v1.0` | — |
-| 46 | Vignette | Darkened or lightened border fade for focus and mood | `v1.0` | — |
-| 47 | Motion Blur | Directional blur along a user-defined angle and distance | `v1.0` | — |
-| 48 | Noise Add / Reduce | Add grain for film look or denoise for clean output | `v2.0` | — |
-| 49 | Smart Sharpen | Intelligent edge sharpening with noise-aware processing | `v2.0` | — |
-| 50 | Liquify Warp | Warp, push, pucker, and bloat regions for retouching | `v3.0` | — |
+| 45 | Sepia Tone | Apply classic warm brownish sepia colour-wash to photos | `v1.0` | ✅ DONE |
+| 46 | Vignette | Darkened or lightened border fade for focus and mood | `v1.0` | ✅ DONE |
+| 47 | Motion Blur | Directional blur along a user-defined angle and distance | `v1.0` | ✅ DONE |
+| 48 | Noise Add / Reduce | Add grain for film look or denoise for clean output | `v2.0` | ✅ DONE |
+| 49 | Smart Sharpen | Intelligent edge sharpening with noise-aware processing | `v2.0` | ✅ DONE |
+| 50 | Liquify Warp | Warp, push, pucker, and bloat regions for retouching | `v3.0` | ⏳ Partial (experimental center warp) |
 
 ---
 
@@ -125,10 +126,10 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 | # | Feature | Description | Version | Status |
 |---|---------|-------------|---------|--------|
 | 51 | Single Flat Layer | All edits on one merged canvas layer; exported as flat file | `v0.1` | ✅ DONE |
-| 52 | Add / Delete Layer | Stack multiple independent pixel layers in the editor | `v1.0` | — |
-| 53 | Layer Visibility Toggle | Show/hide individual layers with the eye icon | `v1.0` | — |
-| 54 | Layer Opacity | Set 0–100% transparency per layer for blending | `v1.0` | — |
-| 55 | Blend Modes | Normal, Multiply, Screen, Overlay and 10+ blend algorithms | `v2.0` | — |
+| 52 | Add / Delete Layer | Stack multiple independent pixel layers in the editor | `v1.0` | ✅ DONE |
+| 53 | Layer Visibility Toggle | Show/hide individual layers with the eye icon | `v1.0` | ✅ DONE |
+| 54 | Layer Opacity | Set 0–100% transparency per layer for blending | `v1.0` | ✅ DONE |
+| 55 | Blend Modes | Normal, Multiply, Screen, Overlay and 10+ blend algorithms | `v2.0` | ⏳ Partial (Normal, Multiply, Screen, Overlay, Soft Light, Color) |
 | 56 | Layer Masks | Non-destructive hide/reveal using grayscale mask painting | `v2.0` | — |
 | 57 | Adjustment Layers | Non-destructive color corrections as dedicated layer types | `v2.0` | — |
 | 58 | Smart Objects | Embed images as protected smart layers for lossless transforms | `v3.0` | — |
@@ -160,12 +161,12 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 |---|---------|-------------|---------|--------|
 | 71 | Rectangle Shape | Draw filled or stroked rectangles with corner-radius option | `v0.1` | ✅ DONE |
 | 72 | Ellipse Shape | Draw circles and ovals as vector shapes on the canvas | `v0.1` | ✅ DONE |
-| 73 | Line Tool | Draw straight lines with color and stroke-width control | `v1.0` | — |
+| 73 | Line Tool | Draw straight lines with color and stroke-width control | `v1.0` | ✅ DONE |
 | 74 | Basic Pen Path | Create simple Bezier vector paths for custom shapes | `v2.0` | — |
-| 75 | Shape Fill & Stroke | Set fill color, stroke color, and stroke width on shapes | `v1.0` | — |
-| 76 | Polygon Tool | Regular polygons and stars with N-sides slider | `v2.0` | — |
+| 75 | Shape Fill & Stroke | Set fill color, stroke color, and stroke width on shapes | `v1.0` | ✅ DONE |
+| 76 | Polygon Tool | Regular polygons and stars with N-sides slider | `v2.0` | ✅ DONE |
 | 77 | Boolean Operations | Add, subtract, intersect, and exclude overlapping shapes | `v3.0` | — |
-| 78 | Custom Shape Library | Built-in library of arrow, badge, frame, and icon shapes | `v2.0` | — |
+| 78 | Custom Shape Library | Built-in library of arrow, badge, frame, and icon shapes | `v2.0` | ⏳ Partial (custom polygon/star preset) |
 | 79 | Vector Export (SVG) | Export shape layers as clean SVG for use in other DawnDesk apps | `v3.0` | — |
 | 80 | Path Direct Select | Move individual anchor points to reshape vector paths | `v3.0` | — |
 
@@ -193,15 +194,15 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 | # | Feature | Description | Version | Status |
 |---|---------|-------------|---------|--------|
 | 91 | Export PNG / JPG | Save flat image in PNG or JPG with quality slider | `v0.1` | ✅ DONE |
-| 92 | Export WebP | Save in WebP for smaller file size on the web | `v1.0` | — |
+| 92 | Export WebP | Save in WebP for smaller file size on the web | `v1.0` | ✅ DONE |
 | 93 | Copy to Clipboard | Copy canvas to system clipboard for pasting in other apps | `v0.1` | ✅ DONE |
 | 94 | Send to DawnDesk Notes | Insert the current image directly into a Notes document | `v1.0` | — |
 | 95 | Send to DawnDesk Email | Attach edited photo to a compose window in DawnDesk Mail | `v1.0` | — |
-| 96 | Batch Export | Export multiple open images at once with shared settings | `v2.0` | — |
+| 96 | Batch Export | Export multiple open images at once with shared settings | `v2.0` | ✅ DONE |
 | 97 | Export Layers as Files | Each visible layer exported as a separate PNG/JPG file | `v3.0` | — |
 | 98 | Version History | DawnDesk cloud saves edit snapshots; restore any prior version | `v2.0` | — |
 | 99 | Collaboration Annotations | Team members annotate the image with pins and comments | `v3.0` | — |
-| 100 | Custom Export Presets | Save export configurations (format, size, quality) as presets | `v3.0` | — |
+| 100 | Custom Export Presets | Save export configurations (format, size, quality) as presets | `v3.0` | ✅ DONE |
 
 ---
 
@@ -217,4 +218,4 @@ The Photo Editor follows DawnDesk's **black-and-dark-yellow** design language wi
 
 ---
 
-*DawnDesk — Photo Editor Feature Spec | Confidential*
+*DawnDesk — Photo Editor Feature Spec*

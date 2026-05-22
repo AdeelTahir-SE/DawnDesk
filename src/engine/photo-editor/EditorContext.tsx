@@ -3,8 +3,10 @@ import {
   type EditorState,
   type EditorAction,
   type HistoryEntry,
+  type LayerInfo,
   DEFAULT_ADJUSTMENTS,
 } from './types';
+import { applyAllAdjustments } from './filters';
 
 const MAX_HISTORY = 30;
 
@@ -79,6 +81,8 @@ function pushHistory(state: EditorState, label: string): EditorState {
     timestamp: Date.now(),
     selection: state.selection ? { ...state.selection } : null,
     adjustments: { ...doc.pendingAdjustments },
+    layers: cloneLayers(state.layers),
+    activeLayerId: state.activeLayerId,
   };
 
   // Truncate any redo history beyond current index
@@ -95,6 +99,117 @@ function pushHistory(state: EditorState, label: string): EditorState {
     history: newHistory,
     historyIndex: newHistory.length - 1,
   };
+}
+
+function cloneImageData(imageData: ImageData): ImageData {
+  return new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  );
+}
+
+function cloneLayers(layers: LayerInfo[]): LayerInfo[] {
+  return layers.map((layer) => ({
+    ...layer,
+    imageData: layer.imageData ? cloneImageData(layer.imageData) : null,
+  }));
+}
+
+function createBlankImageData(width: number, height: number): ImageData {
+  return new ImageData(Math.max(1, width), Math.max(1, height));
+}
+
+function makeThumbnail(imageData: ImageData): string {
+  const maxW = 96;
+  const scale = Math.min(1, maxW / imageData.width);
+  const thumbW = Math.max(1, Math.round(imageData.width * scale));
+  const thumbH = Math.max(1, Math.round(imageData.height * scale));
+  const source = document.createElement('canvas');
+  source.width = imageData.width;
+  source.height = imageData.height;
+  source.getContext('2d')!.putImageData(imageData, 0, 0);
+
+  const thumb = document.createElement('canvas');
+  thumb.width = thumbW;
+  thumb.height = thumbH;
+  const ctx = thumb.getContext('2d')!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, 0, 0, thumbW, thumbH);
+  return thumb.toDataURL('image/png');
+}
+
+function fitImageDataToCanvas(imageData: ImageData, width: number, height: number): ImageData {
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, width);
+  out.height = Math.max(1, height);
+  const outCtx = out.getContext('2d')!;
+  const source = document.createElement('canvas');
+  source.width = imageData.width;
+  source.height = imageData.height;
+  source.getContext('2d')!.putImageData(imageData, 0, 0);
+
+  const scale = Math.min(1, out.width / imageData.width, out.height / imageData.height);
+  const drawW = Math.max(1, Math.round(imageData.width * scale));
+  const drawH = Math.max(1, Math.round(imageData.height * scale));
+  const x = Math.round((out.width - drawW) / 2);
+  const y = Math.round((out.height - drawH) / 2);
+  outCtx.imageSmoothingEnabled = true;
+  outCtx.imageSmoothingQuality = 'high';
+  outCtx.drawImage(source, x, y, drawW, drawH);
+  return outCtx.getImageData(0, 0, out.width, out.height);
+}
+
+function compositeLayers(layers: LayerInfo[], width: number, height: number): ImageData {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  const ctx = canvas.getContext('2d')!;
+
+  [...layers].reverse().forEach((layer) => {
+    if (!layer.visible || !layer.imageData) return;
+    const source = document.createElement('canvas');
+    source.width = layer.imageData.width;
+    source.height = layer.imageData.height;
+    source.getContext('2d')!.putImageData(layer.imageData, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity / 100));
+    ctx.globalCompositeOperation = layer.blendMode === 'soft-light'
+      ? 'soft-light'
+      : layer.blendMode === 'color'
+        ? 'color'
+        : ['multiply', 'screen', 'overlay'].includes(layer.blendMode)
+          ? layer.blendMode as GlobalCompositeOperation
+          : 'source-over';
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  });
+
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function updateActiveDocumentComposite(state: EditorState, layers: LayerInfo[]): EditorState {
+  const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+  if (!doc) return { ...state, layers };
+  const composite = compositeLayers(layers, doc.width, doc.height);
+  return {
+    ...state,
+    layers,
+    documents: state.documents.map((d) =>
+      d.id === state.activeDocumentId
+        ? { ...d, imageData: composite, isDirty: true, thumbnail: makeThumbnail(composite) }
+        : d
+    ),
+  };
+}
+
+function insertLayerAboveActive(layers: LayerInfo[], activeLayerId: string | null, layer: LayerInfo): LayerInfo[] {
+  const activeIndex = layers.findIndex((item) => item.id === activeLayerId);
+  if (activeIndex < 0) return [layer, ...layers];
+  const next = [...layers];
+  next.splice(activeIndex, 0, layer);
+  return next;
 }
 
 // ─── Canvas Transform Helpers ─────────────────────────────────────────────────
@@ -221,6 +336,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         opacity: 100,
         blendMode: 'normal',
         thumbnail: action.payload.thumbnail,
+        imageData: action.payload.imageData ? cloneImageData(action.payload.imageData) : null,
       };
       // Push initial history entry for the new document
       const newState = {
@@ -301,12 +417,22 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
 
     case 'COMMIT_ADJUSTMENT': {
-      // Bake pending adjustments into imageData and push history
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc?.imageData) return state;
+      const selectedLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+      if (!selectedLayer || selectedLayer.locked) return state;
       const stateWithHistory = pushHistory(state, 'Adjustment');
+      const activeLayerId = stateWithHistory.activeLayerId;
+      const layers = stateWithHistory.layers.map((layer) => {
+        if (layer.id !== activeLayerId || !layer.imageData) return layer;
+        const imageData = applyAllAdjustments(layer.imageData, doc.pendingAdjustments);
+        return { ...layer, imageData, thumbnail: makeThumbnail(imageData) };
+      });
+      const nextState = updateActiveDocumentComposite(stateWithHistory, layers);
       return {
-        ...stateWithHistory,
-        documents: stateWithHistory.documents.map((d) =>
-          d.id === stateWithHistory.activeDocumentId
+        ...nextState,
+        documents: nextState.documents.map((d) =>
+          d.id === nextState.activeDocumentId
             ? { ...d, pendingAdjustments: { ...DEFAULT_ADJUSTMENTS } }
             : d
         ),
@@ -372,9 +498,15 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       if (!doc?.imageData || crop.width < 2 || crop.height < 2) return state;
 
       const stateWithHistory = pushHistory(state, 'Crop');
-      const cropped = cropImageData(doc.imageData, crop);
+      const layers = stateWithHistory.layers.map((layer) => {
+        if (!layer.imageData) return layer;
+        const imageData = cropImageData(layer.imageData, crop);
+        return { ...layer, imageData, thumbnail: makeThumbnail(imageData) };
+      });
+      const cropped = compositeLayers(layers, Math.round(crop.width), Math.round(crop.height));
       return {
         ...stateWithHistory,
+        layers,
         cropState: { ...stateWithHistory.cropState, active: false, x: 0, y: 0, width: 0, height: 0 },
         selection: null,
         documents: stateWithHistory.documents.map((d) =>
@@ -389,9 +521,17 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const doc = state.documents.find((d) => d.id === state.activeDocumentId);
       if (!doc?.imageData) return state;
       const stateWithHistory = pushHistory(state, 'Resize Image');
-      const resized = resizeImageData(doc.imageData, action.payload.width, action.payload.height);
+      const nextW = Math.max(1, Math.round(action.payload.width));
+      const nextH = Math.max(1, Math.round(action.payload.height));
+      const layers = stateWithHistory.layers.map((layer) => {
+        if (!layer.imageData) return layer;
+        const imageData = resizeImageData(layer.imageData, nextW, nextH);
+        return { ...layer, imageData, thumbnail: makeThumbnail(imageData) };
+      });
+      const resized = compositeLayers(layers, nextW, nextH);
       return {
         ...stateWithHistory,
+        layers,
         documents: stateWithHistory.documents.map((d) =>
           d.id === stateWithHistory.activeDocumentId
             ? { ...d, imageData: resized, width: resized.width, height: resized.height, isDirty: true }
@@ -401,6 +541,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
 
     case 'ADD_LAYER': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc) return state;
       const layer = {
         id: `layer-${Date.now()}`,
         name: `Layer ${state.layers.length + 1}`,
@@ -408,28 +550,66 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         locked: false,
         opacity: 100,
         blendMode: 'normal',
+        imageData: createBlankImageData(doc.width, doc.height),
         thumbnail: null,
       };
-      return { ...state, layers: [layer, ...state.layers], activeLayerId: layer.id };
+      const stateWithHistory = pushHistory(state, 'Add Layer');
+      const layers = insertLayerAboveActive(stateWithHistory.layers, stateWithHistory.activeLayerId, layer);
+      return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: layer.id }, layers);
+    }
+
+    case 'ADD_IMAGE_LAYER': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc) return state;
+      const layerImageData = fitImageDataToCanvas(action.payload.imageData, doc.width, doc.height);
+      const layer = {
+        id: `layer-${Date.now()}`,
+        name: action.payload.name || `Image Layer ${state.layers.length + 1}`,
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        thumbnail: action.payload.thumbnail ?? makeThumbnail(layerImageData),
+        imageData: layerImageData,
+      };
+      const stateWithHistory = pushHistory(state, 'Add Image Layer');
+      const layers = insertLayerAboveActive(stateWithHistory.layers, stateWithHistory.activeLayerId, layer);
+      return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: layer.id }, layers);
     }
 
     case 'DELETE_ACTIVE_LAYER': {
       const layer = state.layers.find((l) => l.id === state.activeLayerId);
       if (!layer || layer.locked) return state;
       const layers = state.layers.filter((l) => l.id !== layer.id);
-      return { ...state, layers, activeLayerId: layers[0]?.id ?? null };
+      return updateActiveDocumentComposite({ ...state, activeLayerId: layers[0]?.id ?? null }, layers);
     }
 
     case 'SET_ACTIVE_LAYER':
       return { ...state, activeLayerId: action.payload };
 
     case 'UPDATE_LAYER':
-      return {
+      return updateActiveDocumentComposite({
         ...state,
-        layers: state.layers.map((layer) =>
+      }, state.layers.map((layer) =>
           layer.id === action.payload.id ? { ...layer, ...action.payload.changes } : layer
-        ),
-      };
+        ));
+
+    case 'REORDER_LAYER': {
+      const { fromIndex } = action.payload;
+      let { toIndex } = action.payload;
+      if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= state.layers.length || toIndex >= state.layers.length) {
+        return state;
+      }
+      const layers = [...state.layers];
+      const [moved] = layers.splice(fromIndex, 1);
+      if (!moved || moved.locked) return state;
+      const firstLockedIndex = layers.findIndex((layer) => layer.locked);
+      if (firstLockedIndex >= 0 && toIndex > firstLockedIndex) {
+        toIndex = firstLockedIndex;
+      }
+      layers.splice(toIndex, 0, moved);
+      return updateActiveDocumentComposite(state, layers);
+    }
 
     case 'SET_SHOW_TRANSFORM_CONTROLS':
       return { ...state, showTransformControls: action.payload };
@@ -472,12 +652,19 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
       const stateWithHistory = pushHistory(state, `Rotate ${action.payload}°`);
       const { data, w, h } = rotateImageData(doc.imageData, action.payload);
+      const layers = stateWithHistory.layers.map((layer) => {
+        if (!layer.imageData) return layer;
+        const rotated = rotateImageData(layer.imageData, action.payload).data;
+        return { ...layer, imageData: rotated, thumbnail: makeThumbnail(rotated) };
+      });
+      const composite = compositeLayers(layers, w, h);
 
       return {
         ...stateWithHistory,
+        layers,
         documents: stateWithHistory.documents.map((d) =>
           d.id === stateWithHistory.activeDocumentId
-            ? { ...d, imageData: data, width: w, height: h, isDirty: true }
+            ? { ...d, imageData: composite ?? data, width: w, height: h, isDirty: true }
             : d
         ),
       };
@@ -489,12 +676,19 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
       const stateWithHistory = pushHistory(state, `Flip ${action.payload}`);
       const flipped = flipImageData(doc.imageData, action.payload);
+      const layers = stateWithHistory.layers.map((layer) => {
+        if (!layer.imageData) return layer;
+        const imageData = flipImageData(layer.imageData, action.payload);
+        return { ...layer, imageData, thumbnail: makeThumbnail(imageData) };
+      });
+      const composite = compositeLayers(layers, doc.width, doc.height);
 
       return {
         ...stateWithHistory,
+        layers,
         documents: stateWithHistory.documents.map((d) =>
           d.id === stateWithHistory.activeDocumentId
-            ? { ...d, imageData: flipped, isDirty: true }
+            ? { ...d, imageData: composite ?? flipped, isDirty: true }
             : d
         ),
       };
@@ -509,6 +703,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         historyIndex: state.historyIndex - 1,
         selection: prevEntry.selection,
+        layers: cloneLayers(prevEntry.layers),
+        activeLayerId: prevEntry.activeLayerId,
         documents: state.documents.map((d) =>
           d.id === state.activeDocumentId
             ? {
@@ -537,6 +733,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         historyIndex: state.historyIndex + 1,
         selection: nextEntry.selection,
+        layers: cloneLayers(nextEntry.layers),
+        activeLayerId: nextEntry.activeLayerId,
         documents: state.documents.map((d) =>
           d.id === state.activeDocumentId
             ? {
@@ -558,13 +756,26 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
     case 'APPLY_TOOL_RESULT': {
       const stateWithHistory = pushHistory(state, action.payload.label);
+      const activeLayer = stateWithHistory.layers.find((layer) => layer.id === stateWithHistory.activeLayerId);
+      if (!activeLayer || activeLayer.locked) return state;
+      const layers = activeLayer
+        ? stateWithHistory.layers.map((layer) =>
+            layer.id === activeLayer.id
+              ? { ...layer, imageData: action.payload.imageData, thumbnail: makeThumbnail(action.payload.imageData) }
+              : layer
+          )
+        : stateWithHistory.layers;
+      const composite = activeLayer
+        ? compositeLayers(layers, action.payload.imageData.width, action.payload.imageData.height)
+        : action.payload.imageData;
       return {
         ...stateWithHistory,
+        layers,
         documents: stateWithHistory.documents.map((d) =>
           d.id === stateWithHistory.activeDocumentId
             ? {
                 ...d,
-                imageData: action.payload.imageData,
+                imageData: composite,
                 isDirty: true,
               }
             : d

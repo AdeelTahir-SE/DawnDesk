@@ -8,11 +8,16 @@ export async function exportImageToFile(
   scale = 1
 ): Promise<void> {
   const blob = await imageDataToBlob(imageData, format, quality, scale);
+  const exportName = withExtension(fileName, format);
+
+  if (await saveWithBrowserPicker(blob, exportName, format)) {
+    return;
+  }
 
   try {
     const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
     await invoke('photo_export_file', {
-      fileName: withExtension(fileName, format),
+      fileName: exportName,
       bytes,
     });
     return;
@@ -23,7 +28,7 @@ export async function exportImageToFile(
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = withExtension(fileName, format);
+  a.download = exportName;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
@@ -31,6 +36,43 @@ export async function exportImageToFile(
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 1000);
+}
+
+async function saveWithBrowserPicker(
+  blob: Blob,
+  fileName: string,
+  format: 'png' | 'jpeg' | 'webp'
+): Promise<boolean> {
+  const picker = (window as unknown as {
+    showSaveFilePicker?: (options: {
+      suggestedName: string;
+      types: Array<{ description: string; accept: Record<string, string[]> }>;
+    }) => Promise<{ createWritable: () => Promise<{ write: (blob: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+  }).showSaveFilePicker;
+
+  if (!picker) return false;
+
+  try {
+    const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
+    const extension = format === 'jpeg' ? '.jpg' : `.${format}`;
+    const handle = await picker({
+      suggestedName: fileName,
+      types: [
+        {
+          description: `${format.toUpperCase()} image`,
+          accept: { [mimeType]: [extension] },
+        },
+      ],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return true;
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') return true;
+    console.warn('Save picker failed, falling back to native export:', error);
+    return false;
+  }
 }
 
 export async function imageDataToBlob(

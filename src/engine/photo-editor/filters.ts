@@ -154,6 +154,56 @@ export function applySelectiveColor(imageData: ImageData, red: number, green: nu
   return new ImageData(data, imageData.width, imageData.height);
 }
 
+export function applyChannelMixer(
+  imageData: ImageData,
+  redFromGreen: number,
+  redFromBlue: number,
+  greenFromRed: number,
+  greenFromBlue: number,
+  blueFromRed: number,
+  blueFromGreen: number
+): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const rg = redFromGreen / 100;
+  const rb = redFromBlue / 100;
+  const gr = greenFromRed / 100;
+  const gb = greenFromBlue / 100;
+  const br = blueFromRed / 100;
+  const bg = blueFromGreen / 100;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    data[i] = Math.max(0, Math.min(255, r + g * rg + b * rb));
+    data[i + 1] = Math.max(0, Math.min(255, g + r * gr + b * gb));
+    data[i + 2] = Math.max(0, Math.min(255, b + r * br + g * bg));
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
+export function applyLutPreset(imageData: ImageData, preset: number): ImageData {
+  if (preset === 0) return imageData;
+  const data = new Uint8ClampedArray(imageData.data);
+
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i], g = data[i + 1], b = data[i + 2];
+    if (preset === 1) {
+      r = r * 1.08 + 10; g = g * 1.02; b = b * 0.88;
+    } else if (preset === 2) {
+      r = r * 0.95 + 18; g = g * 0.95 + 14; b = b * 0.92 + 8;
+    } else if (preset === 3) {
+      r = r * 0.9; g = g * 1.02 + 4; b = b * 1.12 + 12;
+    }
+    data[i] = Math.max(0, Math.min(255, r));
+    data[i + 1] = Math.max(0, Math.min(255, g));
+    data[i + 2] = Math.max(0, Math.min(255, b));
+  }
+
+  return new ImageData(data, imageData.width, imageData.height);
+}
+
 // ─── Filters ──────────────────────────────────────────────────────────────────
 
 export function applyGrayscale(imageData: ImageData): ImageData {
@@ -265,6 +315,37 @@ export function applyNoise(imageData: ImageData, amount = 18): ImageData {
 
 export function applyDenoise(imageData: ImageData): ImageData {
   return applyBlurFast(imageData, 1);
+}
+
+export function applyLiquifyWarp(imageData: ImageData, strength = 18): ImageData {
+  const { width, height, data: src } = imageData;
+  const dst = new Uint8ClampedArray(src.length);
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxRadius = Math.min(width, height) / 2;
+  const twist = strength / 100;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const influence = Math.max(0, 1 - distance / maxRadius);
+      const angle = twist * influence * influence * Math.PI;
+      const sx = Math.round(cx + dx * Math.cos(angle) - dy * Math.sin(angle));
+      const sy = Math.round(cy + dx * Math.sin(angle) + dy * Math.cos(angle));
+      const srcX = Math.max(0, Math.min(width - 1, sx));
+      const srcY = Math.max(0, Math.min(height - 1, sy));
+      const srcIdx = (srcY * width + srcX) * 4;
+      const dstIdx = (y * width + x) * 4;
+      dst[dstIdx] = src[srcIdx];
+      dst[dstIdx + 1] = src[srcIdx + 1];
+      dst[dstIdx + 2] = src[srcIdx + 2];
+      dst[dstIdx + 3] = src[srcIdx + 3];
+    }
+  }
+
+  return new ImageData(dst, width, height);
 }
 
 /**
@@ -451,6 +532,24 @@ export function applyAllAdjustments(
   }
   if (adjustments.selectiveRed !== 0 || adjustments.selectiveGreen !== 0 || adjustments.selectiveBlue !== 0) {
     result = applySelectiveColor(result, adjustments.selectiveRed, adjustments.selectiveGreen, adjustments.selectiveBlue);
+  }
+  if (
+    adjustments.channelRedFromGreen !== 0 || adjustments.channelRedFromBlue !== 0 ||
+    adjustments.channelGreenFromRed !== 0 || adjustments.channelGreenFromBlue !== 0 ||
+    adjustments.channelBlueFromRed !== 0 || adjustments.channelBlueFromGreen !== 0
+  ) {
+    result = applyChannelMixer(
+      result,
+      adjustments.channelRedFromGreen,
+      adjustments.channelRedFromBlue,
+      adjustments.channelGreenFromRed,
+      adjustments.channelGreenFromBlue,
+      adjustments.channelBlueFromRed,
+      adjustments.channelBlueFromGreen
+    );
+  }
+  if (adjustments.lutPreset !== 0) {
+    result = applyLutPreset(result, adjustments.lutPreset);
   }
 
   return result;
