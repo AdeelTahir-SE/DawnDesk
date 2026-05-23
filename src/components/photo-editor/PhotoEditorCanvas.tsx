@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEditor } from '../../engine/photo-editor/EditorContext';
-import { drawStrokeBetween, sampleColor } from '../../engine/photo-editor/drawingTools';
+import { drawStrokeBetween, floodFill, hexToRGBA, sampleColor } from '../../engine/photo-editor/drawingTools';
 import { applyAllAdjustments } from '../../engine/photo-editor/filters';
 import type { StrokePoint } from '../../engine/photo-editor/drawingTools';
 import type { LayerInfo } from '../../engine/photo-editor/types';
@@ -405,6 +405,13 @@ export default function PhotoEditorCanvas() {
           if (!editImageData) break;
           isSelecting.current = true;
           setSelStart(coords);
+          break;
+        }
+
+        case 'paint-bucket': {
+          if (!editImageData) break;
+          const filled = floodFill(editImageData, coords.x, coords.y, hexToRGBA(state.foregroundColor), 32);
+          dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: filled, label: 'Paint Bucket' } });
           break;
         }
 

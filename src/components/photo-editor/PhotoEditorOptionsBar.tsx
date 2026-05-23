@@ -135,6 +135,16 @@ export default function PhotoEditorOptionsBar() {
           </>
         );
 
+      case 'paint-bucket':
+        return (
+          <>
+            <span className="pe-options-bar__label">Fill:</span>
+            <span className="pe-options-bar__label">{state.foregroundColor}</span>
+            <span className="pe-options-bar__label">Tolerance:</span>
+            <input type="range" min="1" max="96" defaultValue="32" style={{ width: 90, accentColor: 'var(--pe-accent)' }} />
+          </>
+        );
+
       default:
         return (
           <>

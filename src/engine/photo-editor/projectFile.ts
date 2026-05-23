@@ -181,6 +181,7 @@ export async function saveProject(
       blendMode: layer.blendMode,
       imageDataUrl: layer.imageData ? await imageDataToDataUrl(layer.imageData) : null,
       thumbnail: layer.thumbnail,
+      isSmartObject: layer.isSmartObject,
     }))
   );
 
@@ -251,6 +252,7 @@ export async function updateProject(
       blendMode: layer.blendMode,
       imageDataUrl: layer.imageData ? await imageDataToDataUrl(layer.imageData) : null,
       thumbnail: layer.thumbnail,
+      isSmartObject: layer.isSmartObject,
     }))
   );
 
@@ -315,6 +317,7 @@ export async function loadProject(projectId: string): Promise<LoadedProject> {
         blendMode: pl.blendMode,
         thumbnail: pl.thumbnail,
         imageData,
+        isSmartObject: pl.isSmartObject,
       };
     })
   );
@@ -416,6 +419,7 @@ export async function exportProjectAsFile(
       blendMode: layer.blendMode,
       imageDataUrl: layer.imageData ? await imageDataToDataUrl(layer.imageData) : null,
       thumbnail: layer.thumbnail,
+      isSmartObject: layer.isSmartObject,
     }))
   );
 
@@ -471,6 +475,7 @@ export async function importProjectFromFile(file: File): Promise<LoadedProject> 
         blendMode: pl.blendMode,
         thumbnail: pl.thumbnail,
         imageData,
+        isSmartObject: pl.isSmartObject,
       };
     })
   );

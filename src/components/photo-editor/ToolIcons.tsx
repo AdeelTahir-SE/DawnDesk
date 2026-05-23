@@ -85,6 +85,14 @@ export function ToolIcon({ type }: { type: ToolType }) {
           <path d="M6.5 13.5l5 5" />
         </svg>
       );
+    case 'paint-bucket':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m4 13 8-8 7 7-8 8-7-7Z" />
+          <path d="M7 10h10" />
+          <path d="M19 16s2 2.1 2 3.5a2 2 0 0 1-4 0c0-1.4 2-3.5 2-3.5Z" />
+        </svg>
+      );
     case 'gradient':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

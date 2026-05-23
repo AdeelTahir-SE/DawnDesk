@@ -53,6 +53,7 @@ const TOOL_GROUPS: ToolGroup[] = [
       { type: 'brush', name: 'Brush', shortcut: 'B' },
       { type: 'pencil', name: 'Pencil', shortcut: 'N' },
       { type: 'eraser', name: 'Eraser', shortcut: 'E' },
+      { type: 'paint-bucket', name: 'Paint Bucket', shortcut: 'G' },
       { type: 'gradient', name: 'Gradient', shortcut: 'G' },
     ],
   },
@@ -157,13 +158,11 @@ function ToolGroupButton({ group, activeTool, selectedInGroup, onSelectTool }: T
             color: 'inherit', font: 'inherit', cursor: 'pointer',
             padding: 0, textAlign: 'left',
           }}
-          onClick={() => {
-            // Select the first tool by default if not already active in this group
-            if (isActive && activeInGroup) {
-              onSelectTool(activeInGroup.type);
-            } else {
-              onSelectTool(group.tools[0].type);
-            }
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelectTool(group.tools[0].type);
+            setOpen(true);
           }}
           title={`${displayTool.name} (${displayTool.shortcut})`}
         >
@@ -175,25 +174,27 @@ function ToolGroupButton({ group, activeTool, selectedInGroup, onSelectTool }: T
 
         {/* Expand arrow */}
         <button
+          className="pe-tool-btn__more"
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             color: 'var(--pe-text-muted)', padding: '0 4px',
             fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center',
             flexShrink: 0,
           }}
-          onClick={(e) => {
+          onMouseDown={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             setOpen((v) => !v);
           }}
-          title="More tools (Right-click main button to open)"
+          title="More tools"
         >
-          ▾
+          <span aria-hidden="true">▾</span>
         </button>
       </div>
 
       {/* Flyout */}
       {open && (
-        <div style={{
+        <div className="pe-tool-flyout" style={{
           position: 'absolute',
           left: '100%',
           top: 0,
@@ -214,7 +215,9 @@ function ToolGroupButton({ group, activeTool, selectedInGroup, onSelectTool }: T
               key={tool.type}
               className={`pe-tool-btn ${activeTool === tool.type ? 'pe-tool-btn--active' : ''}`}
               style={{ width: '100%' }}
-              onClick={() => {
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 onSelectTool(tool.type);
                 setOpen(false);
               }}

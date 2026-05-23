@@ -25,16 +25,22 @@ function LIcon({ name }: { name: 'eye' | 'eye-off' | 'lock' | 'unlock' | 'plus' 
 export default function LayersPanel() {
   const { state, activeDocument, dispatch } = useEditor();
   const imageLayerInputRef = useRef<HTMLInputElement>(null);
+  const smartObjectInputRef = useRef<HTMLInputElement>(null);
   const layers = activeDocument ? state.layers : [];
   const activeLayer = layers.find((l) => l.id === state.activeLayerId);
 
-  const handleAddImageLayer = async (file: File | null | undefined) => {
+  const handleAddImageLayer = async (file: File | null | undefined, isSmartObject = false) => {
     if (!file || !activeDocument) return;
     const doc = await loadImageFile(file);
     if (!doc.imageData) return;
     dispatch({
       type: 'ADD_IMAGE_LAYER',
-      payload: { imageData: doc.imageData, name: file.name.replace(/\.[^.]+$/, '') || 'Image Layer', thumbnail: doc.thumbnail },
+      payload: {
+        imageData: doc.imageData,
+        name: file.name.replace(/\.[^.]+$/, '') || (isSmartObject ? 'Smart Object' : 'Image Layer'),
+        thumbnail: doc.thumbnail,
+        isSmartObject,
+      },
     });
   };
 
@@ -138,6 +144,14 @@ export default function LayersPanel() {
         </button>
         <button
           className="pe-layers-footer__btn"
+          title="Convert selected layer to Smart Object"
+          disabled={!activeLayer || activeLayer.locked || Boolean(activeLayer.isSmartObject)}
+          onClick={() => dispatch({ type: 'CONVERT_ACTIVE_LAYER_TO_SMART_OBJECT' })}
+        >
+          <LIcon name="smart-obj" />
+        </button>
+        <button
+          className="pe-layers-footer__btn"
           title={activeLayer?.locked ? 'Unlock selected layer' : 'Lock selected layer'}
           disabled={!activeLayer}
           onClick={() => activeLayer && dispatch({ type: 'UPDATE_LAYER', payload: { id: activeLayer.id, changes: { locked: !activeLayer.locked } } })}
@@ -154,7 +168,7 @@ export default function LayersPanel() {
         onReorder={handleReorder}
         className="pe-layers-list"
       >
-        {layers.map((layer, idx) => {
+        {layers.map((layer) => {
           const isActive = state.activeLayerId === layer.id;
 
           return (
@@ -163,6 +177,7 @@ export default function LayersPanel() {
               key={layer.id}
               value={layer.id}
               drag={!layer.locked ? 'y' : false}
+              data-reorderable={!layer.locked}
               className={`pe-layer-item ${isActive ? 'pe-layer-item--active' : ''}`}
               onClick={() => dispatch({ type: 'SET_ACTIVE_LAYER', payload: layer.id })}
               whileDrag={{ scale: 1.02, zIndex: 10 }}
@@ -214,6 +229,9 @@ export default function LayersPanel() {
         <button className="pe-layers-footer__btn" title="Add image as layer" onClick={() => imageLayerInputRef.current?.click()}>
           <LIcon name="image" />
         </button>
+        <button className="pe-layers-footer__btn" title="Place image as Smart Object" onClick={() => smartObjectInputRef.current?.click()}>
+          <LIcon name="smart-obj" />
+        </button>
         <button className="pe-layers-footer__btn" title="Delete layer" onClick={() => dispatch({ type: 'DELETE_ACTIVE_LAYER' })}>
           <LIcon name="trash" />
         </button>
@@ -223,6 +241,13 @@ export default function LayersPanel() {
           accept="image/*"
           hidden
           onChange={(e) => { handleAddImageLayer(e.target.files?.[0]); e.target.value = ''; }}
+        />
+        <input
+          ref={smartObjectInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => { handleAddImageLayer(e.target.files?.[0], true); e.target.value = ''; }}
         />
       </div>
     </div>

@@ -304,8 +304,7 @@
   background: var(--pe-bg-panel);
   border-right: 1px solid var(--pe-border-subtle);
   padding: 8px 6px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .pe-panel-resizer {
@@ -422,6 +421,32 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.pe-tool-flyout .pe-tool-btn {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  padding: 6px 7px;
+}
+
+.pe-tool-flyout .pe-tool-btn__label {
+  display: inline;
+}
+
+.pe-tool-btn__more {
+  width: 18px;
+  height: 22px;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(247, 201, 72, 0.08) !important;
+}
+
+.pe-tool-btn__more span {
+  display: inline-block;
+  color: var(--pe-accent);
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* ─── Color Swatch Picker ──────────────────────────────────────────────────── */
@@ -897,11 +922,12 @@
   border-bottom: 1px solid var(--pe-border-subtle);
 }
 
-.pe-layer-item[draggable="true"] {
+.pe-layer-item[data-reorderable="true"] {
   cursor: grab;
+  touch-action: none;
 }
 
-.pe-layer-item[draggable="true"]:active {
+.pe-layer-item[data-reorderable="true"]:active {
   cursor: grabbing;
 }
 
@@ -1156,6 +1182,17 @@
     height: 34px;
     justify-content: center;
     padding: 0;
+  }
+
+  .pe-tool-flyout .pe-tool-btn {
+    width: 100%;
+    height: auto;
+    justify-content: flex-start;
+    padding: 6px 7px;
+  }
+
+  .pe-tool-flyout .pe-tool-btn__label {
+    display: inline;
   }
 
   .pe-tool-btn__icon svg {

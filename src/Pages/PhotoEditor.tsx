@@ -345,7 +345,7 @@ function PhotoEditorInner() {
         const toolMap: Record<string, string> = {
           v: 'move', m: 'marquee-rect', l: 'lasso', w: 'magic-wand',
           q: 'quick-selection', c: 'crop', i: 'eyedropper', b: 'brush',
-          n: 'pencil', e: 'eraser', g: 'gradient', s: 'clone-stamp',
+          n: 'pencil', e: 'eraser', g: 'paint-bucket', s: 'clone-stamp',
           j: 'healing-brush', k: 'spot-heal', t: 'text', u: 'shape-rect',
           h: 'hand', z: 'zoom',
         };

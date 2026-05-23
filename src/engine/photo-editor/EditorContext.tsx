@@ -571,6 +571,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         blendMode: 'normal',
         thumbnail: action.payload.thumbnail ?? makeThumbnail(layerImageData),
         imageData: layerImageData,
+        isSmartObject: action.payload.isSmartObject ?? false,
       };
       const stateWithHistory = pushHistory(state, 'Add Image Layer');
       const layers = insertLayerAboveActive(stateWithHistory.layers, stateWithHistory.activeLayerId, layer);
@@ -606,6 +607,20 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
     case 'SET_ACTIVE_LAYER':
       return { ...state, activeLayerId: action.payload };
+
+    case 'CONVERT_ACTIVE_LAYER_TO_SMART_OBJECT': {
+      const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+      if (!activeLayer || activeLayer.locked || activeLayer.isSmartObject) return state;
+      const stateWithHistory = pushHistory(state, 'Convert to Smart Object');
+      return updateActiveDocumentComposite(
+        stateWithHistory,
+        stateWithHistory.layers.map((layer) =>
+          layer.id === stateWithHistory.activeLayerId
+            ? { ...layer, isSmartObject: true, name: layer.name.includes('(Smart)') ? layer.name : `${layer.name} (Smart)` }
+            : layer
+        )
+      );
+    }
 
     case 'UPDATE_LAYER':
       return updateActiveDocumentComposite({

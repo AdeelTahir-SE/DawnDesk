@@ -13,6 +13,7 @@ export type ToolType =
   | 'brush'
   | 'pencil'
   | 'eraser'
+  | 'paint-bucket'
   | 'gradient'
   | 'clone-stamp'
   | 'healing-brush'
@@ -111,6 +112,7 @@ export interface ImageDocument {
   colorMode: 'RGB';
   bitDepth: 8;
   imageData: ImageData | null;
+  isSmartObject?: boolean;
   originalImageData: ImageData | null; // For undo reference
   thumbnail: string | null;           // data URL for filmstrip
   isDirty: boolean;
@@ -142,6 +144,7 @@ export interface LayerInfo {
   blendMode: string;
   thumbnail: string | null;
   imageData: ImageData | null;
+  isSmartObject?: boolean;
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────
@@ -257,8 +260,9 @@ export type EditorAction =
   | { type: 'APPLY_CROP' }
   | { type: 'RESIZE_ACTIVE_DOCUMENT'; payload: { width: number; height: number } }
   | { type: 'ADD_LAYER' }
-  | { type: 'ADD_IMAGE_LAYER'; payload: { imageData: ImageData; name: string; thumbnail?: string | null } }
+  | { type: 'ADD_IMAGE_LAYER'; payload: { imageData: ImageData; name: string; thumbnail?: string | null; isSmartObject?: boolean } }
   | { type: 'RESTORE_PROJECT_LAYERS'; payload: { layers: LayerInfo[]; activeLayerId: string | null } }
+  | { type: 'CONVERT_ACTIVE_LAYER_TO_SMART_OBJECT' }
   | { type: 'DELETE_ACTIVE_LAYER' }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
   | { type: 'UPDATE_LAYER'; payload: { id: string; changes: Partial<LayerInfo> } }
@@ -283,6 +287,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   { type: 'brush', name: 'Brush', shortcut: 'B', description: 'Paint soft or hard strokes with the foreground color.', cursor: 'crosshair' },
   { type: 'pencil', name: 'Pencil', shortcut: 'N', description: 'Draw crisp 1-pixel hard-edged marks.', cursor: 'crosshair' },
   { type: 'eraser', name: 'Eraser', shortcut: 'E', description: 'Erase pixels to transparency with brush settings.', cursor: 'crosshair' },
+  { type: 'paint-bucket', name: 'Paint Bucket', shortcut: 'G', description: 'Fill a contiguous area with the foreground color.', cursor: 'crosshair' },
   { type: 'gradient', name: 'Gradient', shortcut: 'G', description: 'Drag to fill the image with a foreground-to-background gradient.', cursor: 'crosshair' },
   { type: 'clone-stamp', name: 'Clone Stamp', shortcut: 'S', description: 'Alt-click to sample, then paint copied pixels elsewhere.', cursor: 'crosshair' },
   { type: 'healing-brush', name: 'Healing Brush', shortcut: 'J', description: 'Alt-click to sample, then paint blended repair strokes.', cursor: 'crosshair' },

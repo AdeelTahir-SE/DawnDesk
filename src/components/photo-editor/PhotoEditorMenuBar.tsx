@@ -265,6 +265,15 @@ export default function PhotoEditorMenuBar({
       </button>
       <button
         className="pe-menu-bar__item"
+        onClick={() => onSaveProjectAs?.()}
+        title="Save Project As"
+        data-tooltip="Save this edit as a separate DawnDesk project."
+        style={{ color: 'var(--pe-text-primary)' }}
+      >
+        Save As
+      </button>
+      <button
+        className="pe-menu-bar__item"
         onClick={onExportDialog ?? onExport}
         title="Export (Ctrl+S)"
         data-tooltip="Export the active image with format and quality options."
