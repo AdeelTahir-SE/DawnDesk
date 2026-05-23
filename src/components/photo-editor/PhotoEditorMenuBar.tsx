@@ -28,6 +28,12 @@ interface MenuBarProps {
   onApplyFilter: (name: string, fn: (data: ImageData) => ImageData) => void;
   onUndo: () => void;
   onRedo: () => void;
+  // Project actions
+  onSaveProject?: () => void;
+  onSaveProjectAs?: () => void;
+  onExportProjectFile?: () => void;
+  onOpenProjects?: () => void;
+  currentProjectName?: string | null;
 }
 
 interface MenuItem {
@@ -45,6 +51,7 @@ interface MenuDef {
 
 export default function PhotoEditorMenuBar({
   onOpenImage, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
+  onSaveProject, onSaveProjectAs, onExportProjectFile, onOpenProjects, currentProjectName,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -65,10 +72,16 @@ export default function PhotoEditorMenuBar({
     {
       label: 'File',
       items: [
+        { label: '🗂 Projects…', description: 'Go to the project manager.', action: () => { onOpenProjects?.(); setOpenMenu(null); } },
+        { separator: true, label: '' },
         { label: 'Open Image...', shortcut: 'Ctrl+O', description: 'Import an image into a new editor tab.', action: () => { onOpenImage(); setOpenMenu(null); } },
         { separator: true, label: '' },
+        { label: 'Save Project', shortcut: 'Ctrl+Shift+S', description: 'Save current layers and settings as a project.', action: () => { onSaveProject?.(); setOpenMenu(null); } },
+        { label: 'Save Project As…', description: 'Save as a new project with a different name.', action: () => { onSaveProjectAs?.(); setOpenMenu(null); } },
+        { label: 'Export Project File…', description: 'Download project as .dawndesk file.', action: () => { onExportProjectFile?.(); setOpenMenu(null); } },
+        { separator: true, label: '' },
         { label: 'Quick Export', shortcut: 'Ctrl+S', description: 'Save the active image using current export settings.', action: () => { onExport(); setOpenMenu(null); } },
-        { label: 'Export...', shortcut: 'Ctrl+Shift+S', description: 'Choose format, quality, and scale before exporting.', action: () => { onExportDialog?.(); setOpenMenu(null); } },
+        { label: 'Export...', description: 'Choose format, quality, and scale before exporting.', action: () => { onExportDialog?.(); setOpenMenu(null); } },
         { label: 'Batch Export Open Tabs...', description: 'Export every open image tab with shared settings.', action: () => { onBatchExport?.(); setOpenMenu(null); } },
         { separator: true, label: '' },
         { label: 'Copy Image', shortcut: 'Ctrl+C', description: 'Copy the active image to the system clipboard.', action: () => { onCopyToClipboard?.(); setOpenMenu(null); } },
@@ -218,6 +231,20 @@ export default function PhotoEditorMenuBar({
 
       {/* Right side spacer + action buttons */}
       <div style={{ flex: 1 }} />
+      {currentProjectName && (
+        <span style={{ fontSize: 11, color: 'var(--pe-text-muted)', paddingRight: 12 }}>
+          📁 {currentProjectName}
+        </span>
+      )}
+      <button
+        className="pe-menu-bar__item"
+        onClick={() => onOpenProjects?.()}
+        title="Projects manager"
+        data-tooltip="Go to the project manager."
+        style={{ color: 'var(--pe-text-secondary)' }}
+      >
+        Projects
+      </button>
       <button
         className="pe-menu-bar__item"
         onClick={onOpenImage}
@@ -226,6 +253,15 @@ export default function PhotoEditorMenuBar({
         style={{ color: 'var(--pe-text-primary)' }}
       >
         📂 Open
+      </button>
+      <button
+        className="pe-menu-bar__item"
+        onClick={() => onSaveProject?.()}
+        title="Save Project (Ctrl+Shift+S)"
+        data-tooltip="Save current layers and settings as a DawnDesk project."
+        style={{ color: 'var(--pe-text-primary)' }}
+      >
+        💾 Save
       </button>
       <button
         className="pe-menu-bar__item"

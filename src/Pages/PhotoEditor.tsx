@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext';
 import { openImageFromDisk, calculateFitZoom } from '../engine/photo-editor/importImage';
 import { exportBatchToFiles, exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
 import { applyAllAdjustments } from '../engine/photo-editor/filters';
+import { saveProject, updateProject, loadProject, exportProjectAsFile, type LoadedProject } from '../engine/photo-editor/projectFile';
 import PhotoEditorMenuBar from '../components/photo-editor/PhotoEditorMenuBar';
 import PhotoEditorToolbar from '../components/photo-editor/PhotoEditorToolbar';
 import PhotoEditorOptionsBar from '../components/photo-editor/PhotoEditorOptionsBar';
@@ -14,12 +15,51 @@ import StatusBar from '../components/photo-editor/StatusBar';
 import FilmStrip from '../components/photo-editor/FilmStrip';
 import '../components/photo-editor/photo-editor.css';
 
+// ─── Helper: create blank ImageData ──────────────────────────────────────────
+function makeBlankDocument(name: string, width: number, height: number, dpi: number, bg: 'white' | 'black' | 'transparent') {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+  if (bg === 'white') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height); }
+  else if (bg === 'black') { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, width, height); }
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const thumbCanvas = document.createElement('canvas');
+  thumbCanvas.width = 96;
+  thumbCanvas.height = Math.max(1, Math.round(96 * height / width));
+  thumbCanvas.getContext('2d')!.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+  const thumbnail = thumbCanvas.toDataURL('image/png');
+  const id = `doc-${Date.now()}`;
+  return {
+    id, fileName: name, filePath: null,
+    width, height, dpi, colorMode: 'RGB' as const, bitDepth: 8 as const,
+    imageData, originalImageData: imageData, thumbnail, isDirty: false,
+    zoom: 1, panOffset: { x: 0, y: 0 },
+    pendingAdjustments: {
+      exposure: 0, contrast: 0, highlights: 0, shadows: 0,
+      whites: 0, blacks: 0, brightness: 0, hue: 0, saturation: 0,
+      lightness: 0, levelsBlack: 0, levelsMid: 1, levelsWhite: 255,
+      curveAmount: 0, colorBalanceCyanRed: 0, colorBalanceMagentaGreen: 0,
+      colorBalanceYellowBlue: 0, vibrance: 0, selectiveRed: 0,
+      selectiveGreen: 0, selectiveBlue: 0, channelRedFromGreen: 0,
+      channelRedFromBlue: 0, channelGreenFromRed: 0, channelGreenFromBlue: 0,
+      channelBlueFromRed: 0, channelBlueFromGreen: 0, lutPreset: 0,
+    },
+  };
+}
+
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
   const navigate = useNavigate();
+  const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [showSaveProjectDialog, setShowSaveProjectDialog] = useState(false);
+  const [saveProjectName, setSaveProjectName] = useState('');
+  const [isSaveAs, setIsSaveAs] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectName, setCurrentProjectName] = useState<string | null>(null);
   const [resizeValues, setResizeValues] = useState({ width: 0, height: 0, lockRatio: true });
   const [panelWidths, setPanelWidths] = useState({ left: 140, right: 300 });
   const [integrationMessage, setIntegrationMessage] = useState<string | null>(null);
@@ -30,6 +70,38 @@ function PhotoEditorInner() {
       return [];
     }
   });
+  const locationHandled = useRef(false);
+
+  // ─── Handle navigation state (new project / load project) ────────
+  useEffect(() => {
+    if (locationHandled.current) return;
+    const nav = location.state as any;
+    if (!nav) return;
+    locationHandled.current = true;
+
+    if (nav.newProject) {
+      const doc = makeBlankDocument(nav.name, nav.width, nav.height, nav.dpi || 72, nav.background || 'transparent');
+      const container = containerRef.current;
+      if (container) {
+        const fitZoom = Math.min(1, Math.min((container.clientWidth - 80) / nav.width, (container.clientHeight - 100) / nav.height));
+        doc.zoom = Math.max(0.05, fitZoom);
+      }
+      setCurrentProjectId(null);
+      setCurrentProjectName(nav.name);
+      setSaveProjectName(nav.name);
+      dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+    } else if (nav.loadProjectId) {
+      loadProject(nav.loadProjectId).then((loaded: LoadedProject) => {
+        dispatch({ type: 'OPEN_DOCUMENT', payload: loaded.document });
+        dispatch({ type: 'RESTORE_PROJECT_LAYERS', payload: { layers: loaded.layers, activeLayerId: loaded.activeLayerId } });
+        if (loaded.foregroundColor) dispatch({ type: 'SET_FOREGROUND_COLOR', payload: loaded.foregroundColor });
+        if (loaded.backgroundColor) dispatch({ type: 'SET_BACKGROUND_COLOR', payload: loaded.backgroundColor });
+        setCurrentProjectId(nav.loadProjectId);
+        setCurrentProjectName(loaded.projectName);
+        setSaveProjectName(loaded.projectName);
+      }).catch((err: unknown) => console.error('Failed to load project:', err));
+    }
+  }, [location.state, dispatch]);
 
   // ─── Open Image Handler ───────────────────────────────────────
   const handleOpenImage = useCallback(async () => {
@@ -59,6 +131,46 @@ function PhotoEditorInner() {
     setResizeValues({ width: activeDocument.width, height: activeDocument.height, lockRatio: true });
     setShowResizeDialog(true);
   }, [activeDocument]);
+
+  // ─── Project Save Handler ─────────────────────────────────────
+  const handleSaveProject = useCallback(async (name?: string, forceNew = false) => {
+    if (!activeDocument) return;
+
+    // If no project ID exists and no name has been provided, open the Save dialog first
+    if (!currentProjectId && !name) {
+      setIsSaveAs(false);
+      setShowSaveProjectDialog(true);
+      return;
+    }
+
+    const projectName = name ?? currentProjectName ?? activeDocument.fileName ?? 'Untitled Project';
+    try {
+      if (currentProjectId && !forceNew) {
+        await updateProject(currentProjectId, state, projectName);
+        setCurrentProjectName(projectName);
+        setIntegrationMessage(`Project "${projectName}" saved.`);
+      } else {
+        const id = await saveProject(state, projectName);
+        setCurrentProjectId(id);
+        setCurrentProjectName(projectName);
+        setIntegrationMessage(`Project "${projectName}" saved.`);
+      }
+    } catch (err) {
+      setIntegrationMessage(`Save failed: ${err}`);
+    }
+  }, [activeDocument, currentProjectId, currentProjectName, state]);
+
+  const handleSaveProjectAs = useCallback(async () => {
+    if (!activeDocument) return;
+    setIsSaveAs(true);
+    setShowSaveProjectDialog(true);
+  }, [activeDocument]);
+
+  const handleExportProjectFile = useCallback(async () => {
+    if (!activeDocument) return;
+    const name = currentProjectName ?? activeDocument.fileName ?? 'Untitled Project';
+    await exportProjectAsFile(state, name);
+  }, [activeDocument, currentProjectName, state]);
 
   // ─── Export Handler ───────────────────────────────────────────
   const handleExport = useCallback(async () => {
@@ -166,11 +278,14 @@ function PhotoEditorInner() {
         return;
       }
 
-      // Ctrl+S: Save / Export
+      // Ctrl+S: Quick Export, Ctrl+Shift+S: Save Project
       if (ctrl && e.key === 's') {
         e.preventDefault();
-        if (e.shiftKey) setShowExportDialog(true);
-        else handleExport();
+        if (e.shiftKey) {
+          handleSaveProject();
+        } else {
+          handleExport();
+        }
         return;
       }
 
@@ -274,41 +389,45 @@ function PhotoEditorInner() {
     if (!container) return;
 
     const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e.dataTransfer?.types.includes('Files')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
 
     const handleDrop = async (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e.dataTransfer?.types.includes('Files')) {
+        e.preventDefault();
+        e.stopPropagation();
 
-      const file = e.dataTransfer?.files[0];
-      if (!file || !file.type.startsWith('image/')) return;
+        const file = e.dataTransfer?.files[0];
+        if (!file || !file.type.startsWith('image/')) return;
 
-      const { loadImageFile } = await import('../engine/photo-editor/importImage');
-      const doc = await loadImageFile(file);
+        const { loadImageFile } = await import('../engine/photo-editor/importImage');
+        const doc = await loadImageFile(file);
 
-      const canvasArea = container.querySelector('.pe-viewport');
-      if (canvasArea) {
-        doc.zoom = calculateFitZoom(
-          doc.width,
-          doc.height,
-          canvasArea.clientWidth,
-          canvasArea.clientHeight
-        );
-      }
+        const canvasArea = container.querySelector('.pe-viewport');
+        if (canvasArea) {
+          doc.zoom = calculateFitZoom(
+            doc.width,
+            doc.height,
+            canvasArea.clientWidth,
+            canvasArea.clientHeight
+          );
+        }
 
-      if (activeDocument?.imageData && doc.imageData) {
-        dispatch({
-          type: 'ADD_IMAGE_LAYER',
-          payload: {
-            imageData: doc.imageData,
-            name: file.name.replace(/\.[^.]+$/, '') || 'Image Layer',
-            thumbnail: doc.thumbnail,
-          },
-        });
-      } else {
-        dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+        if (activeDocument?.imageData && doc.imageData) {
+          dispatch({
+            type: 'ADD_IMAGE_LAYER',
+            payload: {
+              imageData: doc.imageData,
+              name: file.name.replace(/\.[^.]+$/, '') || 'Image Layer',
+              thumbnail: doc.thumbnail,
+            },
+          });
+        } else {
+          dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+        }
       }
     };
 
@@ -346,6 +465,11 @@ function PhotoEditorInner() {
         onApplyFilter={applyFilter}
         onUndo={() => dispatch({ type: 'UNDO' })}
         onRedo={() => dispatch({ type: 'REDO' })}
+        onSaveProject={handleSaveProject}
+        onSaveProjectAs={handleSaveProjectAs}
+        onExportProjectFile={handleExportProjectFile}
+        onOpenProjects={() => navigate('/projects')}
+        currentProjectName={currentProjectName}
       />
 
       {/* Left toolbar */}
@@ -538,6 +662,49 @@ function PhotoEditorInner() {
       {integrationMessage && (
         <div className="pe-toast" onClick={() => setIntegrationMessage(null)}>
           {integrationMessage}
+        </div>
+      )}
+
+      {/* Save Project As dialog */}
+      {showSaveProjectDialog && (
+        <div className="pe-modal-backdrop" onMouseDown={() => setShowSaveProjectDialog(false)}>
+          <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="pe-modal__header">
+              <strong>{isSaveAs ? 'Save Project As' : 'Save Project'}</strong>
+              <button className="pe-modal__close" onClick={() => setShowSaveProjectDialog(false)}>✕</button>
+            </div>
+            <label className="pe-field">
+              <span>Project Name</span>
+              <input
+                className="pe-number-input pe-number-input--wide"
+                type="text"
+                value={saveProjectName}
+                onChange={(e) => setSaveProjectName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && saveProjectName.trim()) {
+                    handleSaveProject(saveProjectName.trim(), isSaveAs);
+                    setShowSaveProjectDialog(false);
+                  }
+                }}
+                style={{ fontFamily: 'inherit' }}
+              />
+            </label>
+            <div className="pe-modal__actions">
+              <button className="pe-action-button" onClick={() => setShowSaveProjectDialog(false)}>Cancel</button>
+              <button
+                className="pe-action-button pe-action-button--primary"
+                onClick={() => {
+                  if (saveProjectName.trim()) {
+                    handleSaveProject(saveProjectName.trim(), isSaveAs);
+                    setShowSaveProjectDialog(false);
+                  }
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

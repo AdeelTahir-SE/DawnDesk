@@ -577,6 +577,26 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: layer.id }, layers);
     }
 
+    case 'RESTORE_PROJECT_LAYERS': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc) return state;
+      const layers = cloneLayers(action.payload.layers);
+      const activeLayerId = layers.some((layer) => layer.id === action.payload.activeLayerId)
+        ? action.payload.activeLayerId
+        : layers[0]?.id ?? null;
+      const composite = compositeLayers(layers, doc.width, doc.height);
+      return {
+        ...state,
+        layers,
+        activeLayerId,
+        documents: state.documents.map((d) =>
+          d.id === state.activeDocumentId
+            ? { ...d, imageData: composite, originalImageData: composite, thumbnail: makeThumbnail(composite), isDirty: false }
+            : d
+        ),
+      };
+    }
+
     case 'DELETE_ACTIVE_LAYER': {
       const layer = state.layers.find((l) => l.id === state.activeLayerId);
       if (!layer || layer.locked) return state;
@@ -602,11 +622,21 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       }
       const layers = [...state.layers];
       const [moved] = layers.splice(fromIndex, 1);
+      // Don't allow moving locked layers
       if (!moved || moved.locked) return state;
-      const firstLockedIndex = layers.findIndex((layer) => layer.locked);
-      if (firstLockedIndex >= 0 && toIndex > firstLockedIndex) {
-        toIndex = firstLockedIndex;
+      // Find the last locked layer's index in the spliced array (usually the background layer at the bottom)
+      let lastLockedIndex = -1;
+      for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i].locked) {
+          lastLockedIndex = i;
+          break;
+        }
       }
+      // Don't let unlocked layers move below the bottom-most locked layer
+      if (lastLockedIndex >= 0 && toIndex > lastLockedIndex) {
+        toIndex = lastLockedIndex;
+      }
+      if (toIndex < 0) return state;
       layers.splice(toIndex, 0, moved);
       return updateActiveDocumentComposite(state, layers);
     }

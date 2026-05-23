@@ -258,6 +258,7 @@ export type EditorAction =
   | { type: 'RESIZE_ACTIVE_DOCUMENT'; payload: { width: number; height: number } }
   | { type: 'ADD_LAYER' }
   | { type: 'ADD_IMAGE_LAYER'; payload: { imageData: ImageData; name: string; thumbnail?: string | null } }
+  | { type: 'RESTORE_PROJECT_LAYERS'; payload: { layers: LayerInfo[]; activeLayerId: string | null } }
   | { type: 'DELETE_ACTIVE_LAYER' }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
   | { type: 'UPDATE_LAYER'; payload: { id: string; changes: Partial<LayerInfo> } }

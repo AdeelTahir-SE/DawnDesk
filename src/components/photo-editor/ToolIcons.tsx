@@ -159,3 +159,8 @@ export function ToolIcon({ type }: { type: ToolType }) {
       );
   }
 }
+
+// Helper for toolbar (returns JSX element)
+export function getToolIcon(type: ToolType) {
+  return <ToolIcon type={type} />;
+}
