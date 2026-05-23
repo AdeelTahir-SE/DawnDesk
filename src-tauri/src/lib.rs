@@ -24,7 +24,6 @@ pub fn run() {
             sub_apps::todo::get_pending_todos,
             sub_apps::ai::generate_response,
 
-            sub_apps::pdf_tools::pdf_to_word::convert_pdf_to_word,
             sub_apps::photo_editor::photo_export_file,
 
         ])
