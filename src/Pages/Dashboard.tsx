@@ -18,7 +18,7 @@ const kpis: KPI[] = [
     { label: "Active Tasks", value: "12", change: "5 high priority" },
     { label: "Projects Completed", value: "24", change: "+3 this week" },
     { label: "AI Requests Today", value: "48", change: "100% success rate" },
-    { label: "Active Tools", value: "4", change: "All online" },
+    { label: "Active Tools", value: "6", change: "All online" },
 ];
 
 
@@ -168,6 +168,14 @@ useEffect(() => {
                             <Link to="/ai" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
                                 <img src="/sidebar/ai.svg" alt="AI" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">AI Assistant</span>
+                            </Link>
+                            <Link to="/prompts" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/prompt-manager.svg" alt="Prompts" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Prompts</span>
+                            </Link>
+                            <Link to="/project-manager" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/project-manager.svg" alt="Projects" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Projects</span>
                             </Link>
                         </div>
                     </article>

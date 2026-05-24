@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
-
-
+import { useLocation } from "react-router-dom"
 
 export default function AI(){
     const [message, setMessage] = useState<string>("")
     const [response, setResponse] = useState<string>("this is response")
     const [logs, setLogs] = useState<string[]>([])
+    const location = useLocation()
+
+    useEffect(() => {
+        const state = location.state as { initialPrompt?: string } | null;
+        if (state?.initialPrompt) {
+            setMessage(state.initialPrompt);
+            // Clear location state in history so refreshing doesn't keep pre-filling the prompt
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state])
 
     useEffect(() => {
         let unlisten: (() => void) | null = null

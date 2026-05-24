@@ -11,6 +11,8 @@ import VideoEditor from "./Pages/VideoEditor";
 import AI from "./Pages/AI";
 // import Loading from "./Pages/Loading";
 import Todo from "./Pages/Todo";
+import PromptManager from "./Pages/PromptManager";
+import ProjectManager from "./Pages/ProjectManager";
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
         <Route path="ai" element={<AI />} />
         <Route path="settings" element={<Settings />} />
         <Route path="todo" element={<Todo />} />
+        <Route path="prompts" element={<PromptManager />} />
+        <Route path="project-manager" element={<ProjectManager />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
