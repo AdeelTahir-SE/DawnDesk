@@ -12,11 +12,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
-            sub_apps::storage::get_storage_data,
-            sub_apps::storage::creation::create_file,
-            sub_apps::storage::creation::create_folder,
-            sub_apps::storage::deletion::delete_file,
-            sub_apps::storage::deletion::delete_folder,
             sub_apps::todo::get_todo,
             sub_apps::todo::create_todo,
             sub_apps::todo::update_todo,

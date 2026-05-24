@@ -33,11 +33,9 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
             <nav className="flex flex-col items-start justify-center space-y-2">
                 <SidebarLink icon="/sidebar/dashboard.svg" label="Dashboard" to="/dashboard" showItems={showItems} />
                 <SidebarLink icon="/sidebar/todo.svg" label="Todo" to="/todo" showItems={showItems} />
-                <SidebarLink icon="/sidebar/file-pdf.svg" label="PDF Tools" to="/pdf-tools" showItems={showItems} />
                 <SidebarLink icon="/sidebar/photo-editor.svg" label="Photo Editor" to="/photo-editor" showItems={showItems} />
                 <SidebarLink icon="/sidebar/video-editor.svg" label="Video Editor" to="/video-editor" showItems={showItems} />
                 <SidebarLink icon="/sidebar/ai.svg" label="AI" to="/ai" showItems={showItems} />
-                <SidebarLink icon="/sidebar/storage.svg" label="Storage" to="/storage" showItems={showItems} />
                 <SidebarLink icon="/sidebar/settings.svg" label="Settings" to="/settings" showItems={showItems} />
             </nav>
         </aside>

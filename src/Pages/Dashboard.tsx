@@ -14,33 +14,21 @@ type Activity = {
     time: string;
 };
 
-type StorageType = {
-    name: string;
-    percent: number;
-};
-
 const kpis: KPI[] = [
-    { label: "Total Files", value: "1,248", change: "+4.2%" },
-    { label: "Storage Used", value: "38.6 GB", change: "+1.1 GB" },
-    { label: "Tasks Today", value: "27", change: "+8" },
-    { label: "Active Tools", value: "6", change: "All healthy" },
+    { label: "Active Tasks", value: "12", change: "5 high priority" },
+    { label: "Projects Completed", value: "24", change: "+3 this week" },
+    { label: "AI Requests Today", value: "48", change: "100% success rate" },
+    { label: "Active Tools", value: "4", change: "All online" },
 ];
 
 
 
 const activities: Activity[] = [
     { title: "Exported " + "Campaign Reel.mp4", time: "12 min ago" },
-    { title: "Merged 3 files in PDF Tools", time: "43 min ago" },
+    { title: "Cleaned up system workspace", time: "43 min ago" },
     { title: "Updated " + "Landing Draft.png", time: "1 hr ago" },
     { title: "Ran AI summary for notes", time: "2 hr ago" },
     { title: "Archived " + "Q1 Assets.zip", time: "Today" },
-];
-
-const storageBreakdown: StorageType[] = [
-    { name: "Images", percent: 39 },
-    { name: "Videos", percent: 34 },
-    { name: "PDFs", percent: 18 },
-    { name: "Other", percent: 9 },
 ];
 
 const weeklyUsage = [52, 66, 61, 74, 69, 84, 72];
@@ -162,20 +150,26 @@ useEffect(() => {
                     
 
                     <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-                        <h2 className="text-lg font-semibold text-white">Storage Snapshot</h2>
-                        <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-neutral-800">
-                            <div className="h-full w-[68%] rounded-full bg-yellow-400" />
+                        <h2 className="text-lg font-semibold text-white">Quick Tools</h2>
+                        <p className="mt-1 text-xs text-white/50">Jump straight into your active tools</p>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                            <Link to="/todo" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/todo.svg" alt="Todo" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Tasks</span>
+                            </Link>
+                            <Link to="/photo-editor" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/photo-editor.svg" alt="Photo" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Photo Editor</span>
+                            </Link>
+                            <Link to="/video-editor" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/video-editor.svg" alt="Video" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Video Editor</span>
+                            </Link>
+                            <Link to="/ai" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/ai.svg" alt="AI" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">AI Assistant</span>
+                            </Link>
                         </div>
-                        <p className="mt-2 text-xs text-white/60">68% used of 56 GB</p>
-
-                        <ul className="mt-4 space-y-2">
-                            {storageBreakdown.map((item) => (
-                                <li key={item.name} className="flex items-center justify-between text-sm">
-                                    <span className="text-white/80">{item.name}</span>
-                                    <span className="text-white/60">{item.percent}%</span>
-                                </li>
-                            ))}
-                        </ul>
                     </article>
                                   <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
                         <h2 className="text-lg font-semibold text-white">Recent Activity</h2>

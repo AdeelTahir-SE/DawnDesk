@@ -10,14 +10,3 @@ pub(crate) fn storage_root(app: &AppHandle) -> Result<PathBuf, String> {
 
     Ok(storage_dir)
 }
-pub(crate) fn validate_name(name: &str) -> Result<(), String> {
-    if name.trim().is_empty() {
-        return Err("Name cannot be empty".to_string());
-    }
-
-    if name.contains('/') || name.contains('\\') {
-        return Err("Name cannot contain path separators".to_string());
-    }
-
-    Ok(())
-}
