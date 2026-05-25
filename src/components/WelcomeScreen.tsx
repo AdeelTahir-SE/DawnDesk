@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { 
   ArrowRight, Folder, LayoutList, Users, LineChart, Flag,
   Wallet, TrendingUp, Receipt, PieChart, ShieldCheck, Box,
-  Terminal, Sparkles
+  Terminal, Sparkles, Code2, Database, Activity, Cpu,
+  MessageSquare, Wand2, Lightbulb, Bookmark
 } from "lucide-react";
 
-import projectWelcomeImg from "../assets/project-welcome.png";
-import financeWelcomeImg from "../assets/finance-welcome.png";
+import projectWelcomeImg from "../assets/project-welcome-clean.png";
+import financeWelcomeImg from "../assets/finance-welcome-clean.png";
+import devtoolsWelcomeImg from "../assets/devtools-welcome-bg.png";
+import promptsWelcomeImg from "../assets/prompts-welcome-bg.png";
 
 interface WelcomeScreenProps {
   appKey: string;
@@ -83,55 +86,93 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
       image: financeWelcomeImg
     };
   } else if (appKey === "devtools") {
-    content.appName = "DawnDesk Developer Tools";
-    content.appIcon = <Terminal className="w-5 h-5 text-yellow-400" />;
-    content.title = "Welcome to\n";
-    content.titleHighlight = "Developer Tools";
-    content.buttonText = "Open DevTools";
-    // Missing image for devtools, fallback to default aesthetic
+    content = {
+      appName: "DawnDesk Developer Tools",
+      appIcon: <Terminal className="w-5 h-5 text-yellow-400" />,
+      title: "Welcome to\n",
+      titleHighlight: "Developer Tools",
+      subtitle: "Supercharge your development.\nA suite of powerful utilities, database managers, and performance monitors designed to help you build faster and smarter.",
+      features: [
+        { icon: <Code2 className="w-5 h-5 text-yellow-400" />, title: "Code Utilities", desc: "Formatters, linters, and quick-converters." },
+        { icon: <Database className="w-5 h-5 text-yellow-400" />, title: "Local DB Management", desc: "Inspect and manage your SQLite databases." },
+        { icon: <Activity className="w-5 h-5 text-yellow-400" />, title: "System Monitoring", desc: "Track memory, CPU, and network requests in real-time." },
+        { icon: <Cpu className="w-5 h-5 text-yellow-400" />, title: "Environment Configs", desc: "Seamlessly manage local environments and secrets." }
+      ],
+      buttonText: "Open DevTools",
+      image: devtoolsWelcomeImg
+    };
   } else if (appKey === "prompts") {
-    content.appName = "DawnDesk Prompt Manager";
-    content.appIcon = <Sparkles className="w-5 h-5 text-yellow-400" />;
-    content.title = "Welcome to\n";
-    content.titleHighlight = "Prompt Manager";
-    content.buttonText = "Open Prompt Manager";
+    content = {
+      appName: "DawnDesk Prompt Manager",
+      appIcon: <Sparkles className="w-5 h-5 text-yellow-400" />,
+      title: "Welcome to\n",
+      titleHighlight: "Prompt Manager",
+      subtitle: "Elevate your AI interactions.\nCraft, test, organize, and perfect your AI prompts in a dedicated offline workspace built for engineers and creatives.",
+      features: [
+        { icon: <MessageSquare className="w-5 h-5 text-yellow-400" />, title: "Craft & Test", desc: "Design complex prompts and test them interactively." },
+        { icon: <Bookmark className="w-5 h-5 text-yellow-400" />, title: "Organize Library", desc: "Save your best prompts into categories and folders." },
+        { icon: <Wand2 className="w-5 h-5 text-yellow-400" />, title: "Variable Injection", desc: "Use dynamic variables like {{name}} to reuse templates." },
+        { icon: <Lightbulb className="w-5 h-5 text-yellow-400" />, title: "Discover Ideas", desc: "Get inspiration for new ways to interact with AI." }
+      ],
+      buttonText: "Open Prompt Manager",
+      image: promptsWelcomeImg
+    };
   }
 
   return (
-    <div className="flex w-full h-[calc(100vh-4rem)] bg-[#0a0a0a] text-white overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+    <div className="relative flex w-full h-full bg-[#0a0a0a] text-white overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+      
+      {/* Background Image */}
+      {content.image ? (
+        <img 
+          src={content.image} 
+          alt="Welcome background" 
+          className="absolute inset-0 w-full h-full object-cover object-center sm:object-right"
+        />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden">
+           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-400/5 rounded-full blur-[100px]" />
+           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[100px]" />
+           <div className="w-48 h-48 rounded-full border-[12px] border-white/5 flex items-center justify-center shadow-2xl">
+             {content.appIcon}
+           </div>
+        </div>
+      )}
+
+      {/* Gradient Overlay for Text Readability */}
+      {content.image && (
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] from-30% via-[#0a0a0a]/80 via-60% to-transparent to-100% w-full pointer-events-none" />
+      )}
       
       {/* LEFT COLUMN: Content */}
-      <div className="w-full lg:w-1/2 p-8 sm:p-12 xl:p-20 flex flex-col justify-center h-full overflow-y-auto custom-scrollbar relative z-10">
+      <div className="w-full lg:w-[55%] p-6 sm:p-8 xl:p-12 flex flex-col justify-center h-full overflow-y-auto custom-scrollbar relative z-10">
         
-        {/* App Logo/Name */}
-        <div className="flex items-center gap-3 mb-10 sm:mb-16">
-          <div className="w-10 h-10 rounded-xl bg-yellow-400/10 flex items-center justify-center border border-yellow-400/20 shadow-sm">
-            {content.appIcon}
-          </div>
-          <span className="text-sm font-bold text-white/80">{content.appName}</span>
-        </div>
+        {/* Removed App Logo/Name */}
 
         {/* Title & Subtitle */}
-        <h1 className="text-4xl sm:text-5xl xl:text-6xl font-extrabold tracking-tight mb-6 whitespace-pre-line leading-tight">
+        <h1 className="text-[2.5rem] sm:text-[3rem] leading-[1.1] font-bold text-white mb-3 tracking-tight mt-4 whitespace-pre-line">
           {content.title}
-          <span className="text-yellow-400">{content.titleHighlight}</span>
+          <span className="text-[#facc15]">{content.titleHighlight}</span>
         </h1>
         
-        <p className="text-sm sm:text-base text-white/60 max-w-lg mb-12 whitespace-pre-line leading-relaxed font-medium">
+        {/* Small Yellow Line */}
+        <div className="w-12 h-[3px] bg-gradient-to-r from-[#facc15] to-[#facc15]/30 rounded-full mb-4"></div>
+        
+        <div className="text-base sm:text-[1.05rem] text-white/70 mb-4 leading-relaxed max-w-md whitespace-pre-line">
           {content.subtitle}
-        </p>
+        </div>
 
         {/* Features List */}
         {content.features.length > 0 && (
-          <div className="flex flex-col gap-8 mb-12">
+          <div className="flex flex-col gap-3 mb-4">
             {content.features.map((feat, idx) => (
-              <div key={idx} className="flex gap-4 sm:gap-5 items-start">
-                <div className="w-12 h-12 shrink-0 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-sm">
+              <div key={idx} className="flex gap-4 sm:gap-4 items-start">
+                <div className="w-9 h-9 shrink-0 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-inner">
                   {feat.icon}
                 </div>
                 <div className="flex flex-col">
-                  <h3 className="text-base font-bold text-white mb-1 tracking-tight">{feat.title}</h3>
-                  <p className="text-sm text-white/50 leading-snug">{feat.desc}</p>
+                  <h3 className="text-white font-semibold text-base mb-0.5">{feat.title}</h3>
+                  <p className="text-white/50 text-sm leading-snug">{feat.desc}</p>
                 </div>
               </div>
             ))}
@@ -139,40 +180,16 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         )}
 
         {/* Action Button */}
-        <div className="mt-auto pt-8">
+        <div className="mt-auto pt-2 pb-2">
           <button 
             onClick={handleEnter}
-            className="w-full sm:w-auto px-8 py-4 rounded-xl bg-yellow-400 text-black text-sm font-bold hover:bg-yellow-300 transition-all shadow-lg flex items-center justify-center gap-3 group"
+            className="flex items-center justify-between w-[340px] bg-[#facc15] hover:bg-[#fbbf24] text-black font-semibold py-4 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-500/20 group"
           >
-            {content.buttonText}
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <span className="text-lg tracking-wide">{content.buttonText}</span>
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
-
-      {/* RIGHT COLUMN: Image */}
-      <div className="hidden lg:block lg:w-1/2 h-full relative border-l border-white/5 bg-neutral-900">
-        {content.image ? (
-          <>
-            <img 
-              src={content.image} 
-              alt="Welcome background" 
-              className="absolute inset-0 w-full h-full object-cover object-right"
-            />
-            {/* Gradient overlay to smoothly blend the image with the black left side */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent w-32" />
-          </>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden">
-             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-400/5 rounded-full blur-[100px]" />
-             <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[100px]" />
-             <div className="w-48 h-48 rounded-full border-[12px] border-white/5 flex items-center justify-center shadow-2xl">
-               {content.appIcon}
-             </div>
-          </div>
-        )}
-      </div>
-
     </div>
   );
 }

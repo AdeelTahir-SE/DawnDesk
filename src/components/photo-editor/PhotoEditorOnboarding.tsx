@@ -5,12 +5,17 @@ import {
   LayoutDashboard, FolderKanban, CloudUpload, PlaySquare, Lightbulb, 
   Check, Play, ChevronRight 
 } from "lucide-react";
-import bgImage from "../../assets/photo-editor-bg.png";
+import bgNightSky from "../../assets/bg-night-sky.png";
+import bgOcean from "../../assets/bg-ocean.png";
+import bgForest from "../../assets/bg-forest.png";
 
 export default function PhotoEditorOnboarding({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
+
+  const bgImages = [bgNightSky, bgOcean, bgForest];
+  const currentBg = bgImages[step % bgImages.length];
 
   useEffect(() => {
     // FORCE ONBOARDING FOR TESTING
@@ -48,7 +53,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
         </div>
       </div>
       <div className="flex-1 p-4 relative">
-        <div className="w-full h-full rounded-xl bg-cover bg-center shadow-inner" style={{backgroundImage: `url(${bgImage})`}}></div>
+        <div className="w-full h-full rounded-xl bg-cover bg-center shadow-inner" style={{backgroundImage: `url(${currentBg})`}}></div>
         {/* Sliders Panel Mockup */}
         <div className="absolute -right-6 top-6 w-56 bg-neutral-900/90 backdrop-blur-md rounded-xl border border-white/10 p-4 shadow-2xl">
           <div className="text-sm font-semibold text-white mb-3 flex justify-between items-center">
@@ -86,7 +91,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       <div className="flex gap-3 overflow-hidden">
         {['Original', 'Vibrant', 'Moody', 'Cinematic', 'Warm'].map((f, i) => (
           <div key={f} className="flex flex-col items-center gap-2 flex-1">
-            <div className={`w-full aspect-square rounded-xl bg-cover bg-center border-2 transition-colors ${i === 1 ? 'border-[#facc15]' : 'border-transparent'}`} style={{backgroundImage: `url(${bgImage})`, filter: i === 2 ? 'grayscale(0.5)' : i === 3 ? 'contrast(1.2) sepia(0.2)' : 'none'}}></div>
+            <div className={`w-full aspect-square rounded-xl bg-cover bg-center border-2 transition-colors ${i === 1 ? 'border-[#facc15]' : 'border-transparent'}`} style={{backgroundImage: `url(${currentBg})`, filter: i === 2 ? 'grayscale(0.5)' : i === 3 ? 'contrast(1.2) sepia(0.2)' : 'none'}}></div>
             <span className={`text-[10px] font-medium ${i === 1 ? 'text-[#facc15]' : 'text-white/70'}`}>{f}</span>
           </div>
         ))}
@@ -104,7 +109,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
         </div>
         {['Landscape Collection', 'Portraits', 'Travel 2024', 'Favorites'].map((p, i) => (
           <div key={p} className="flex items-center gap-3 mb-4 last:mb-0 group cursor-pointer">
-            <div className="w-10 h-10 rounded-lg bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`, filter: `hue-rotate(${i * 45}deg)`}}></div>
+            <div className="w-10 h-10 rounded-lg bg-cover bg-center" style={{backgroundImage: `url(${bgImages[i % bgImages.length]})`, filter: `hue-rotate(${i * 45}deg)`}}></div>
             <div className="flex-1">
               <div className="text-xs font-medium text-white/90 group-hover:text-white">{p}</div>
               <div className="text-[10px] text-white/50">{8 + i * 3} items</div>
@@ -143,7 +148,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
         <span>Inspiration</span>
       </div>
       
-      <div className="w-full h-36 rounded-xl bg-cover bg-center relative mb-4 shadow-inner group cursor-pointer" style={{backgroundImage: `url(${bgImage})`}}>
+      <div className="w-full h-36 rounded-xl bg-cover bg-center relative mb-4 shadow-inner group cursor-pointer transition-all duration-700" style={{backgroundImage: `url(${currentBg})`}}>
         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors rounded-xl"></div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white group-hover:scale-110 transition-transform">
@@ -161,7 +166,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       <div className="text-xs text-white font-medium mb-3">More Tutorials</div>
       {['Perfect Portraits', 'Creative Color Grading'].map((t, i) => (
         <div key={t} className="flex items-center gap-3 mb-3 last:mb-0 cursor-pointer group">
-          <div className="w-12 h-10 rounded-lg bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`, filter: i === 0 ? 'hue-rotate(90deg)' : 'hue-rotate(-45deg)'}}></div>
+          <div className="w-12 h-10 rounded-lg bg-cover bg-center" style={{backgroundImage: `url(${bgImages[(i+1) % bgImages.length]})`, filter: i === 0 ? 'hue-rotate(90deg)' : 'hue-rotate(-45deg)'}}></div>
           <div className="flex-1">
             <div className="text-[11px] font-medium text-white/80 group-hover:text-white">{t}</div>
             <div className="text-[9px] text-white/40 mt-0.5">{8 + i * 2} min</div>
@@ -245,11 +250,14 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
   return (
     <div className="relative z-[100] w-full h-full min-h-[calc(100vh-4rem)] overflow-hidden bg-black flex font-sans select-none">
       {/* Background image */}
-      <img 
-        src={bgImage} 
-        alt="Background" 
-        className={`absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] ease-linear ${step % 2 !== 0 ? 'scale-110' : 'scale-100'}`}
-      />
+      {bgImages.map((img, idx) => (
+        <img 
+          key={img}
+          src={img} 
+          alt="Background" 
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${idx === (step % bgImages.length) ? 'opacity-100' : 'opacity-0'} ${step % 2 !== 0 ? 'scale-110' : 'scale-100'} transition-transform duration-[20s]`}
+        />
+      ))}
       
       {/* Left Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#111113] via-[#111113]/90 to-transparent w-[75%]" />
@@ -264,24 +272,24 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       </button>
       
       {/* Content Container */}
-      <div className="relative z-10 flex flex-col h-full w-full px-16 pt-12 pb-12 justify-between">
+      <div className="relative z-10 flex flex-col h-full w-full px-8 sm:px-16 pt-8 pb-8 justify-between">
         <div className="flex-1 flex items-center max-w-3xl">
           <div key={step} className="animate-in fade-in slide-in-from-left-4 duration-500 w-full">
             {/* Main Typography */}
-            <h1 className="text-[3.5rem] leading-[1.1] font-bold text-white mb-6 tracking-tight">
+            <h1 className="text-[2.75rem] sm:text-[3.25rem] leading-[1.1] font-bold text-white mb-4 tracking-tight">
               {currentSlide.title}
             </h1>
             
             {/* Small Yellow Line */}
-            <div className="w-12 h-[3px] bg-gradient-to-r from-[#facc15] to-[#facc15]/30 rounded-full mb-8"></div>
+            <div className="w-12 h-[3px] bg-gradient-to-r from-[#facc15] to-[#facc15]/30 rounded-full mb-5"></div>
             
             {/* Description Paragraph */}
-            <div className="text-lg text-white/70 mb-10 leading-relaxed max-w-md">
+            <div className="text-base sm:text-lg text-white/70 mb-6 leading-relaxed max-w-md">
               {currentSlide.desc}
             </div>
             
             {/* Features List */}
-            <div className="flex flex-col gap-6 mb-12">
+            <div className="flex flex-col gap-4 mb-6">
               {currentSlide.features.map((f, i) => (
                 <div key={i} className="flex items-center gap-5">
                   {step === 5 ? (
@@ -303,7 +311,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
             
             {/* Action Buttons */}
             {step === 0 ? (
-              <div className="flex flex-col items-start gap-6 mt-4">
+              <div className="flex flex-col items-start gap-4 mt-2">
                 <button onClick={nextStep} className="flex items-center justify-between w-[340px] bg-[#facc15] hover:bg-[#fbbf24] text-black font-semibold py-4 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-500/20 group">
                   <div className="flex items-center gap-4">
                     <GraduationCap className="w-6 h-6 opacity-80" strokeWidth={2.5} />
@@ -317,7 +325,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
                 </button>
               </div>
             ) : step === 5 ? (
-              <div className="flex items-center gap-4 mt-8">
+              <div className="flex items-center gap-4 mt-4">
                 <button onClick={prevStep} className="px-6 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-colors border border-white/10">
                   Back
                 </button>
@@ -327,7 +335,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-4 mt-8">
+              <div className="flex items-center gap-4 mt-4">
                 <button onClick={prevStep} className="px-6 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-colors border border-white/10">
                   Back
                 </button>

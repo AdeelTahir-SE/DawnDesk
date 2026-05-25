@@ -4,12 +4,17 @@ import {
   Sparkles, Type, Music, FolderKanban, CloudUpload, Save, Download,
   PlaySquare, Lightbulb, Image as LucideImage, Check, Play, ChevronRight, CheckSquare
 } from "lucide-react";
-import bgImage from "../../assets/photo-editor-bg.png";
+import bgNightSky from "../../assets/bg-night-sky.png";
+import bgOcean from "../../assets/bg-ocean.png";
+import bgForest from "../../assets/bg-forest.png";
 
 export default function VideoEditorOnboarding({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
+
+  const bgImages = [bgNightSky, bgOcean, bgForest];
+  const currentBg = bgImages[step % bgImages.length];
 
   useEffect(() => {
     // FORCE ONBOARDING FOR TESTING
@@ -60,7 +65,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
         {/* Main Area */}
         <div className="flex-1 flex flex-col p-3 gap-3">
           {/* Video Preview */}
-          <div className="flex-1 rounded-lg bg-cover bg-center border border-white/5 relative" style={{backgroundImage: `url(${bgImage})`}}>
+          <div className="flex-1 rounded-lg bg-cover bg-center border border-white/5 relative" style={{backgroundImage: `url(${currentBg})`}}>
             {/* Playback Controls Overlay */}
             <div className="absolute bottom-2 left-0 right-0 flex items-center justify-between px-4">
               <div className="text-[9px] font-mono text-white/70">00:00:18:15</div>
@@ -115,7 +120,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
   const EffectsVisual = () => (
     <div className="absolute right-12 top-1/2 -translate-y-1/2 w-[520px] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700">
       {/* Video Preview */}
-      <div className="w-full h-64 rounded-2xl border border-white/10 shadow-2xl bg-cover bg-center relative group" style={{backgroundImage: `url(${bgImage})`, filter: 'brightness(0.9) contrast(1.1) saturate(1.2)'}}>
+      <div className="w-full h-64 rounded-2xl border border-white/10 shadow-2xl bg-cover bg-center relative group" style={{backgroundImage: `url(${currentBg})`, filter: 'brightness(0.9) contrast(1.1) saturate(1.2)'}}>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-[#facc15]/90 flex items-center justify-center text-black group-hover:scale-110 transition-transform shadow-lg shadow-yellow-500/20">
             <Play size={20} fill="currentColor" className="ml-1"/>
@@ -140,7 +145,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
           </div>
           {['Fade', 'Slide', 'Zoom', 'Push', 'Wipe'].map((f, i) => (
             <div key={f} className="flex flex-col items-center gap-2 flex-1">
-              <div className={`w-full aspect-video rounded-lg bg-cover bg-center border-2 transition-colors ${i === 2 ? 'border-[#facc15]' : 'border-transparent opacity-80'}`} style={{backgroundImage: `url(${bgImage})`}}></div>
+              <div className={`w-full aspect-video rounded-lg bg-cover bg-center border-2 transition-colors ${i === 2 ? 'border-[#facc15]' : 'border-transparent opacity-80'}`} style={{backgroundImage: `url(${currentBg})`}}></div>
               <span className={`text-[10px] font-medium ${i === 2 ? 'text-[#facc15]' : 'text-white/70'}`}>{f}</span>
             </div>
           ))}
@@ -164,7 +169,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
           { name: 'Product Promo', time: 'Updated 5d ago' }
         ].map((p, i) => (
           <div key={p.name} className="flex items-center gap-3 mb-4 last:mb-0 group cursor-pointer">
-            <div className="w-12 h-8 rounded bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`, filter: `hue-rotate(${i * 60}deg)`}}></div>
+            <div className="w-12 h-8 rounded bg-cover bg-center" style={{backgroundImage: `url(${bgImages[i % bgImages.length]})`, filter: `hue-rotate(${i * 60}deg)`}}></div>
             <div className="flex-1">
               <div className="text-xs font-medium text-white/90 group-hover:text-white">{p.name}</div>
               <div className="text-[9px] text-white/50">{p.time}</div>
@@ -181,10 +186,10 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       </div>
 
       <div className="absolute right-0 bottom-10 w-48 bg-neutral-900/90 backdrop-blur-xl rounded-xl border border-white/10 p-2 shadow-2xl z-20 grid grid-cols-2 gap-2">
-        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${bgImage})`, filter: 'hue-rotate(30deg)'}}></div>
-        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${bgImage})`, filter: 'hue-rotate(90deg)'}}></div>
-        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${bgImage})`, filter: 'hue-rotate(150deg)'}}></div>
-        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${bgImage})`, filter: 'hue-rotate(210deg)'}}></div>
+        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${currentBg})`, filter: 'hue-rotate(30deg)'}}></div>
+        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${currentBg})`, filter: 'hue-rotate(90deg)'}}></div>
+        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${currentBg})`, filter: 'hue-rotate(150deg)'}}></div>
+        <div className="aspect-video rounded bg-cover bg-center border border-white/5" style={{backgroundImage: `url(${currentBg})`, filter: 'hue-rotate(210deg)'}}></div>
       </div>
       
       {/* Background abstract connection line */}
@@ -212,7 +217,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
         <span className="hover:text-white cursor-pointer">Inspiration</span>
       </div>
       
-      <div className="w-full h-40 rounded-xl bg-cover bg-center relative mb-4 shadow-inner group cursor-pointer" style={{backgroundImage: `url(${bgImage})`}}>
+      <div className="w-full h-40 rounded-xl bg-cover bg-center relative mb-4 shadow-inner group cursor-pointer transition-all duration-700" style={{backgroundImage: `url(${currentBg})`}}>
         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors rounded-xl"></div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white group-hover:scale-110 transition-transform">
@@ -233,7 +238,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
         { title: 'Text Animation Basics', time: '6 min' }
       ].map((t, i) => (
         <div key={t.title} className="flex items-center gap-3 mb-3 last:mb-0 cursor-pointer group">
-          <div className="w-16 h-10 rounded-lg bg-cover bg-center" style={{backgroundImage: `url(${bgImage})`, filter: i === 0 ? 'hue-rotate(90deg)' : 'hue-rotate(-45deg)'}}></div>
+          <div className="w-16 h-10 rounded-lg bg-cover bg-center" style={{backgroundImage: `url(${bgImages[(i+1) % bgImages.length]})`, filter: i === 0 ? 'hue-rotate(90deg)' : 'hue-rotate(-45deg)'}}></div>
           <div className="flex-1">
             <div className="text-[11px] font-medium text-white/80 group-hover:text-white">{t.title}</div>
             <div className="flex items-center gap-1 text-[9px] text-white/40 mt-0.5">
@@ -322,11 +327,14 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
   return (
     <div className="relative z-[100] w-full h-full min-h-[calc(100vh-4rem)] overflow-hidden bg-black flex font-sans select-none">
       {/* Background image */}
-      <img 
-        src={bgImage} 
-        alt="Background" 
-        className={`absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] ease-linear ${step % 2 !== 0 ? 'scale-110' : 'scale-100'}`}
-      />
+      {bgImages.map((img, idx) => (
+        <img 
+          key={img}
+          src={img} 
+          alt="Background" 
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${idx === (step % bgImages.length) ? 'opacity-100' : 'opacity-0'} ${step % 2 !== 0 ? 'scale-110' : 'scale-100'} transition-transform duration-[20s]`}
+        />
+      ))}
       
       {/* Left Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#111113] via-[#111113]/90 to-transparent w-[75%]" />
@@ -341,38 +349,38 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       </button>
       
       {/* Content Container */}
-      <div className="relative z-10 flex flex-col h-full w-full px-16 pt-12 pb-12 justify-between">
+      <div className="relative z-10 flex flex-col h-full w-full px-8 sm:px-16 pt-8 pb-8 justify-between">
         <div className="flex-1 flex items-center max-w-3xl">
           <div key={step} className="animate-in fade-in slide-in-from-left-4 duration-500 w-full">
             {/* Main Typography */}
-            <h1 className="text-[3.5rem] leading-[1.1] font-bold text-white mb-6 tracking-tight mt-10">
+            <h1 className="text-[2.5rem] sm:text-[3rem] leading-[1.1] font-bold text-white mb-3 tracking-tight mt-4">
               {currentSlide.title}
             </h1>
             
             {/* Small Yellow Line */}
-            <div className="w-12 h-[3px] bg-gradient-to-r from-[#facc15] to-[#facc15]/30 rounded-full mb-8"></div>
+            <div className="w-12 h-[3px] bg-gradient-to-r from-[#facc15] to-[#facc15]/30 rounded-full mb-4"></div>
             
             {/* Description Paragraph */}
-            <div className="text-lg text-white/70 mb-10 leading-relaxed max-w-md">
+            <div className="text-base sm:text-[1.05rem] text-white/70 mb-4 leading-relaxed max-w-md">
               {currentSlide.desc}
             </div>
             
             {/* Features List */}
-            <div className="flex flex-col gap-6 mb-12">
+            <div className="flex flex-col gap-3 mb-4">
               {currentSlide.features.map((f, i) => (
-                <div key={i} className="flex items-center gap-5">
+                <div key={i} className="flex items-center gap-4">
                   {step === 5 ? (
                     <div className="w-6 h-6 flex items-center justify-center shrink-0">
                       {f.icon}
                     </div>
                   ) : (
-                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0 border border-white/10 shadow-inner">
+                    <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0 border border-white/10 shadow-inner">
                       {f.icon}
                     </div>
                   )}
                   <div>
-                    <h3 className={`text-white font-semibold ${step === 5 ? 'text-lg' : 'text-[1.05rem] mb-0.5'}`}>{f.title}</h3>
-                    {f.desc && <p className="text-white/50 text-[0.9rem]">{f.desc}</p>}
+                    <h3 className={`text-white font-semibold ${step === 5 ? 'text-lg' : 'text-base mb-0.5'}`}>{f.title}</h3>
+                    {f.desc && <p className="text-white/50 text-sm">{f.desc}</p>}
                   </div>
                 </div>
               ))}
@@ -380,7 +388,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
             
             {/* Action Buttons */}
             {step === 0 ? (
-              <div className="flex flex-col items-start gap-6 mt-4">
+              <div className="flex flex-col items-start gap-4 mt-1">
                 <button onClick={nextStep} className="flex items-center justify-between w-[340px] bg-[#facc15] hover:bg-[#fbbf24] text-black font-semibold py-4 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-500/20 group">
                   <div className="flex items-center gap-4">
                     <CheckSquare className="w-6 h-6 opacity-80" strokeWidth={2.5} />
@@ -394,7 +402,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
                 </button>
               </div>
             ) : step === 5 ? (
-              <div className="flex items-center gap-4 mt-8">
+              <div className="flex items-center gap-4 mt-2">
                 <button onClick={prevStep} className="px-6 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-colors border border-white/10">
                   Back
                 </button>
@@ -404,7 +412,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-4 mt-8">
+              <div className="flex items-center gap-4 mt-2">
                 <button onClick={prevStep} className="px-6 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-colors border border-white/10">
                   Back
                 </button>
