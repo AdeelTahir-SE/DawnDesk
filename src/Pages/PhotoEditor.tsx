@@ -14,6 +14,7 @@ import TabBar from '../components/photo-editor/TabBar';
 import StatusBar from '../components/photo-editor/StatusBar';
 import FilmStrip from '../components/photo-editor/FilmStrip';
 import '../components/photo-editor/photo-editor.css';
+import OnboardingWrapper from '../components/OnboardingWrapper';
 
 // ─── Helper: create blank ImageData ──────────────────────────────────────────
 function makeBlankDocument(name: string, width: number, height: number, dpi: number, bg: 'white' | 'black' | 'transparent') {
@@ -713,8 +714,10 @@ function PhotoEditorInner() {
 
 export default function PhotoEditor() {
   return (
-    <EditorProvider>
-      <PhotoEditorInner />
-    </EditorProvider>
+    <OnboardingWrapper appKey="photo-editor" title="Welcome to Photo Editor" description="A powerful, browser-based photo manipulation tool.">
+      <EditorProvider>
+        <PhotoEditorInner />
+      </EditorProvider>
+    </OnboardingWrapper>
   );
 }

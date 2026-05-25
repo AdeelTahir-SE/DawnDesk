@@ -8,7 +8,6 @@ import PhotoEditorHelp from "./Pages/PhotoEditorHelp";
 import ProjectsManager from "./Pages/ProjectsManager";
 import Settings from "./Pages/Settings";
 import VideoEditor from "./Pages/VideoEditor";
-import AI from "./Pages/AI";
 // import Loading from "./Pages/Loading";
 import Todo from "./Pages/Todo";
 import PromptManager from "./Pages/PromptManager";
@@ -25,7 +24,6 @@ function App() {
         <Route path="photo-editor/help" element={<PhotoEditorHelp />} />
         <Route path="projects" element={<ProjectsManager />} />
         <Route path="video-editor" element={<VideoEditor />} />
-        <Route path="ai" element={<AI />} />
         <Route path="settings" element={<Settings />} />
         <Route path="todo" element={<Todo />} />
         <Route path="prompts" element={<PromptManager />} />
