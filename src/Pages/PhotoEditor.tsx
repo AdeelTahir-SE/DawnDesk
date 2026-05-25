@@ -14,7 +14,7 @@ import TabBar from '../components/photo-editor/TabBar';
 import StatusBar from '../components/photo-editor/StatusBar';
 import FilmStrip from '../components/photo-editor/FilmStrip';
 import '../components/photo-editor/photo-editor.css';
-import OnboardingWrapper from '../components/OnboardingWrapper';
+import PhotoEditorOnboarding from '../components/photo-editor/PhotoEditorOnboarding';
 import { X } from 'lucide-react';
 
 // ─── Helper: create blank ImageData ──────────────────────────────────────────
@@ -715,10 +715,10 @@ function PhotoEditorInner() {
 
 export default function PhotoEditor() {
   return (
-    <OnboardingWrapper appKey="photo-editor" title="Welcome to Photo Editor" description="A powerful, browser-based photo manipulation tool.">
+    <PhotoEditorOnboarding>
       <EditorProvider>
         <PhotoEditorInner />
       </EditorProvider>
-    </OnboardingWrapper>
+    </PhotoEditorOnboarding>
   );
 }

@@ -1,10 +1,10 @@
-import OnboardingWrapper from "../components/OnboardingWrapper";
+import VideoEditorOnboarding from "../components/video-editor/VideoEditorOnboarding";
 
 export default function VideoEditor() {
     return (
-        <OnboardingWrapper appKey="video-editor" title="Welcome to Video Editor" description="Edit and render your videos effortlessly.">
+        <VideoEditorOnboarding>
             <div>
             </div>
-        </OnboardingWrapper>
+        </VideoEditorOnboarding>
     );
 }
