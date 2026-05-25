@@ -1,196 +1,113 @@
-import { useEffect, useState } from "react";
-import { pmGateway, DbTask, DbProjectMember, DbUser, DbProject } from "../../utils/supabase";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { CheckCircle2, CircleDashed, Clock, Loader2, LayoutDashboard } from "lucide-react";
+import { LocalTask } from "./KanbanBoard";
 
-interface ProjectDashboardProps {
-  projectId: string;
-}
-
-export default function ProjectDashboard({ projectId }: ProjectDashboardProps) {
-  const [tasks, setTasks] = useState<DbTask[]>([]);
-  const [members, setMembers] = useState<(DbProjectMember & { user?: DbUser })[]>([]);
-  const [project, setProject] = useState<DbProject | null>(null);
+export default function ProjectDashboard({ projectId }: { projectId: number }) {
+  const [tasks, setTasks] = useState<LocalTask[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
-      const [t, m, p, users] = await Promise.all([
-        pmGateway.getTasks(projectId),
-        pmGateway.getProjectMembers(projectId),
-        pmGateway.getProjects(),
-        pmGateway.getRegisteredUsers()
-      ]);
-      setTasks(t);
-      setMembers(m.map(mem => ({ ...mem, user: users.find(u => u.id === mem.userId) })));
-      setProject(p.find(x => x.id === projectId) || null);
+    const fetchTasks = async () => {
+      setLoading(true);
+      try {
+        const data = await invoke<LocalTask[]>("get_tasks", { projectId });
+        setTasks(data);
+      } catch (e) {
+        console.error(e);
+      }
+      setLoading(false);
     };
-    load();
+    fetchTasks();
   }, [projectId]);
 
-  if (!project) return null;
+  if (loading) {
+    return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 text-white/30 animate-spin" /></div>;
+  }
 
-  const doneColId = "col-done"; // Simplification for mock dashboard logic, in reality we'd fetch columns
-  const doneTasks = tasks.filter(t => t.status.includes('done') || t.status === doneColId);
-  const activeTasks = tasks.filter(t => !t.status.includes('done') && t.status !== doneColId);
-  
-  const upcomingTasks = [...activeTasks].sort((a, b) => {
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  }).slice(0, 5);
+  const todoCount = tasks.filter(t => t.status === 'todo').length;
+  const inProgressCount = tasks.filter(t => t.status === 'in_progress').length;
+  const doneCount = tasks.filter(t => t.status === 'done').length;
+  const totalCount = tasks.length;
+  const progress = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
 
-  const progress = tasks.length === 0 ? 0 : Math.round((doneTasks.length / tasks.length) * 100);
+  const recentTasks = tasks.slice(0, 5); // Assuming they come back sorted DESC by ID
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 h-full overflow-y-auto no-scrollbar pb-12 animate-in fade-in">
+    <div className="flex flex-col gap-6 h-full overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-300">
       
-      {/* Header Section */}
-      <section className="rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <p className="text-xs uppercase tracking-[0.2em] text-yellow-400 font-bold">Workspace Overview</p>
-        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">{project.name}</h1>
-        <p className="mt-2 max-w-2xl text-sm text-white/60 sm:text-base">
-          {project.description || "Track your team's velocity and monitor upcoming deadlines."}
-        </p>
-      </section>
-
-      {/* KPI Cards */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-yellow-400/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <p className="text-sm text-white/60 font-medium">Total Tasks</p>
-          <p className="mt-2 text-3xl font-bold text-white">{tasks.length}</p>
-          <p className="mt-2 text-xs font-semibold text-yellow-300">Workspace scope</p>
-        </article>
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         
-        <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-yellow-400/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <p className="text-sm text-white/60 font-medium">Active Tasks</p>
-          <p className="mt-2 text-3xl font-bold text-white">{activeTasks.length}</p>
-          <p className="mt-2 text-xs font-semibold text-yellow-300">In progress pipeline</p>
-        </article>
+        {/* Progress Card */}
+        <div className="bg-neutral-900/50 border border-white/10 rounded-2xl p-6 flex items-center justify-between col-span-1 md:col-span-2 relative overflow-hidden group">
+          <div className="absolute right-0 top-0 w-48 h-48 bg-yellow-400/5 blur-3xl rounded-full group-hover:bg-yellow-400/10 transition-colors" />
+          <div className="flex flex-col gap-2 z-10">
+            <h3 className="text-sm font-bold text-white/50 uppercase tracking-wider flex items-center gap-2">
+              <LayoutDashboard className="w-4 h-4 text-white" /> Project Progress
+            </h3>
+            <div className="flex items-end gap-3 mt-2">
+              <span className="text-5xl font-black text-white">{progress}%</span>
+              <span className="text-sm text-white/50 mb-1">completed</span>
+            </div>
+          </div>
+          <div className="w-24 h-24 rounded-full border-8 border-white/5 flex items-center justify-center relative z-10">
+             <div className="absolute inset-0 rounded-full border-8 border-yellow-400 border-l-transparent border-b-transparent transform rotate-45" style={{ opacity: progress > 0 ? 1 : 0 }} />
+             <span className="text-xl font-bold text-white">{doneCount}/{totalCount}</span>
+          </div>
+        </div>
 
-        <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-yellow-400/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <p className="text-sm text-white/60 font-medium">Completed</p>
-          <p className="mt-2 text-3xl font-bold text-white">{doneTasks.length}</p>
-          <p className="mt-2 text-xs font-semibold text-green-400">Marked as done</p>
-        </article>
+        {/* Status Cards */}
+        <div className="bg-neutral-900/50 border border-white/10 rounded-2xl p-6 flex flex-col justify-between">
+          <div className="flex items-center gap-2 text-white/50 mb-4">
+            <CircleDashed className="w-5 h-5 text-white/30" />
+            <h3 className="text-sm font-bold uppercase tracking-wider">To Do</h3>
+          </div>
+          <span className="text-4xl font-black text-white">{todoCount}</span>
+        </div>
 
-        <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-yellow-400/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <p className="text-sm text-white/60 font-medium">Team Members</p>
-          <p className="mt-2 text-3xl font-bold text-white">{members.length}</p>
-          <div className="mt-2 flex -space-x-2 overflow-hidden">
-            {members.map(m => (
-              <div key={m.userId} className={`inline-block h-5 w-5 rounded-full ring-2 ring-neutral-900 bg-gradient-to-tr ${m.user?.avatarColor || 'from-neutral-500 to-neutral-600'} flex items-center justify-center text-[8px] font-bold text-white`} title={m.user?.name}>
-                {m.user?.name.charAt(0)}
+        <div className="bg-neutral-900/50 border border-white/10 rounded-2xl p-6 flex flex-col justify-between">
+          <div className="flex items-center gap-2 text-white/50 mb-4">
+            <Clock className="w-5 h-5 text-yellow-400" />
+            <h3 className="text-sm font-bold uppercase tracking-wider">Doing</h3>
+          </div>
+          <span className="text-4xl font-black text-white">{inProgressCount}</span>
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-neutral-900/50 border border-white/10 rounded-2xl p-6 flex-1">
+        <h3 className="text-lg font-bold text-white mb-6">Recent Tasks</h3>
+        {recentTasks.length === 0 ? (
+          <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-xl">
+            <span className="text-sm font-medium text-white/30">No tasks created yet. Head over to the Tasks tab.</span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {recentTasks.map(t => (
+              <div key={t.id} className="flex items-center justify-between p-4 rounded-xl border border-white/5 bg-black/40 hover:bg-white/5 transition-colors">
+                <div className="flex items-center gap-4">
+                  {t.status === 'done' ? (
+                    <CheckCircle2 className="w-5 h-5 text-white" />
+                  ) : t.status === 'in_progress' ? (
+                    <Clock className="w-5 h-5 text-yellow-400" />
+                  ) : (
+                    <CircleDashed className="w-5 h-5 text-white/30" />
+                  )}
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-white leading-none">{t.title}</span>
+                    <span className="text-xs text-white/40 mt-1 capitalize">{t.status.replace('_', ' ')}</span>
+                  </div>
+                </div>
+                <div className="text-xs text-white/30">
+                  {new Date(t.created_at).toLocaleDateString()}
+                </div>
               </div>
             ))}
           </div>
-        </article>
-      </section>
+        )}
+      </div>
 
-      {/* Main Grid */}
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        
-        {/* Left Column (8 cols) */}
-        <div className="xl:col-span-8 space-y-4">
-          <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-            <h2 className="text-lg font-semibold text-white">Project Velocity</h2>
-            <p className="mt-1 text-xs text-white/50">Overall completion status</p>
-            
-            <div className="mt-6 flex flex-col gap-2">
-              <div className="flex justify-between items-end text-sm">
-                <span className="font-bold text-white">{progress}% Completed</span>
-                <span className="text-white/40">{doneTasks.length} / {tasks.length} Tasks</span>
-              </div>
-              <div className="w-full bg-neutral-950/80 rounded-full h-3 overflow-hidden border border-neutral-800">
-                <div 
-                  className="bg-yellow-400 h-3 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(250,204,21,0.5)]" 
-                  style={{ width: `${progress}%` }} 
-                />
-              </div>
-            </div>
-          </article>
-
-          <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Upcoming Deadlines</h2>
-                <p className="mt-1 text-xs text-white/50">Tasks ordered by nearest due date</p>
-              </div>
-              <span className="rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs font-semibold text-yellow-300">
-                {upcomingTasks.length} items
-              </span>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/60 overflow-hidden">
-              {upcomingTasks.length > 0 ? (
-                <ul className="divide-y divide-neutral-800">
-                  {upcomingTasks.map(task => {
-                    const assignee = members.find(m => m.userId === task.assignedTo)?.user;
-                    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
-                    return (
-                      <li key={task.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-900/40 transition-colors group">
-                        <div className="flex items-center gap-4 min-w-0">
-                          {assignee ? (
-                            <div className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-tr ${assignee.avatarColor} flex items-center justify-center text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10`} title={assignee.name}>
-                              {assignee.name.charAt(0)}
-                            </div>
-                          ) : (
-                            <div className="shrink-0 w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-[10px] font-bold text-white/40">?</div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-white/90 group-hover:text-yellow-400 transition-colors">{task.title}</p>
-                            <p className="mt-1 text-xs text-white/45 flex items-center gap-2">
-                              <span className={`px-1.5 py-0.5 rounded border ${
-                                task.priority === 'Urgent' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                task.priority === 'High' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                'bg-neutral-800 text-white/60 border-neutral-700'
-                              }`}>{task.priority}</span>
-                            </p>
-                          </div>
-                        </div>
-
-                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold border ${
-                          isOverdue ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-neutral-800 text-white/70 border-neutral-700"
-                        }`}>
-                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date'}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
-                <div className="px-4 py-6 text-sm text-white/60 text-center">
-                  No active tasks with upcoming deadlines.
-                </div>
-              )}
-            </div>
-          </article>
-        </div>
-
-        {/* Right Column (4 cols) */}
-        <div className="xl:col-span-4 space-y-4">
-          <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 h-full">
-            <h2 className="text-lg font-semibold text-white">Project Members</h2>
-            <p className="mt-1 text-xs text-white/50">Team roster and roles</p>
-            <ul className="mt-4 space-y-3">
-              {members.map(m => (
-                <li key={m.userId} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-2.5 hover:border-neutral-700 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-full bg-gradient-to-tr ${m.user?.avatarColor || 'from-neutral-600 to-neutral-700'} flex items-center justify-center text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10`}>
-                      {m.user?.name.charAt(0)}
-                    </div>
-                    <span className="text-sm font-medium text-white/90">{m.user?.name}</span>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-wider text-yellow-400/80 font-bold">{m.role}</span>
-                </li>
-              ))}
-            </ul>
-          </article>
-        </div>
-
-      </section>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import {
     X, 
     Menu, 
     LayoutDashboard, 
-    ListTodo, 
     Terminal, 
     FolderKanban, 
     Image as ImageIcon, 
@@ -41,7 +40,6 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
             </div>
             <nav className="flex flex-col items-start justify-center space-y-2">
                 <SidebarLink icon={LayoutDashboard} label="Dashboard" to="/dashboard" showItems={showItems} />
-                <SidebarLink icon={ListTodo} label="Todo" to="/todo" showItems={showItems} />
                 <SidebarLink icon={Terminal} label="Prompts" to="/prompts" showItems={showItems} />
                 <SidebarLink icon={FolderKanban} label="Projects" to="/project-manager" showItems={showItems} />
                 <SidebarLink icon={ImageIcon} label="Photo Editor" to="/photo-editor" showItems={showItems} />

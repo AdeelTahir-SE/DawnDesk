@@ -1,5 +1,5 @@
 import { useState } from "react";
-import OnboardingWrapper from "../components/OnboardingWrapper";
+import WelcomeScreen from "../components/WelcomeScreen";
 import DevToolsHub from "../components/dev-tools/DevToolsHub";
 import ToolWorkspace from "../components/dev-tools/ToolWorkspace";
 import { DevTool } from "../components/dev-tools/devToolsList";
@@ -29,7 +29,7 @@ export default function DevTools() {
   };
 
   return (
-    <OnboardingWrapper appKey="dev_tools" title="Welcome to Dev Tools" description="Access 30 rare and high-value tools built for developers, all running locally without subscriptions.">
+    <WelcomeScreen appKey="devtools" title="Developer Tools" description="Experimental tools and testing environment.">
       <div className="flex h-full w-full bg-[#0a0a0a]">
         {!activeTool ? (
           <DevToolsHub onSelectTool={setActiveTool} />
@@ -39,6 +39,6 @@ export default function DevTools() {
           </ToolWorkspace>
         )}
       </div>
-    </OnboardingWrapper>
+    </WelcomeScreen>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext';
-import { openImageFromDisk, calculateFitZoom } from '../engine/photo-editor/importImage';
+import { openImageFromDisk, calculateFitZoom, loadImageFile } from '../engine/photo-editor/importImage';
 import { exportBatchToFiles, exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
 import { applyAllAdjustments } from '../engine/photo-editor/filters';
 import { saveProject, updateProject, loadProject, exportProjectAsFile, type LoadedProject } from '../engine/photo-editor/projectFile';
@@ -405,7 +405,6 @@ function PhotoEditorInner() {
         const file = e.dataTransfer?.files[0];
         if (!file || !file.type.startsWith('image/')) return;
 
-        const { loadImageFile } = await import('../engine/photo-editor/importImage');
         const doc = await loadImageFile(file);
 
         const canvasArea = container.querySelector('.pe-viewport');

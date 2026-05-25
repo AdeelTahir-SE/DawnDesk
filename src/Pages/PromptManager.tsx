@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus, Search, X, FileQuestion, Edit, Trash2, Check, Copy } from "lucide-react";
-import OnboardingWrapper from "../components/OnboardingWrapper";
+import WelcomeScreen from "../components/WelcomeScreen";
 
 interface Prompt {
   id: string;
@@ -223,7 +223,7 @@ export default function PromptManager() {
   };
 
   return (
-    <OnboardingWrapper appKey="prompts" title="Welcome to Prompt Manager" description="Organize your prompt engineering workflow.">
+    <WelcomeScreen appKey="prompts" title="Prompt Manager" description="Organize your AI prompt library securely offline.">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full flex-col gap-6 p-8 text-white max-w-7xl animate-fadeIn">
         {/* Header section */}
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -515,6 +515,6 @@ export default function PromptManager() {
           </div>
         )}
       </div>
-    </OnboardingWrapper>
+    </WelcomeScreen>
   );
 }
