@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+
 import OnboardingWrapper from "../components/OnboardingWrapper";
 
 interface Prompt {
@@ -80,7 +80,7 @@ const SEEDED_PROMPTS: Prompt[] = [
 ];
 
 export default function PromptManager() {
-  const navigate = useNavigate();
+
 
   // State
   const [prompts, setPrompts] = useState<Prompt[]>([]);

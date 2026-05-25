@@ -17,7 +17,6 @@ pub fn run() {
             sub_apps::todo::update_todo,
             sub_apps::todo::delete_todo,
             sub_apps::todo::get_pending_todos,
-            sub_apps::ai::generate_response,
 
             sub_apps::photo_editor::photo_export_file,
 

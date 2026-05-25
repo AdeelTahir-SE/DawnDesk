@@ -173,6 +173,10 @@ useEffect(() => {
                                 <img src="/sidebar/project-manager.svg" alt="Projects" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Projects</span>
                             </Link>
+                            <Link to="/dev-tools" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <img src="/sidebar/settings.svg" alt="Dev Tools" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Dev Tools</span>
+                            </Link>
                         </div>
                     </article>
                                   <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
