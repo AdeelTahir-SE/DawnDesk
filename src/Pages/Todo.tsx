@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect } from "react";
+import { Trash2 } from "lucide-react";
 import { TodoItem } from "../utils/types";
 import OnboardingWrapper from "../components/OnboardingWrapper";
 
@@ -210,8 +211,8 @@ function TodoCard({
         >
           {completed ? "Done" : "Pending"}
         </button>
-        <button onClick={() => onDelete?.(id)} type="button" className="">
-          <img src="/delete.svg" alt="Delete" className="w-4 h-4 filter invert hover:invert-[70%]" />
+        <button onClick={() => onDelete?.(id)} type="button" className="text-white/50 hover:text-white transition-colors">
+          <Trash2 className="w-4 h-4" />
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useEditor } from '../../engine/photo-editor/EditorContext';
+import { ChevronLeft, ChevronRight, Image as ImageIcon, Plus } from 'lucide-react';
 
 interface FilmStripProps {
   onOpenImage: () => void;
@@ -11,7 +12,7 @@ export default function FilmStrip({ onOpenImage }: FilmStripProps) {
     <div className="pe-filmstrip">
       {/* Left arrow */}
       <button className="pe-filmstrip__nav" title="Previous">
-        ◀
+        <ChevronLeft size={16} />
       </button>
 
       {/* Thumbnail track */}
@@ -35,7 +36,7 @@ export default function FilmStrip({ onOpenImage }: FilmStripProps) {
                 fontSize: 20,
                 color: 'var(--pe-text-muted)',
               }}>
-                🖼
+                <ImageIcon size={20} />
               </div>
             )}
           </div>
@@ -47,13 +48,13 @@ export default function FilmStrip({ onOpenImage }: FilmStripProps) {
           title="Open another image"
           onClick={onOpenImage}
         >
-          +
+          <Plus size={16} />
         </button>
       </div>
 
       {/* Right arrow */}
       <button className="pe-filmstrip__nav" title="Next">
-        ▶
+        <ChevronRight size={16} />
       </button>
     </div>
   );

@@ -1,4 +1,4 @@
-import { UploadCloud, FileType } from "lucide-react";
+import { UploadCloud, FileType, FolderOpen, Save } from "lucide-react";
 import { useState } from "react";
 
 export default function FontExtractorUI() {
@@ -32,10 +32,10 @@ export default function FontExtractorUI() {
         </p>
         <div className="mt-6 flex items-center gap-4">
           <button 
-            className="rounded-xl bg-yellow-400 px-6 py-2.5 text-xs font-bold text-black hover:bg-yellow-300 transition-colors shadow-[0_0_15px_rgba(250,204,21,0.2)]"
+            className="flex items-center gap-2 rounded-xl bg-yellow-400 px-6 py-2.5 text-xs font-bold text-black hover:bg-yellow-300 transition-colors shadow-[0_0_15px_rgba(250,204,21,0.2)]"
             onClick={() => setIsExtracted(true)}
           >
-            Browse Files
+            <FolderOpen className="w-4 h-4" /> Browse Files
           </button>
         </div>
       </div>
@@ -79,8 +79,8 @@ export default function FontExtractorUI() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="text-yellow-400 hover:text-yellow-300 font-semibold text-xs">
-                      Export .ttf
+                    <button className="flex items-center justify-end gap-1.5 w-full text-yellow-400 hover:text-yellow-300 font-semibold text-xs">
+                      <Save className="w-3.5 h-3.5" /> Export .ttf
                     </button>
                   </td>
                 </tr>

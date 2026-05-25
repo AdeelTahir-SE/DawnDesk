@@ -6,6 +6,7 @@ import {
   importProjectFromFile,
   type ProjectEntry,
 } from '../engine/photo-editor/projectFile';
+import { Image as ImageIcon, ExternalLink, Trash2, LayoutGrid, Search, Download, Plus, AlertCircle, FileQuestion, FolderPlus, X } from 'lucide-react';
 import '../components/photo-editor/photo-editor.css';
 
 // ─── New Project Dialog ────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ function NewProjectDialog({ onClose, onCreate }: NewProjectDialogProps) {
       >
         <div className="pe-modal__header">
           <strong style={{ fontSize: 15 }}>New Project</strong>
-          <button className="pe-modal__close" onClick={onClose}>✕</button>
+          <button className="pe-modal__close" onClick={onClose}><X className="w-4 h-4" strokeWidth={2} /></button>
         </div>
 
         {/* Presets */}
@@ -196,11 +197,7 @@ function ProjectCard({ entry, onOpen, onDelete }: ProjectCardProps) {
           <img src={entry.thumbnail} alt={entry.name} />
         ) : (
           <div className="pm-card__thumb-placeholder">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="m21 15-5-5L5 21" />
-            </svg>
+            <ImageIcon className="text-white/50" size={32} strokeWidth={1.5} />
           </div>
         )}
         <div className="pm-card__thumb-overlay">
@@ -223,9 +220,7 @@ function ProjectCard({ entry, onOpen, onDelete }: ProjectCardProps) {
           title="Open project"
           onClick={() => onOpen(entry.id)}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
+          <ExternalLink size={14} strokeWidth={2} />
         </button>
         {!confirmDelete ? (
           <button
@@ -233,9 +228,7 @@ function ProjectCard({ entry, onOpen, onDelete }: ProjectCardProps) {
             title="Delete project"
             onClick={() => setConfirmDelete(true)}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-            </svg>
+            <Trash2 size={14} strokeWidth={2} />
           </button>
         ) : (
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -349,22 +342,14 @@ export default function ProjectsManager() {
       <div className="pm-header">
         <div className="pm-header__left">
           <div className="pm-header__logo">
-            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-              <rect x="2" y="2" width="9" height="9" rx="2" fill="#F7C948" />
-              <rect x="13" y="2" width="9" height="9" rx="2" fill="#F7C948" opacity="0.5" />
-              <rect x="2" y="13" width="9" height="9" rx="2" fill="#F7C948" opacity="0.5" />
-              <rect x="13" y="13" width="9" height="9" rx="2" fill="#F7C948" opacity="0.3" />
-            </svg>
+            <LayoutGrid size={20} fill="#F7C948" className="text-yellow-400" />
             <span className="pm-header__title">Photo Editor</span>
           </div>
           <div className="pm-header__subtitle">Projects</div>
         </div>
         <div className="pm-header__actions">
           <div className="pm-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
+            <Search size={14} strokeWidth={2} />
             <input
               type="text"
               placeholder="Search projects..."
@@ -377,11 +362,7 @@ export default function ProjectsManager() {
             onClick={() => importRef.current?.click()}
             title="Import .dawndesk project file"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
+            <Download size={14} strokeWidth={2} />
             Import
           </button>
           <input
@@ -398,9 +379,7 @@ export default function ProjectsManager() {
             className="pm-btn pm-btn--primary"
             onClick={() => setShowNewDialog(true)}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <Plus size={14} strokeWidth={2.5} />
             New Project
           </button>
         </div>
@@ -409,13 +388,9 @@ export default function ProjectsManager() {
       <div className="pm-content">
         {error && (
           <div className="pm-error">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
+            <AlertCircle size={16} strokeWidth={2} />
             {error}
-            <button onClick={() => setError(null)}>✕</button>
+            <button onClick={() => setError(null)}><X className="w-4 h-4" strokeWidth={2} /></button>
           </div>
         )}
 
@@ -428,18 +403,12 @@ export default function ProjectsManager() {
           <div className="pm-empty">
             {search ? (
               <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.35-4.35" />
-                </svg>
+                <FileQuestion size={48} strokeWidth={1.5} />
                 <p>No projects match "{search}"</p>
               </>
             ) : (
               <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
-                  <path d="M3 3h18v18H3z" opacity="0.3" />
-                  <path d="M12 8v8M8 12h8" />
-                </svg>
+                <FolderPlus size={48} strokeWidth={1.5} className="text-white/30" />
                 <p>No projects yet</p>
                 <button className="pm-btn pm-btn--primary" onClick={() => setShowNewDialog(true)}>
                   Create your first project

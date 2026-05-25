@@ -1,7 +1,7 @@
-
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useState,useEffect } from "react";
+import { ListTodo, Image as ImageIcon, Video, Terminal, FolderKanban, Wrench } from "lucide-react";
 import { TodoItem } from "../utils/types";
 type KPI = {
     label: string;
@@ -154,27 +154,27 @@ useEffect(() => {
                         <p className="mt-1 text-xs text-white/50">Jump straight into your active tools</p>
                         <div className="mt-4 grid grid-cols-2 gap-3">
                             <Link to="/todo" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <img src="/sidebar/todo.svg" alt="Todo" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <ListTodo className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Tasks</span>
                             </Link>
                             <Link to="/photo-editor" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <img src="/sidebar/photo-editor.svg" alt="Photo" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <ImageIcon className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Photo Editor</span>
                             </Link>
                             <Link to="/video-editor" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <img src="/sidebar/video-editor.svg" alt="Video" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <Video className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Video Editor</span>
                             </Link>
                             <Link to="/prompts" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <img src="/sidebar/prompt-manager.svg" alt="Prompts" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <Terminal className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Prompts</span>
                             </Link>
                             <Link to="/project-manager" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <img src="/sidebar/project-manager.svg" alt="Projects" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <FolderKanban className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Projects</span>
                             </Link>
                             <Link to="/dev-tools" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <img src="/sidebar/settings.svg" alt="Dev Tools" className="h-6 w-6 filter invert brightness-75 group-hover:brightness-100 transition-all" />
+                                <Wrench className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Dev Tools</span>
                             </Link>
                         </div>

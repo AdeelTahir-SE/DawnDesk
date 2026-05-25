@@ -1,5 +1,6 @@
 import { DevTool, devTools } from "./devToolsList";
 import { useState } from "react";
+import { Search, ArrowRight } from "lucide-react";
 
 interface DevToolsHubProps {
   onSelectTool: (tool: DevTool) => void;
@@ -30,19 +31,7 @@ export default function DevToolsHub({ onSelectTool }: DevToolsHubProps) {
 
       {/* Search Bar */}
       <div className="relative">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" strokeWidth={2} />
         <input
           type="text"
           placeholder="Search tools by name or description..."
@@ -98,19 +87,7 @@ export default function DevToolsHub({ onSelectTool }: DevToolsHubProps) {
                     </div>
 
                     <div className="absolute right-4 bottom-5 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 text-yellow-400">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="w-4 h-4"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" />
-                      </svg>
+                      <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
                     </div>
                   </button>
                 ))}
@@ -121,7 +98,7 @@ export default function DevToolsHub({ onSelectTool }: DevToolsHubProps) {
 
         {filteredTools.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <span className="text-4xl opacity-20">🔍</span>
+            <Search className="w-12 h-12 opacity-20 text-white" />
             <h3 className="mt-4 text-lg font-medium text-white/80">No tools found</h3>
             <p className="mt-1 text-sm text-white/40">Try adjusting your search terms.</p>
           </div>

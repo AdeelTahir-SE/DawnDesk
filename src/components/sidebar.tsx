@@ -1,4 +1,17 @@
 import { NavLink } from "react-router-dom";
+import { 
+    X, 
+    Menu, 
+    LayoutDashboard, 
+    ListTodo, 
+    Terminal, 
+    FolderKanban, 
+    Image as ImageIcon, 
+    Video, 
+    Wrench, 
+    Settings,
+    LineChart
+} from "lucide-react";
 
 type SidebarProps = {
     showItems: boolean;
@@ -19,38 +32,35 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
                 </div>
                 <button
                     aria-label={showItems ? "Hide items" : "Show items"}
-                    className="hidden md:inline-flex p-2 rounded-md hover:bg-neutral-800/70 transition-colors duration-150"
+                    className="hidden md:inline-flex p-2 rounded-md hover:bg-neutral-800/70 text-white transition-colors duration-150"
                     onClick={onToggleItems}
                     type="button"
                 >
-                    <img
-                        src={showItems ? "/sidebar/close.svg" : "/sidebar/list.svg"}
-                        alt={showItems ? "Hide items" : "Show items"}
-                        className="h-5 w-5 filter invert"
-                    />
+                    {showItems ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                 </button>
             </div>
             <nav className="flex flex-col items-start justify-center space-y-2">
-                <SidebarLink icon="/sidebar/dashboard.svg" label="Dashboard" to="/dashboard" showItems={showItems} />
-                <SidebarLink icon="/sidebar/todo.svg" label="Todo" to="/todo" showItems={showItems} />
-                <SidebarLink icon="/sidebar/prompt-manager.svg" label="Prompts" to="/prompts" showItems={showItems} />
-                <SidebarLink icon="/sidebar/project-manager.svg" label="Projects" to="/project-manager" showItems={showItems} />
-                <SidebarLink icon="/sidebar/photo-editor.svg" label="Photo Editor" to="/photo-editor" showItems={showItems} />
-                <SidebarLink icon="/sidebar/video-editor.svg" label="Video Editor" to="/video-editor" showItems={showItems} />
-                <SidebarLink icon="/sidebar/settings.svg" label="Dev Tools" to="/dev-tools" showItems={showItems} />
-                <SidebarLink icon="/sidebar/settings.svg" label="Settings" to="/settings" showItems={showItems} />
+                <SidebarLink icon={LayoutDashboard} label="Dashboard" to="/dashboard" showItems={showItems} />
+                <SidebarLink icon={ListTodo} label="Todo" to="/todo" showItems={showItems} />
+                <SidebarLink icon={Terminal} label="Prompts" to="/prompts" showItems={showItems} />
+                <SidebarLink icon={FolderKanban} label="Projects" to="/project-manager" showItems={showItems} />
+                <SidebarLink icon={ImageIcon} label="Photo Editor" to="/photo-editor" showItems={showItems} />
+                <SidebarLink icon={Video} label="Video Editor" to="/video-editor" showItems={showItems} />
+                <SidebarLink icon={LineChart} label="Finance" to="/finance" showItems={showItems} />
+                <SidebarLink icon={Wrench} label="Dev Tools" to="/dev-tools" showItems={showItems} />
+                <SidebarLink icon={Settings} label="Settings" to="/settings" showItems={showItems} />
             </nav>
         </aside>
     );
 }
 
 function SidebarLink({
-    icon,
+    icon: Icon,
     label,
     to,
     showItems,
 }: {
-    icon: string;
+    icon: React.ElementType;
     label: string;
     to: string;
     showItems: boolean;
@@ -68,11 +78,7 @@ function SidebarLink({
         >
             {({ isActive }) => (
                 <>
-                    <img
-                        src={icon}
-                        alt={`${label} icon`}
-                        className={`h-5 w-5 ${isActive ? "brightness-0 invert" : " invert-[70%]"}`}
-                    />
+                    <Icon className={`h-5 w-5 ${isActive ? "text-yellow-300" : "text-white/70"}`} />
                     <span className={showItems ? "hidden md:inline" : "hidden"}>{label}</span>
                 </>
             )}

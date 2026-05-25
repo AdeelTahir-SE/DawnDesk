@@ -12,6 +12,7 @@ import {
   applySmartSharpen,
   applyVignette,
 } from '../../engine/photo-editor/filters';
+import { FolderOpen, Save, Folder, Library } from 'lucide-react';
 
 interface MenuBarProps {
   onOpenImage: () => void;
@@ -38,6 +39,7 @@ interface MenuBarProps {
 
 interface MenuItem {
   label: string;
+  icon?: React.ReactNode;
   shortcut?: string;
   description?: string;
   action?: () => void;
@@ -72,7 +74,7 @@ export default function PhotoEditorMenuBar({
     {
       label: 'File',
       items: [
-        { label: '🗂 Projects…', description: 'Go to the project manager.', action: () => { onOpenProjects?.(); setOpenMenu(null); } },
+        { label: 'Projects…', icon: <Library size={14} />, description: 'Go to the project manager.', action: () => { onOpenProjects?.(); setOpenMenu(null); } },
         { separator: true, label: '' },
         { label: 'Open Image...', shortcut: 'Ctrl+O', description: 'Import an image into a new editor tab.', action: () => { onOpenImage(); setOpenMenu(null); } },
         { separator: true, label: '' },
@@ -215,7 +217,10 @@ export default function PhotoEditorMenuBar({
                       (e.target as HTMLElement).style.background = 'none';
                     }}
                   >
-                    <span>{item.label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
                     {item.shortcut && (
                       <span style={{ color: 'var(--pe-text-muted)', fontSize: 11, marginLeft: 24 }}>
                         {item.shortcut}
@@ -232,9 +237,10 @@ export default function PhotoEditorMenuBar({
       {/* Right side spacer + action buttons */}
       <div style={{ flex: 1 }} />
       {currentProjectName && (
-        <span style={{ fontSize: 11, color: 'var(--pe-text-muted)', paddingRight: 12 }}>
-          📁 {currentProjectName}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--pe-text-muted)', paddingRight: 12 }}>
+          <Folder size={12} />
+          <span>{currentProjectName}</span>
+        </div>
       )}
       <button
         className="pe-menu-bar__item"
@@ -250,18 +256,18 @@ export default function PhotoEditorMenuBar({
         onClick={onOpenImage}
         title="Open Image (Ctrl+O)"
         data-tooltip="Open or import an image into the editor."
-        style={{ color: 'var(--pe-text-primary)' }}
+        style={{ color: 'var(--pe-text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        📂 Open
+        <FolderOpen size={14} /> Open
       </button>
       <button
         className="pe-menu-bar__item"
         onClick={() => onSaveProject?.()}
         title="Save Project (Ctrl+Shift+S)"
         data-tooltip="Save current layers and settings as a DawnDesk project."
-        style={{ color: 'var(--pe-text-primary)' }}
+        style={{ color: 'var(--pe-text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        💾 Save
+        <Save size={14} /> Save
       </button>
       <button
         className="pe-menu-bar__item"

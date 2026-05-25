@@ -20,6 +20,9 @@ pub fn run() {
 
             sub_apps::photo_editor::photo_export_file,
 
+            sub_apps::finance_manager::get_transactions,
+            sub_apps::finance_manager::create_transaction,
+            sub_apps::finance_manager::delete_transaction,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

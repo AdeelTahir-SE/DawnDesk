@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-
+import { Plus, Search, X, FileQuestion, Edit, Trash2, Check, Copy } from "lucide-react";
 import OnboardingWrapper from "../components/OnboardingWrapper";
 
 interface Prompt {
@@ -239,19 +239,7 @@ export default function PromptManager() {
             onClick={openCreateModal}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-semibold text-black hover:bg-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.15)] hover:shadow-[0_0_25px_rgba(250,204,21,0.3)] hover:scale-[1.02] transition-all duration-300 shrink-0"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-4 h-4"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
             Add New Prompt
           </button>
         </div>
@@ -260,19 +248,7 @@ export default function PromptManager() {
         <div className="flex flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 backdrop-blur-md">
           {/* Search */}
           <div className="relative flex items-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="absolute left-4 w-5 h-5 text-white/40"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+            <Search className="absolute left-4 w-5 h-5 text-white/40" strokeWidth={2} />
             <input
               type="text"
               placeholder="Search prompt titles, categories, or keywords..."
@@ -285,19 +261,7 @@ export default function PromptManager() {
                 onClick={() => setSearchQuery("")}
                 className="absolute right-4 text-white/40 hover:text-white"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-4 h-4"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <X className="w-4 h-4" strokeWidth={2} />
               </button>
             )}
           </div>
@@ -326,18 +290,7 @@ export default function PromptManager() {
         {/* Prompts Cards Grid */}
         {filteredPrompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900/30 p-12 text-center backdrop-blur-sm">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-12 h-12 text-white/20 mb-4"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
+            <FileQuestion className="w-12 h-12 text-white/20 mb-4" strokeWidth={1.5} />
             <h3 className="text-lg font-medium text-white/80">No templates found</h3>
             <p className="mt-1 text-sm text-white/40 max-w-sm">
               {searchQuery
@@ -375,19 +328,7 @@ export default function PromptManager() {
                         className="rounded p-1 hover:bg-neutral-800 text-white/60 hover:text-white transition-colors"
                         title="Edit Prompt"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="w-3.5 h-3.5"
-                        >
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
+                        <Edit className="w-3.5 h-3.5" strokeWidth={2} />
                       </button>
                       {(prompt.isCustom !== false) && (
                         <button
@@ -395,21 +336,7 @@ export default function PromptManager() {
                           className="rounded p-1 hover:bg-red-500/10 text-white/60 hover:text-red-400 transition-colors"
                           title="Delete Prompt"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-3.5 h-3.5"
-                          >
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            <line x1="10" y1="11" x2="10" y2="17" />
-                            <line x1="14" y1="11" x2="14" y2="17" />
-                          </svg>
+                          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
                         </button>
                       )}
                     </div>
@@ -439,35 +366,12 @@ export default function PromptManager() {
                   >
                     {copiedId === prompt.id ? (
                       <>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="w-3 h-3 text-green-400 animate-scaleUp"
-                        >
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
+                        <Check className="w-3 h-3 text-green-400 animate-scaleUp" strokeWidth={3} />
                         Copied!
                       </>
                     ) : (
                       <>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="w-3.5 h-3.5 text-white/50"
-                        >
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                        </svg>
+                        <Copy className="w-3.5 h-3.5 text-white/50" strokeWidth={2} />
                         Copy
                       </>
                     )}
@@ -495,19 +399,7 @@ export default function PromptManager() {
                   onClick={() => setIsModalOpen(false)}
                   className="rounded-lg p-1 hover:bg-neutral-800 text-white/50 hover:text-white transition-colors"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-5 h-5"
-                  >
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  <X className="w-5 h-5" strokeWidth={2} />
                 </button>
               </div>
 

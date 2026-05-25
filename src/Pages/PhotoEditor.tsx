@@ -15,6 +15,7 @@ import StatusBar from '../components/photo-editor/StatusBar';
 import FilmStrip from '../components/photo-editor/FilmStrip';
 import '../components/photo-editor/photo-editor.css';
 import OnboardingWrapper from '../components/OnboardingWrapper';
+import { X } from 'lucide-react';
 
 // ─── Helper: create blank ImageData ──────────────────────────────────────────
 function makeBlankDocument(name: string, width: number, height: number, dpi: number, bg: 'white' | 'black' | 'transparent') {
@@ -515,7 +516,7 @@ function PhotoEditorInner() {
           <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="pe-modal__header">
               <strong>Export Image</strong>
-              <button className="pe-modal__close" onClick={() => setShowExportDialog(false)} data-tooltip="Close the export dialog without saving.">x</button>
+              <button className="pe-modal__close" onClick={() => setShowExportDialog(false)} data-tooltip="Close the export dialog without saving."><X className="w-4 h-4" strokeWidth={2} /></button>
             </div>
             <label className="pe-field">
               <span>Preset</span>
@@ -600,7 +601,7 @@ function PhotoEditorInner() {
           <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="pe-modal__header">
               <strong>Resize Image</strong>
-              <button className="pe-modal__close" onClick={() => setShowResizeDialog(false)} data-tooltip="Close the resize dialog.">x</button>
+              <button className="pe-modal__close" onClick={() => setShowResizeDialog(false)} data-tooltip="Close the resize dialog."><X className="w-4 h-4" strokeWidth={2} /></button>
             </div>
             <label className="pe-field">
               <span>Width</span>
@@ -672,7 +673,7 @@ function PhotoEditorInner() {
           <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="pe-modal__header">
               <strong>{isSaveAs ? 'Save Project As' : 'Save Project'}</strong>
-              <button className="pe-modal__close" onClick={() => setShowSaveProjectDialog(false)}>✕</button>
+              <button className="pe-modal__close" onClick={() => setShowSaveProjectDialog(false)}><X className="w-4 h-4" strokeWidth={2} /></button>
             </div>
             <label className="pe-field">
               <span>Project Name</span>

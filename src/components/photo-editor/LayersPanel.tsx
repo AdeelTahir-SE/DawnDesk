@@ -2,23 +2,25 @@ import { useRef } from 'react';
 import { Reorder } from 'motion/react';
 import { useEditor } from '../../engine/photo-editor/EditorContext';
 import { loadImageFile } from '../../engine/photo-editor/importImage';
+import { Eye, EyeOff, Lock, Unlock, Plus, Trash2, GripVertical, Image as ImageIcon, ArrowUp, ArrowDown, Box, Circle, SlidersHorizontal } from 'lucide-react';
 
 function LIcon({ name }: { name: 'eye' | 'eye-off' | 'lock' | 'unlock' | 'plus' | 'trash' | 'grip' | 'image' | 'up' | 'down' | 'smart-obj' | 'mask' | 'adj' }) {
-  const c = { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const size = 14;
   switch (name) {
-    case 'eye':       return <svg {...c}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>;
-    case 'eye-off':   return <svg {...c}><path d="m3 3 18 18" /><path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-4.8" /><path d="M9.9 4.3A10.5 10.5 0 0 1 12 4c6.5 0 10 8 10 8a18 18 0 0 1-3 4.3" /><path d="M6.2 6.2C3.5 8 2 12 2 12a18 18 0 0 0 7.8 6.6" /></svg>;
-    case 'lock':      return <svg {...c}><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
-    case 'unlock':    return <svg {...c}><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 7.5-2" /></svg>;
-    case 'plus':      return <svg {...c}><path d="M12 5v14M5 12h14" /></svg>;
-    case 'trash':     return <svg {...c}><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></svg>;
-    case 'image':     return <svg {...c}><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="8" cy="10" r="1.5" /><path d="m21 16-5-5L5 19" /></svg>;
-    case 'up':        return <svg {...c}><path d="M12 19V5M5 12l7-7 7 7" /></svg>;
-    case 'down':      return <svg {...c}><path d="M12 5v14M19 12l-7 7-7-7" /></svg>;
-    case 'smart-obj': return <svg {...c} fill="none"><rect x="3" y="3" width="18" height="18" rx="3" strokeWidth="1.5" /><path d="M8 12h8M12 8v8" strokeWidth="1.5" /></svg>;
-    case 'mask':      return <svg {...c}><rect x="4" y="4" width="16" height="16" rx="2" /><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none" /></svg>;
-    case 'adj':       return <svg {...c}><path d="M4 12h16M4 6h16M4 18h16" /><circle cx="8" cy="6" r="2" fill="currentColor" /><circle cx="16" cy="12" r="2" fill="currentColor" /><circle cx="10" cy="18" r="2" fill="currentColor" /></svg>;
-    default:          return <svg {...c}><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" /></svg>;
+    case 'eye':       return <Eye size={size} />;
+    case 'eye-off':   return <EyeOff size={size} />;
+    case 'lock':      return <Lock size={size} />;
+    case 'unlock':    return <Unlock size={size} />;
+    case 'plus':      return <Plus size={size} />;
+    case 'trash':     return <Trash2 size={size} />;
+    case 'grip':      return <GripVertical size={size} />;
+    case 'image':     return <ImageIcon size={size} />;
+    case 'up':        return <ArrowUp size={size} />;
+    case 'down':      return <ArrowDown size={size} />;
+    case 'smart-obj': return <Box size={size} />;
+    case 'mask':      return <Circle size={size} />;
+    case 'adj':       return <SlidersHorizontal size={size} />;
+    default:          return null;
   }
 }
 

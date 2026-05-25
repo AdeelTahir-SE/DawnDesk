@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { X } from 'lucide-react';
 
 // ─── Color conversion helpers ─────────────────────────────────────────────────
 
@@ -279,7 +280,7 @@ export default function ColorPickerDialog({
       >
         <div className="pe-modal__header">
           <strong style={{ fontSize: 13 }}>{title}</strong>
-          <button className="pe-modal__close" onClick={onClose}>✕</button>
+          <button className="pe-modal__close" onClick={onClose}><X className="w-4 h-4" strokeWidth={2} /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
