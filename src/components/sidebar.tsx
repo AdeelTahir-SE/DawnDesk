@@ -18,7 +18,15 @@ type SidebarProps = {
     onToggleItems: () => void;
 };
 
+import { useAppLogger } from "../utils/LoggerContext";
+
 export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
+    const { logInfo } = useAppLogger();
+
+    const handleToggle = () => {
+        logInfo('Sidebar', `Sidebar ${showItems ? 'collapsed' : 'expanded'}`);
+        onToggleItems();
+    };
 
     return (
         <aside
@@ -33,7 +41,7 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
                 <button
                     aria-label={showItems ? "Hide items" : "Show items"}
                     className="hidden md:inline-flex p-2 rounded-md hover:bg-neutral-800/70 text-white transition-colors duration-150"
-                    onClick={onToggleItems}
+                    onClick={handleToggle}
                     type="button"
                 >
                     {showItems ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

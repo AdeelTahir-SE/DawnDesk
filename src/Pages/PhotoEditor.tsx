@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAppLogger } from '../utils/LoggerContext';
 import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext';
 import { openImageFromDisk, calculateFitZoom, loadImageFile } from '../engine/photo-editor/importImage';
 import { exportBatchToFiles, exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
@@ -174,6 +175,8 @@ function PhotoEditorInner() {
     await exportProjectAsFile(state, name);
   }, [activeDocument, currentProjectName, state]);
 
+  const { logSuccess } = useAppLogger();
+
   // ─── Export Handler ───────────────────────────────────────────
   const handleExport = useCallback(async () => {
     if (!activeDocument?.imageData) return;
@@ -181,7 +184,8 @@ function PhotoEditorInner() {
     const renderedImageData = applyAllAdjustments(activeDocument.imageData, activeDocument.pendingAdjustments);
     await exportImageToFile(renderedImageData, activeDocument.fileName, format, quality, scale);
     dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: activeDocument.id, dirty: false } });
-  }, [activeDocument, dispatch, state.exportOptions]);
+    logSuccess('Export', `Exported image as ${format.toUpperCase()}`);
+  }, [activeDocument, dispatch, state.exportOptions, logSuccess]);
 
   const handleBatchExport = useCallback(async () => {
     const { format, quality, scale } = state.exportOptions;

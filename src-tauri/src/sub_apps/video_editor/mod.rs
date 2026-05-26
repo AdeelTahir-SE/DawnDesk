@@ -17,7 +17,7 @@ pub struct MediaProbeResult {
 #[tauri::command]
 pub async fn ve_check_ffmpeg(app: AppHandle) -> Result<bool, String> {
     let output = app.shell()
-        .sidecar("ffmpeg")
+        .sidecar("binaries/ffmpeg")
         .map_err(|e| e.to_string())?
         .args(["-version"])
         .output()
@@ -30,7 +30,7 @@ pub async fn ve_check_ffmpeg(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeResult, String> {
     let output = app.shell()
-        .sidecar("ffprobe")
+        .sidecar("binaries/ffprobe")
         .map_err(|e| e.to_string())?
         .args([
             "-v", "quiet",
@@ -106,7 +106,7 @@ pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeRe
 #[tauri::command]
 pub async fn ve_generate_thumbnail(app: AppHandle, path: String, time: f64) -> Result<String, String> {
     let output = app.shell()
-        .sidecar("ffmpeg")
+        .sidecar("binaries/ffmpeg")
         .map_err(|e| e.to_string())?
         .args([
             "-ss", &time.to_string(),

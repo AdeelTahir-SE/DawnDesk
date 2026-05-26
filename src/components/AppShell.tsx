@@ -1,10 +1,17 @@
-import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "./navbar";
 import Sidebar from "./sidebar";
+import { useAppLogger } from "../utils/LoggerContext";
 
 export default function AppShell() {
   const [showItems, setShowItems] = useState(true);
+  const location = useLocation();
+  const { logInfo } = useAppLogger();
+
+  useEffect(() => {
+    logInfo('Navigation', `Navigated to ${location.pathname}`);
+  }, [location.pathname, logInfo]);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">

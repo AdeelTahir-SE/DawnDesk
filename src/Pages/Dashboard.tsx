@@ -3,15 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState,useEffect } from "react";
 import { ListTodo, Image as ImageIcon, Video, Terminal, FolderKanban, Wrench } from "lucide-react";
 import { TodoItem } from "../utils/types";
+import { readTextFile, BaseDirectory, exists } from '@tauri-apps/plugin-fs';
+import { useAppLogger, LogEntry } from "../utils/LoggerContext";
+
 type KPI = {
     label: string;
     value: string;
     change: string;
-};
-
-type Activity = {
-    title: string;
-    time: string;
 };
 
 const kpis: KPI[] = [
@@ -19,16 +17,6 @@ const kpis: KPI[] = [
     { label: "Projects Completed", value: "24", change: "+3 this week" },
     { label: "AI Requests Today", value: "48", change: "100% success rate" },
     { label: "Active Tools", value: "6", change: "All online" },
-];
-
-
-
-const activities: Activity[] = [
-    { title: "Exported " + "Campaign Reel.mp4", time: "12 min ago" },
-    { title: "Cleaned up system workspace", time: "43 min ago" },
-    { title: "Updated " + "Landing Draft.png", time: "1 hr ago" },
-    { title: "Ran AI summary for notes", time: "2 hr ago" },
-    { title: "Archived " + "Q1 Assets.zip", time: "Today" },
 ];
 
 const weeklyUsage = [52, 66, 61, 74, 69, 84, 72];
@@ -39,6 +27,37 @@ const weeklyUsage = [52, 66, 61, 74, 69, 84, 72];
 export default function Dashboard() {
 
     const [pendingTodos, setPendingTodos] = useState<TodoItem[]>([]);
+    const { logs } = useAppLogger();
+    const [activities, setActivities] = useState<LogEntry[]>([]);
+
+    async function loadLogs() {
+        try {
+            const hasLog = await exists('dawndesk_activity.log', { baseDir: BaseDirectory.AppLocalData });
+            if (!hasLog) return;
+            const content = await readTextFile('dawndesk_activity.log', { baseDir: BaseDirectory.AppLocalData });
+            const lines = content.trim().split('\n').filter(l => l.trim() !== '' && l.startsWith('['));
+            const parsed = lines.map(line => {
+                const timestampMatch = line.match(/^\[(.*?)\]/);
+                const levelMatch = line.match(/^\[.*?\] \[(.*?)\]/);
+                
+                const time = timestampMatch ? new Date(timestampMatch[1]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown time';
+                const level = levelMatch ? levelMatch[1].toLowerCase() as any : 'info';
+                
+                const rest = line.replace(/^\[.*?\] \[(.*?)\] /, '');
+                const [action, ...msgParts] = rest.split(' - ');
+                const message = msgParts.join(' - ');
+
+                return { timestamp: timestampMatch ? timestampMatch[1] : '', action, level, message, time };
+            }).reverse().slice(0, 50);
+            
+            // Merge with state logs, avoiding duplicates based on timestamp
+            const fileLogs = parsed as any[];
+            setActivities(fileLogs);
+        } catch (err) {
+            console.error('Failed to load logs in dashboard', err);
+        }
+    }
+
     async function getPendingTodos(){
     try {
         const result = await invoke<TodoItem[]>("get_pending_todos");
@@ -50,6 +69,7 @@ export default function Dashboard() {
 }
 useEffect(() => {
     getPendingTodos();
+    loadLogs();
 }, []);
 
     return (
@@ -179,15 +199,34 @@ useEffect(() => {
                             </Link>
                         </div>
                     </article>
-                                  <article className="dd-card">
-                        <h2 className="dd-section-title">Recent Activity</h2>
-                        <ul className="mt-4 space-y-3">
-                            {activities.map((item) => (
-                                <li key={item.title} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                                    <span className="text-sm text-white/85">{item.title}</span>
-                                    <span className="dd-subtext">{item.time}</span>
+                    <article className="dd-card">
+                        <div className="flex items-center justify-between">
+                            <h2 className="dd-section-title">Recent Activity</h2>
+                            <button 
+                                onClick={loadLogs}
+                                className="text-xs text-yellow-300 hover:text-yellow-400"
+                            >
+                                Refresh
+                            </button>
+                        </div>
+                        <ul className="mt-4 space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                            {[...logs, ...activities].filter((v,i,a) => a.findIndex(t=>(t.timestamp === v.timestamp)) === i).length > 0 ? 
+                                [...logs, ...activities].filter((v,i,a) => a.findIndex(t=>(t.timestamp === v.timestamp)) === i).slice(0,50).map((item, index) => (
+                                <li key={index} className="flex flex-col rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-white/85 truncate font-medium">{item.action}</span>
+                                        <span className="dd-subtext shrink-0 text-[10px] uppercase text-yellow-500/70">{item.level}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-1">
+                                        <span className="text-xs text-white/60 truncate">{item.message}</span>
+                                        <span className="dd-subtext shrink-0 ml-2">
+                                            {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
+                                        </span>
+                                    </div>
                                 </li>
-                            ))}
+                            )) : (
+                                <div className="text-sm text-white/50 text-center py-4">No recent activity</div>
+                            )}
                         </ul>
                     </article>  
 

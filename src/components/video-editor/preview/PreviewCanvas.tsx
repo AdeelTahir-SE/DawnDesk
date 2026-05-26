@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import TransportControls from './TransportControls';
 import { Maximize } from 'lucide-react';

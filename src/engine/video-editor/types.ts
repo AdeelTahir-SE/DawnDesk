@@ -94,6 +94,7 @@ export interface Clip {
   color: string;
   locked: boolean;
   label: string;
+  path?: string;
 }
 
 /* ── Effect Types ──────────────────────────────────────────────────────── */

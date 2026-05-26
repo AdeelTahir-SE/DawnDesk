@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Layout, Loader2, Folder, X, BarChart3, Clock, CheckCircle2, Sparkles } from "lucide-react";
-import { LocalProject, LocalIssue } from "./types";
+import { Plus, Layout, Loader2, Folder, X, Search, Calendar } from "lucide-react";
+import { LocalProject } from "./types";
 
 interface ProjectListScreenProps {
   onProjectSelect: (projectId: number) => void;
@@ -9,8 +9,8 @@ interface ProjectListScreenProps {
 
 export default function ProjectListScreen({ onProjectSelect }: ProjectListScreenProps) {
   const [projects, setProjects] = useState<LocalProject[]>([]);
-  const [taskCounts, setTaskCounts] = useState<Record<number, { total: number; done: number; active: number }>>({});
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Create Project Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,25 +23,11 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     try {
       const projs = await invoke<LocalProject[]>("get_projects");
       setProjects(projs);
-      const counts: Record<number, { total: number; done: number; active: number }> = {};
-      await Promise.all(projs.map(async (project) => {
-        const tasks = await invoke<LocalIssue[]>("get_issues", { projectId: project.id });
-        counts[project.id] = {
-          total: tasks.length,
-          done: tasks.filter(task => task.status === "Done").length,
-          active: tasks.filter(task => task.status !== "Done").length,
-        };
-      }));
-      setTaskCounts(counts);
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
   };
-
-  const totalTasks = Object.values(taskCounts).reduce((sum, count) => sum + count.total, 0);
-  const activeTasks = Object.values(taskCounts).reduce((sum, count) => sum + count.active, 0);
-  const completedTasks = Object.values(taskCounts).reduce((sum, count) => sum + count.done, 0);
 
   useEffect(() => {
     loadData();
@@ -77,22 +63,42 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     setCreating(false);
   };
 
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) return projects;
+    const lowerQuery = searchQuery.toLowerCase();
+    return projects.filter(p => 
+      p.name.toLowerCase().includes(lowerQuery) || 
+      (p.description && p.description.toLowerCase().includes(lowerQuery)) ||
+      p.key.toLowerCase().includes(lowerQuery)
+    );
+  }, [projects, searchQuery]);
+
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] w-full max-w-7xl mx-auto p-4 sm:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+    <div className="flex flex-col h-[calc(100vh-4rem)] w-full max-w-7xl mx-auto p-4 sm:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
       
       {/* Header */}
-      <section className="dd-hero">
-        <div className="flex flex-wrap items-center justify-between gap-5">
+      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-neutral-800 pb-6">
         <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-neutral-950/40 flex items-center justify-center border border-neutral-800">
-            <Folder className="w-8 h-8 text-yellow-400" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-neutral-800 to-neutral-900 flex items-center justify-center border border-neutral-700/50 shadow-inner">
+            <Layout className="w-8 h-8 text-neutral-300" />
           </div>
           <div>
-            <p className="dd-label">Project Manager</p>
-            <h1 className="dd-page-title mt-2">Project Hub</h1>
-            <p className="dd-body-lg max-w-2xl mt-2">Manage all your projects and tasks locally.</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Workspaces</h1>
+            <p className="text-neutral-400 mt-1 max-w-xl">Organize your projects and access your local development environments.</p>
           </div>
         </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 group-focus-within:text-yellow-400 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Search workspaces..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 w-64 bg-neutral-900/50 border border-neutral-800 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
+            />
+          </div>
           <button
             onClick={() => setIsModalOpen(true)}
             className="dd-btn-primary"
@@ -101,94 +107,65 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
             New Workspace
           </button>
         </div>
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="dd-card-inset">
-            <div className="dd-form-label flex items-center gap-2">
-              <Layout className="h-4 w-4" /> Workspaces
-            </div>
-            <div className="mt-2 text-2xl font-bold text-white">{projects.length}</div>
-          </div>
-          <div className="dd-card-inset">
-            <div className="dd-form-label flex items-center gap-2">
-              <Clock className="h-4 w-4 text-yellow-400" /> Active Tasks
-            </div>
-            <div className="mt-2 text-2xl font-bold text-white">{activeTasks}</div>
-          </div>
-          <div className="dd-card-inset">
-            <div className="dd-form-label flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Completed
-            </div>
-            <div className="mt-2 text-2xl font-bold text-white">{completedTasks}<span className="text-sm text-white/45"> / {totalTasks}</span></div>
-          </div>
-        </div>
       </section>
 
       {/* Projects Grid */}
-      <section className="space-y-6 flex-1 overflow-auto pb-8 custom-scrollbar">
-        <div className="flex items-center justify-between">
-          <h2 className="dd-section-title flex items-center gap-2">
-            <Layout className="w-5 h-5 text-white/60" /> Active Workspaces
-          </h2>
-        </div>
-
+      <section className="flex-1 overflow-auto pb-8 custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <Loader2 className="w-8 h-8 text-white/45 animate-spin" />
+            <Loader2 className="w-8 h-8 text-neutral-600 animate-spin" />
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center border-2 border-dashed border-neutral-800 rounded-2xl bg-neutral-900/20">
+            <Folder className="w-12 h-12 text-neutral-600 mb-4" />
+            <h3 className="text-lg font-medium text-white mb-1">No workspaces found</h3>
+            <p className="text-neutral-400 max-w-md">
+              {searchQuery ? "Try adjusting your search query." : "Get started by creating your first workspace."}
+            </p>
+            {!searchQuery && (
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="mt-6 dd-btn-primary"
+              >
+                <Plus className="h-4 w-4" />
+                Create Workspace
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             
-            {/* Create New Project Card */}
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="group rounded-2xl border-2 border-dashed border-neutral-800 bg-neutral-950/40 p-6 flex flex-col items-center justify-center gap-3 min-h-[220px] hover:border-yellow-400/40 hover:bg-yellow-400/10 transition-all"
-            >
-              <div className="w-12 h-12 rounded-full bg-neutral-950/40 flex items-center justify-center group-hover:scale-110 group-hover:bg-yellow-400/10 transition-all">
-                <Plus className="w-6 h-6 text-white/60 group-hover:text-yellow-400 transition-colors" />
-              </div>
-              <span className="text-sm font-bold text-white/60 group-hover:text-yellow-400 transition-colors">Create Workspace</span>
-            </button>
-
-            {/* Existing Projects */}
-            {projects.map(p => (
-              (() => {
-                const counts = taskCounts[p.id] ?? { total: 0, done: 0, active: 0 };
-                const progress = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0;
-                return (
+            {filteredProjects.map(p => (
               <button 
                 key={p.id}
                 onClick={() => onProjectSelect(p.id)}
-                className="dd-card-elevated group flex flex-col text-left hover:border-yellow-400/40 hover:shadow-2xl transition-all h-full min-h-[240px] relative overflow-hidden"
+                className="group text-left border border-neutral-800 bg-neutral-900/40 hover:bg-neutral-800/60 rounded-2xl p-6 transition-all h-full min-h-[200px] flex flex-col relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
               >
+                <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: p.color_tag || '#4ade80' }} />
+                
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-neutral-800/80 flex items-center justify-center border border-neutral-700">
+                    <Folder className="w-5 h-5 text-neutral-300 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="text-xs font-mono font-medium text-neutral-500 bg-neutral-900 px-2 py-1 rounded border border-neutral-800">
+                    {p.key}
+                  </span>
+                </div>
                 
                 <div className="flex-1">
-                  <div className="w-10 h-10 rounded-xl shadow-sm mb-5 border border-neutral-800 bg-neutral-950/40 flex items-center justify-center">
-                    <Folder className="w-5 h-5 text-yellow-400 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white group-hover:text-yellow-300 transition-colors line-clamp-1">{p.name}</h3>
-                  <p className="text-sm text-white/60 mt-2 line-clamp-2 leading-relaxed">{p.description || "No description provided."}</p>
-                </div>
-                <div className="dd-card-inset mt-5">
-                  <div className="mb-2 flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 font-semibold text-white/50"><BarChart3 className="h-3.5 w-3.5" /> Progress</span>
-                    <span className="font-bold text-white">{progress}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-neutral-800">
-                    <div className="h-full rounded-full bg-yellow-400" style={{ width: `${progress}%` }} />
-                  </div>
+                  <h3 className="text-lg font-semibold text-white group-hover:text-yellow-400 transition-colors line-clamp-1 mb-2">{p.name}</h3>
+                  <p className="text-sm text-neutral-400 line-clamp-2 leading-relaxed">
+                    {p.description || "No description provided."}
+                  </p>
                 </div>
                 
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-neutral-800">
-                  <span className="text-xs text-white/45 font-medium">
-                    Created {new Date(p.created_at).toLocaleDateString()}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs font-semibold text-white/50">
-                    <Sparkles className="h-3.5 w-3.5" /> {counts.active} active
+                <div className="flex items-center gap-2 mt-6 pt-4 border-t border-neutral-800/60">
+                  <Calendar className="w-3.5 h-3.5 text-neutral-500" />
+                  <span className="text-xs text-neutral-500 font-medium">
+                    {new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                   </span>
                 </div>
               </button>
-                );
-              })()
             ))}
 
           </div>
@@ -197,32 +174,58 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
 
       {/* CREATE PROJECT MODAL */}
       {isModalOpen && (
-        <div className="dd-modal-overlay !z-[100]">
-          <div className="dd-modal-sm">
-            <div className="dd-modal-header">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div>
-                <h2 className="dd-modal-title">Create Workspace</h2>
-                <p className="dd-subtext mt-1">A dedicated space for your project and its tasks.</p>
+                <h2 className="text-lg font-semibold text-white">Create Workspace</h2>
+                <p className="text-sm text-neutral-400 mt-0.5">Initialize a new project environment.</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="dd-icon-btn h-9 w-9">
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleCreateProject} className="dd-modal-body">
-              <div className="flex flex-col gap-2">
-                <label className="dd-form-label">Project Name</label>
-                <input type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)} placeholder="e.g. Website Redesign" className="dd-input" required />
+            <form onSubmit={handleCreateProject} className="p-6 space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-300">Workspace Name</label>
+                <input 
+                  type="text" 
+                  value={newProjName} 
+                  onChange={e=>setNewProjName(e.target.value)} 
+                  placeholder="e.g. E-Commerce Platform" 
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all" 
+                  required 
+                  autoFocus
+                />
               </div>
               
-              <div className="flex flex-col gap-2">
-                <label className="dd-form-label">Description (Optional)</label>
-                <textarea value={newProjDesc} onChange={e=>setNewProjDesc(e.target.value)} placeholder="Brief description..." className="dd-input resize-none h-24 custom-scrollbar" />
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-300">Description (Optional)</label>
+                <textarea 
+                  value={newProjDesc} 
+                  onChange={e=>setNewProjDesc(e.target.value)} 
+                  placeholder="Brief overview of this workspace..." 
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all resize-none h-24 custom-scrollbar" 
+                />
               </div>
 
-              <div className="dd-modal-footer mt-2">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="dd-btn-secondary">Cancel</button>
-                <button type="submit" disabled={creating} className="dd-btn-primary px-6">
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-neutral-700 text-sm font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={creating} 
+                  className="flex-1 dd-btn-primary"
+                >
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Workspace"}
                 </button>
               </div>
@@ -234,3 +237,4 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     </div>
   );
 }
+
