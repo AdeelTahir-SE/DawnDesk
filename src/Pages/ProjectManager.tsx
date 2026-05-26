@@ -129,8 +129,8 @@ export default function ProjectManager() {
 
           <main className="custom-scrollbar flex-1 overflow-y-auto p-8 bg-neutral-950">
             <div className="mx-auto max-w-[1400px] h-full">
-              {activeTab === "backlog" && <Backlog projectId={activeProjectId} searchQuery={searchQuery} />}
-              {activeTab === "board" && <Board projectId={activeProjectId} searchQuery={searchQuery} />}
+              {activeTab === "backlog" && <Backlog projectId={activeProjectId} />}
+              {activeTab === "board" && <Board projectId={activeProjectId} />}
               {activeTab === "roadmap" && <Roadmap projectId={activeProjectId} />}
               {activeTab === "reports" && <Reports projectId={activeProjectId} />}
               {activeTab === "settings" && <ProjectSettings project={activeProject} onProjectDeleted={() => setActiveProjectId(null)} onProjectUpdated={(proj) => setActiveProject(proj)} />}

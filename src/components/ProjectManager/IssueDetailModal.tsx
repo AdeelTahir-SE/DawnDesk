@@ -1,22 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { LocalIssue, LocalComment } from "./types";
+import { LocalIssue, LocalComment, LocalCustomField, LocalCustomFieldValue, LocalAttachment, LocalIssueLink, LocalIssueHistory, LocalWorklog } from "./types";
 import {
   X, Save, Clock, AlignLeft, Tag, Trash2, Plus,
   CheckSquare, MessageSquare, ChevronDown, ChevronUp,
   Bug, BookOpen, Zap, Layers, ListChecks, Calendar,
   ArrowUp, ArrowDown, Minus, ChevronsUp, ChevronsDown,
+  Paperclip, Link2, History
 } from "lucide-react";
 
 // ---------- local types ----------
-
-interface Worklog {
-  id: number;
-  issue_id: number;
-  minutes: number;
-  description: string | null;
-  created_at: string;
-}
 
 interface Label {
   id: number;
@@ -132,6 +125,27 @@ export default function IssueDetailModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // ---- original estimate ----
+  const [originalEstimate, setOriginalEstimate] = useState<number | null>(issue?.original_estimate_minutes ?? null);
+
+  // ---- custom fields ----
+  const [customFields, setCustomFields] = useState<LocalCustomField[]>([]);
+  const [issueCustomFields, setIssueCustomFields] = useState<LocalCustomFieldValue[]>([]);
+
+  // ---- attachments ----
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  // ---- links ----
+  const [links, setLinks] = useState<LocalIssueLink[]>([]);
+  const [linkIssueId, setLinkIssueId] = useState("");
+  const [linkType, setLinkType] = useState("Blocks");
+  const [linking, setLinking] = useState(false);
+
+  // ---- history ----
+  const [history, setHistory] = useState<LocalIssueHistory[]>([]);
+  const [activeTab, setActiveTab] = useState<"comments" | "history">("comments");
+
   // ---- subtasks ----
   const [allIssues, setAllIssues] = useState<LocalIssue[]>([]);
   const [subtaskTitle, setSubtaskTitle] = useState("");
@@ -144,7 +158,7 @@ export default function IssueDetailModal({
   const [postingComment, setPostingComment] = useState(false);
 
   // ---- worklogs ----
-  const [worklogs, setWorklogs] = useState<Worklog[]>([]);
+  const [worklogs, setWorklogs] = useState<LocalWorklog[]>([]);
   const [showLogWork, setShowLogWork] = useState(false);
   const [logHours, setLogHours] = useState(0);
   const [logMinutes, setLogMinutes] = useState(0);
@@ -164,18 +178,28 @@ export default function IssueDetailModal({
   const fetchRelatedData = useCallback(async () => {
     if (isNew) return;
     try {
-      const [issuesRes, commentsRes, worklogsRes, projLabels, issLabels] = await Promise.all([
+      const [issuesRes, commentsRes, worklogsRes, projLabels, issLabels, cFields, iCFields, atts, issueLinks, hist] = await Promise.all([
         invoke<LocalIssue[]>("get_issues", { projectId }),
         invoke<LocalComment[]>("get_comments", { issueId: issue.id }),
-        invoke<Worklog[]>("get_worklogs", { issueId: issue.id }),
+        invoke<LocalWorklog[]>("get_worklogs", { issueId: issue.id }),
         invoke<Label[]>("get_labels", { projectId }),
         invoke<Label[]>("get_issue_labels", { issueId: issue.id }),
+        invoke<LocalCustomField[]>("get_custom_fields", { projectId }),
+        invoke<LocalCustomFieldValue[]>("get_issue_custom_fields", { issueId: issue.id }),
+        invoke<LocalAttachment[]>("get_attachments", { issueId: issue.id }),
+        invoke<LocalIssueLink[]>("get_issue_links", { issueId: issue.id }),
+        invoke<LocalIssueHistory[]>("get_issue_history", { issueId: issue.id }),
       ]);
       setAllIssues(issuesRes);
       setComments(commentsRes);
       setWorklogs(worklogsRes);
       setProjectLabels(projLabels);
       setIssueLabels(issLabels);
+      setCustomFields(cFields);
+      setIssueCustomFields(iCFields);
+      setAttachments(atts);
+      setLinks(issueLinks);
+      setHistory(hist);
     } catch (err) {
       console.error("Failed to fetch related data:", err);
     }
@@ -189,6 +213,9 @@ export default function IssueDetailModal({
     if (isNew) {
       invoke<Label[]>("get_labels", { projectId })
         .then(setProjectLabels)
+        .catch(() => {});
+      invoke<LocalCustomField[]>("get_custom_fields", { projectId })
+        .then(setCustomFields)
         .catch(() => {});
     }
   }, [isNew, projectId]);
@@ -222,6 +249,7 @@ export default function IssueDetailModal({
             status,
             priority,
             story_points: storyPoints,
+            original_estimate_minutes: originalEstimate,
             due_date: dueDate || null,
             created_at: new Date().toISOString(),
           },
@@ -238,6 +266,9 @@ export default function IssueDetailModal({
             priority,
             story_points: storyPoints,
             time_spent_minutes: issue.time_spent_minutes,
+            original_estimate_minutes: originalEstimate,
+            rank: issue.rank,
+            pinned: issue.pinned,
             due_date: dueDate || null,
             updated_at: new Date().toISOString(),
           },
@@ -277,6 +308,7 @@ export default function IssueDetailModal({
           status: "To Do",
           priority: "Medium",
           story_points: null,
+          original_estimate_minutes: null,
           due_date: null,
           created_at: new Date().toISOString(),
         },
@@ -333,7 +365,7 @@ export default function IssueDetailModal({
       setLogMinutes(0);
       setLogDesc("");
       setShowLogWork(false);
-      const updated = await invoke<Worklog[]>("get_worklogs", { issueId: issue.id });
+      const updated = await invoke<LocalWorklog[]>("get_worklogs", { issueId: issue.id });
       setWorklogs(updated);
     } catch (err) {
       console.error("Failed to log work:", err);
@@ -352,6 +384,63 @@ export default function IssueDetailModal({
       console.error("Failed to toggle label:", err);
     }
     setTogglingLabel(null);
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !issue) return;
+    setUploadingAttachment(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const dataUrl = ev.target?.result as string;
+        await invoke("upload_attachment", {
+          issueId: issue.id,
+          fileName: file.name,
+          base64Data: dataUrl,
+          createdAt: new Date().toISOString(),
+        });
+        const updated = await invoke<LocalAttachment[]>("get_attachments", { issueId: issue.id });
+        setAttachments(updated);
+        setUploadingAttachment(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Failed to upload attachment", err);
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleCreateLink = async () => {
+    if (!linkIssueId || !issue) return;
+    setLinking(true);
+    try {
+      await invoke("create_issue_link", {
+        linkType,
+        sourceIssueId: issue.id,
+        targetIssueId: parseInt(linkIssueId),
+      });
+      const updated = await invoke<LocalIssueLink[]>("get_issue_links", { issueId: issue.id });
+      setLinks(updated);
+      setLinkIssueId("");
+    } catch (err) {
+      console.error(err);
+    }
+    setLinking(false);
+  };
+
+  const handleCustomFieldChange = async (fieldId: number, value: string) => {
+    if (!issue) return;
+    setIssueCustomFields((prev) => {
+      const existing = prev.find((f) => f.field_id === fieldId);
+      if (existing) return prev.map((f) => (f.field_id === fieldId ? { ...f, value } : f));
+      return [...prev, { issue_id: issue.id, field_id: fieldId, value }];
+    });
+    try {
+      await invoke("set_custom_field_value", { issueId: issue.id, fieldId, value });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // ---- render ----
@@ -484,61 +573,170 @@ export default function IssueDetailModal({
               </div>
             )}
 
-            {/* ---- Comments ---- */}
+            {/* ---- Attachments ---- */}
+            {!isNew && (
+              <div className="px-6 sm:px-8 pb-6">
+                <div className="border border-neutral-800 rounded-xl bg-neutral-900/40 overflow-hidden p-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2 mb-3">
+                    <Paperclip className="w-4 h-4" /> Attachments
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    <input type="file" onChange={handleUpload} disabled={uploadingAttachment} className="text-xs text-white/70" />
+                    {uploadingAttachment && <p className="text-xs text-yellow-400">Uploading...</p>}
+                    <div className="flex flex-wrap gap-2">
+                      {attachments.map(att => (
+                        <div key={att.id} className="bg-neutral-800 text-xs px-3 py-1.5 rounded-lg flex items-center gap-2">
+                          <span className="text-white truncate max-w-[200px]">{att.file_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ---- Linked Issues ---- */}
+            {!isNew && (
+              <div className="px-6 sm:px-8 pb-6">
+                <div className="border border-neutral-800 rounded-xl bg-neutral-900/40 overflow-hidden p-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2 mb-3">
+                    <Link2 className="w-4 h-4" /> Linked Issues
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    {links.map(link => {
+                      const isSource = link.source_issue_id === issue.id;
+                      const targetId = isSource ? link.target_issue_id : link.source_issue_id;
+                      const targetIssue = allIssues.find(i => i.id === targetId);
+                      return (
+                        <div key={link.id} className="flex items-center gap-2 text-xs">
+                          <span className="text-white/50">{link.link_type}</span>
+                          <span className="text-white">{targetIssue?.key || `Issue #${targetId}`}</span>
+                          <span className="text-white/30">{targetIssue?.title}</span>
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center gap-2 mt-2">
+                      <select
+                        value={linkType}
+                        onChange={(e) => setLinkType(e.target.value)}
+                        className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none"
+                      >
+                        <option value="Blocks">Blocks</option>
+                        <option value="Relates To">Relates To</option>
+                      </select>
+                      <select
+                        value={linkIssueId}
+                        onChange={(e) => setLinkIssueId(e.target.value)}
+                        className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none"
+                      >
+                        <option value="">Select issue...</option>
+                        {allIssues.filter(i => i.id !== issue.id).map(i => (
+                          <option key={i.id} value={i.id}>{i.key} - {i.title}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleCreateLink}
+                        disabled={linking || !linkIssueId}
+                        className="px-3 py-1.5 rounded-lg bg-neutral-800 text-white text-xs font-bold hover:bg-neutral-700 transition-colors disabled:opacity-40"
+                      >
+                        Link
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ---- Activity (Comments / History) ---- */}
             {!isNew && (
               <div className="px-6 sm:px-8 pb-8">
                 <div className="flex flex-col gap-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4" /> Comments
-                    {comments.length > 0 && (
-                      <span className="ml-1 bg-neutral-800 text-white/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        {comments.length}
-                      </span>
-                    )}
-                  </h3>
-
-                  {/* comment list */}
-                  <div className="flex flex-col gap-3">
-                    {comments.length === 0 && (
-                      <p className="text-xs text-white/30 py-2">No comments yet. Start the conversation.</p>
-                    )}
-                    {comments.map((c) => (
-                      <div key={c.id} className="group bg-neutral-900/40 border border-neutral-800 rounded-xl px-4 py-3 flex flex-col gap-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-white/40 font-medium">{relativeTime(c.created_at)}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteComment(c.id)}
-                            className="p-1 rounded text-white/0 group-hover:text-white/30 hover:!text-red-400 hover:bg-red-400/10 transition-all"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <p className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed">{c.content}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* add comment */}
-                  <div className="flex gap-2">
-                    <textarea
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Write a comment..."
-                      rows={2}
-                      className="flex-1 rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60 transition-colors resize-none custom-scrollbar"
-                      onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleAddComment(); } }}
-                    />
+                  <div className="flex gap-4 border-b border-neutral-800 mb-2">
                     <button
                       type="button"
-                      onClick={handleAddComment}
-                      disabled={postingComment || !commentText.trim()}
-                      className="self-end px-4 py-2.5 rounded-xl bg-neutral-800 text-white text-xs font-bold hover:bg-neutral-700 transition-colors disabled:opacity-40"
+                      className={`pb-2 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'comments' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-white/50 hover:text-white/80'}`}
+                      onClick={() => setActiveTab('comments')}
                     >
-                      {postingComment ? "..." : "Post"}
+                      <MessageSquare className="w-3.5 h-3.5" /> Comments
+                    </button>
+                    <button
+                      type="button"
+                      className={`pb-2 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'history' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-white/50 hover:text-white/80'}`}
+                      onClick={() => setActiveTab('history')}
+                    >
+                      <History className="w-3.5 h-3.5" /> History
                     </button>
                   </div>
-                  <p className="text-[10px] text-white/25 -mt-2">Ctrl + Enter to post</p>
+
+                  {activeTab === 'comments' && (
+                    <>
+                      {/* comment list */}
+                      <div className="flex flex-col gap-3">
+                        {comments.length === 0 && (
+                          <p className="text-xs text-white/30 py-2">No comments yet. Start the conversation.</p>
+                        )}
+                        {comments.map((c) => (
+                          <div key={c.id} className="group bg-neutral-900/40 border border-neutral-800 rounded-xl px-4 py-3 flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-white/40 font-medium">{relativeTime(c.created_at)}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteComment(c.id)}
+                                className="p-1 rounded text-white/0 group-hover:text-white/30 hover:!text-red-400 hover:bg-red-400/10 transition-all"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <p className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed">{c.content}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* add comment */}
+                      <div className="flex gap-2">
+                        <textarea
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          placeholder="Write a comment..."
+                          rows={2}
+                          className="flex-1 rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60 transition-colors resize-none custom-scrollbar"
+                          onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleAddComment(); } }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddComment}
+                          disabled={postingComment || !commentText.trim()}
+                          className="self-end px-4 py-2.5 rounded-xl bg-neutral-800 text-white text-xs font-bold hover:bg-neutral-700 transition-colors disabled:opacity-40"
+                        >
+                          {postingComment ? "..." : "Post"}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-white/25 -mt-2">Ctrl + Enter to post</p>
+                    </>
+                  )}
+
+                  {activeTab === 'history' && (
+                    <div className="flex flex-col gap-3">
+                      {history.length === 0 && <p className="text-xs text-white/30 py-2">No history available.</p>}
+                      {history.map(h => (
+                        <div key={h.id} className="flex items-start gap-3 py-2 border-b border-neutral-800/50 last:border-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-yellow-400/50 mt-1.5 shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-xs text-white/70">
+                              Changed <span className="font-semibold text-white">{h.field_name}</span>
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-white/50">
+                              <span className="line-through truncate max-w-[200px]">{h.old_value || 'None'}</span>
+                              <span>→</span>
+                              <span className="text-green-400 truncate max-w-[200px]">{h.new_value || 'None'}</span>
+                            </div>
+                            <p className="text-[10px] text-white/30 mt-1">{relativeTime(h.created_at)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -657,6 +855,21 @@ export default function IssueDetailModal({
                 <label className="text-[10px] font-semibold uppercase tracking-widest text-white/40 flex items-center gap-1.5">
                   <Clock className="w-3 h-3" /> Time Tracking
                 </label>
+                
+                <div className="flex flex-col gap-1.5 mb-2">
+                  <label className="text-[9px] font-semibold uppercase tracking-widest text-white/30">
+                    Original Estimate (mins)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={originalEstimate ?? ""}
+                    onChange={(e) => setOriginalEstimate(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                    placeholder="e.g. 120"
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+
                 <div className="p-3 bg-neutral-950 rounded-lg border border-neutral-800">
                   <div className="flex items-center justify-between">
                     <div>
@@ -742,6 +955,32 @@ export default function IssueDetailModal({
               </div>
 
               <div className="border-t border-neutral-800" />
+
+              {/* Custom Fields */}
+              {customFields.length > 0 && !isNew && (
+                <>
+                  <div className="flex flex-col gap-3">
+                    <h4 className="text-[10px] font-semibold uppercase tracking-widest text-white/40 flex items-center gap-1.5">
+                      <ListChecks className="w-3 h-3" /> Custom Fields
+                    </h4>
+                    {customFields.map(cf => {
+                      const val = issueCustomFields.find(f => f.field_id === cf.id)?.value || "";
+                      return (
+                        <div key={cf.id} className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-semibold uppercase tracking-widest text-white/40">{cf.name}</label>
+                          <input
+                            type="text"
+                            value={val}
+                            onChange={(e) => handleCustomFieldChange(cf.id, e.target.value)}
+                            className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors w-full"
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="border-t border-neutral-800" />
+                </>
+              )}
 
               {/* Labels */}
               <div className="flex flex-col gap-2">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Save, Trash2, ShieldAlert, Loader2, Plus, X, Tag } from "lucide-react";
+import { Save, Trash2, ShieldAlert, Loader2, Plus, X, Tag, Settings2, GitMerge, Bot, Database } from "lucide-react";
 import { LocalProject } from "./types";
 
 interface Label {
@@ -8,6 +8,32 @@ interface Label {
   project_id: number;
   name: string;
   color: string;
+}
+
+interface WorkflowStatus {
+  id: number;
+  project_id: number;
+  name: string;
+  category: string;
+  position: number;
+  wip_limit?: number | null;
+}
+
+interface AutomationRule {
+  id: number;
+  project_id: number;
+  name: string;
+  trigger_type: string;
+  conditions_json: string;
+  actions_json: string;
+  is_active: boolean;
+}
+
+interface CustomField {
+  id: number;
+  project_id: number;
+  name: string;
+  field_type: string;
 }
 
 interface ProjectSettingsProps {
@@ -24,6 +50,8 @@ const LABEL_COLORS = [
 export default function ProjectSettings({ project, onProjectDeleted, onProjectUpdated }: ProjectSettingsProps) {
   if (!project) return null;
 
+  const [activeTab, setActiveTab] = useState<"general" | "workflows" | "automations" | "customFields">("general");
+
   const [name, setName] = useState(project.name);
   const [projKey, setProjKey] = useState(project.key);
   const [desc, setDesc] = useState(project.description || "");
@@ -36,18 +64,59 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0]);
   const [showLabelForm, setShowLabelForm] = useState(false);
 
-  const fetchLabels = async () => {
+  // Workflows
+  const [workflows, setWorkflows] = useState<WorkflowStatus[]>([]);
+  const [showWorkflowForm, setShowWorkflowForm] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState("");
+  const [newWorkflowCategory, setNewWorkflowCategory] = useState("To Do");
+  const [newWorkflowWipLimit, setNewWorkflowWipLimit] = useState<number | "">("");
+
+  // Automations
+  const [automations, setAutomations] = useState<AutomationRule[]>([]);
+  const [showAutomationForm, setShowAutomationForm] = useState(false);
+  const [newAutoName, setNewAutoName] = useState("");
+  const [newAutoTrigger, setNewAutoTrigger] = useState("Status Changed");
+  const [newAutoCondition, setNewAutoCondition] = useState("");
+  const [newAutoAction, setNewAutoAction] = useState("Set Priority");
+  const [newAutoActionValue, setNewAutoActionValue] = useState("");
+
+  // Custom Fields
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [showCustomFieldForm, setShowCustomFieldForm] = useState(false);
+  const [newCustomFieldName, setNewCustomFieldName] = useState("");
+  const [newCustomFieldType, setNewCustomFieldType] = useState("Text");
+
+  const fetchData = async () => {
     try {
-      const result = await invoke<Label[]>("get_labels", { projectId: project.id });
-      setLabels(result);
+      const [lbls, wfs, autos] = await Promise.all([
+        invoke<Label[]>("get_labels", { projectId: project.id }),
+        invoke<WorkflowStatus[]>("get_workflow_statuses", { projectId: project.id }),
+        invoke<AutomationRule[]>("get_automation_rules", { projectId: project.id }),
+      ]);
+      setLabels(lbls);
+      setWorkflows(wfs);
+      setAutomations(autos);
+
+      try {
+        const cfs = await invoke<CustomField[]>("get_custom_fields", { projectId: project.id });
+        setCustomFields(cfs);
+      } catch (e) {
+        console.warn("Custom fields fetch failed, backend might not be ready yet", e);
+      }
     } catch (e) {
       console.error(e);
     }
   };
 
   useEffect(() => {
-    fetchLabels();
+    fetchData();
   }, [project.id]);
+
+  useEffect(() => {
+    if (workflows.length > 0 && !newAutoCondition) {
+      setNewAutoCondition(workflows[0].name);
+    }
+  }, [workflows, newAutoCondition]);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +162,7 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
       await invoke("create_label", { projectId: project.id, name: newLabelName.trim(), color: newLabelColor });
       setNewLabelName("");
       setShowLabelForm(false);
-      fetchLabels();
+      fetchData();
     } catch (e) {
       console.error(e);
     }
@@ -103,7 +172,95 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
     if (!window.confirm("Delete this label? It will be removed from all issues.")) return;
     try {
       await invoke("delete_label", { id });
-      fetchLabels();
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCreateWorkflow = async () => {
+    if (!newWorkflowName.trim()) return;
+    try {
+      await invoke("create_workflow_status", {
+        projectId: project.id,
+        name: newWorkflowName.trim(),
+        category: newWorkflowCategory,
+        position: workflows.length,
+        wipLimit: newWorkflowWipLimit === "" ? null : Number(newWorkflowWipLimit)
+      });
+      setNewWorkflowName("");
+      setNewWorkflowWipLimit("");
+      setShowWorkflowForm(false);
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteWorkflow = async (id: number) => {
+    if (!window.confirm("Delete this status? Issues in this status may become orphaned.")) return;
+    try {
+      await invoke("delete_workflow_status", { id });
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCreateAutomation = async () => {
+    if (!newAutoName.trim()) return;
+    try {
+      const conditionsJson = JSON.stringify({ status: newAutoCondition });
+      const actionsJson = JSON.stringify([{ type: newAutoAction, value: newAutoActionValue }]);
+
+      await invoke("create_automation_rule", {
+        projectId: project.id,
+        name: newAutoName.trim(),
+        triggerType: newAutoTrigger,
+        conditionsJson,
+        actionsJson
+      });
+      setNewAutoName("");
+      setNewAutoActionValue("");
+      setShowAutomationForm(false);
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteAutomation = async (id: number) => {
+    if (!window.confirm("Delete this automation rule?")) return;
+    try {
+      await invoke("delete_automation_rule", { id });
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCreateCustomField = async () => {
+    if (!newCustomFieldName.trim()) return;
+    try {
+      await invoke("create_custom_field", {
+        projectId: project.id,
+        name: newCustomFieldName.trim(),
+        fieldType: newCustomFieldType
+      });
+      setNewCustomFieldName("");
+      setNewCustomFieldType("Text");
+      setShowCustomFieldForm(false);
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteCustomField = async (id: number) => {
+    if (!window.confirm("Delete this custom field?")) return;
+    try {
+      await invoke("delete_custom_field", { id });
+      fetchData();
     } catch (e) {
       console.error(e);
     }
@@ -111,163 +268,453 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
 
   return (
     <div className="flex flex-col gap-8 max-w-3xl h-full overflow-y-auto custom-scrollbar animate-fadeIn pb-12">
-
       <div className="flex flex-col gap-2">
         <h2 className="text-2xl font-bold text-white tracking-tight">Project Settings</h2>
-        <p className="text-sm text-white/60">Manage your workspace configuration, labels, and workflows.</p>
+        <p className="text-sm text-white/60">Manage your workspace configuration, labels, workflows, automations, and fields.</p>
       </div>
 
-      {/* General Settings */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 mb-6">General</h3>
-        <form onSubmit={handleUpdate} className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_0.5fr] gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Project Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors"
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Key</label>
-              <input
-                type="text"
-                value={projKey}
-                onChange={e => setProjKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
-                className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white uppercase tracking-wider outline-none focus:border-yellow-400/60 transition-colors"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Description</label>
-            <textarea
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-              className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors resize-none h-32 custom-scrollbar"
-            />
-          </div>
-
-          <div className="flex justify-end mt-2 pt-6 border-t border-neutral-800">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 rounded-lg bg-yellow-400 text-black text-sm font-bold hover:bg-yellow-300 transition-colors flex items-center gap-2"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Label Management */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2"><Tag className="w-4 h-4" /> Labels</h3>
-            <p className="text-xs text-white/40 mt-1">Create and manage labels for categorizing issues.</p>
-          </div>
+      <div className="flex gap-4 border-b border-neutral-800 pb-px">
+        {[
+          { id: "general", label: "General", icon: Settings2 },
+          { id: "workflows", label: "Workflows", icon: GitMerge },
+          { id: "automations", label: "Automations", icon: Bot },
+          { id: "customFields", label: "Custom Fields", icon: Database },
+        ].map(t => (
           <button
-            onClick={() => setShowLabelForm(!showLabelForm)}
-            className="flex items-center gap-2 rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-2 text-xs font-bold text-white/70 hover:text-white hover:border-yellow-400/40 transition-colors"
+            key={t.id}
+            onClick={() => setActiveTab(t.id as any)}
+            className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === t.id
+                ? "border-yellow-400 text-yellow-400"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
-            <Plus className="w-3.5 h-3.5" /> New Label
+            <t.icon className="w-4 h-4" />
+            {t.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {showLabelForm && (
-          <div className="mb-6 p-4 rounded-xl border border-neutral-800 bg-neutral-950/60 flex flex-col gap-4 animate-fadeIn">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Label Name</label>
-              <input
-                type="text"
-                value={newLabelName}
-                onChange={e => setNewLabelName(e.target.value)}
-                placeholder="e.g. Bug, Feature, Design"
-                className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Color</label>
-              <div className="flex flex-wrap gap-2">
-                {LABEL_COLORS.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setNewLabelColor(c)}
-                    className={`w-7 h-7 rounded-full transition-all ${newLabelColor === c ? "ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110" : "hover:scale-110"}`}
-                    style={{ backgroundColor: c }}
+      {activeTab === "general" && (
+        <div className="flex flex-col gap-8 animate-fadeIn">
+          {/* General Settings */}
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 mb-6">General</h3>
+            <form onSubmit={handleUpdate} className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-[1.5fr_0.5fr] gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Project Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors"
+                    required
                   />
-                ))}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Key</label>
+                  <input
+                    type="text"
+                    value={projKey}
+                    onChange={e => setProjKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white uppercase tracking-wider outline-none focus:border-yellow-400/60 transition-colors"
+                    required
+                  />
+                </div>
               </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setShowLabelForm(false)} className="px-4 py-2 rounded-lg border border-neutral-800 text-xs font-semibold text-white/60 hover:text-white">Cancel</button>
-              <button type="button" onClick={handleCreateLabel} className="px-4 py-2 rounded-lg bg-yellow-400 text-black text-xs font-bold hover:bg-yellow-300">Create Label</button>
-            </div>
-          </div>
-        )}
 
-        <div className="space-y-2">
-          {labels.length === 0 ? (
-            <p className="text-sm text-white/40 text-center py-6">No labels created yet.</p>
-          ) : labels.map(label => (
-            <div key={label.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-800 bg-neutral-950/40 group hover:border-neutral-700 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: label.color }} />
-                <span className="text-sm font-medium text-white">{label.name}</span>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Description</label>
+                <textarea
+                  value={desc}
+                  onChange={e => setDesc(e.target.value)}
+                  className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors resize-none h-32 custom-scrollbar"
+                />
+              </div>
+
+              <div className="flex justify-end mt-2 pt-6 border-t border-neutral-800">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-6 py-2.5 rounded-lg bg-yellow-400 text-black text-sm font-bold hover:bg-yellow-300 transition-colors flex items-center gap-2"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Label Management */}
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2"><Tag className="w-4 h-4" /> Labels</h3>
+                <p className="text-xs text-white/40 mt-1">Create and manage labels for categorizing issues.</p>
               </div>
               <button
-                onClick={() => handleDeleteLabel(label.id)}
-                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                onClick={() => setShowLabelForm(!showLabelForm)}
+                className="flex items-center gap-2 rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-2 text-xs font-bold text-white/70 hover:text-white hover:border-yellow-400/40 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" /> New Label
               </button>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Workflow Info */}
-      <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 mb-4">Workflow Statuses</h3>
-        <p className="text-xs text-white/40 mb-4">Default statuses used across all boards in this project.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {["To Do", "In Progress", "In Review", "Done"].map(s => (
-            <div key={s} className="p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 text-center">
-              <div className={`w-2.5 h-2.5 rounded-full mx-auto mb-2 ${
-                s === "Done" ? "bg-green-400" : s === "In Progress" ? "bg-yellow-400" : s === "In Review" ? "bg-indigo-400" : "bg-neutral-500"
-              }`} />
-              <span className="text-xs font-semibold text-white/70">{s}</span>
+            {showLabelForm && (
+              <div className="mb-6 p-4 rounded-xl border border-neutral-800 bg-neutral-950/60 flex flex-col gap-4 animate-fadeIn">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Label Name</label>
+                  <input
+                    type="text"
+                    value={newLabelName}
+                    onChange={e => setNewLabelName(e.target.value)}
+                    placeholder="e.g. Bug, Feature, Design"
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Color</label>
+                  <div className="flex flex-wrap gap-2">
+                    {LABEL_COLORS.map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setNewLabelColor(c)}
+                        className={`w-7 h-7 rounded-full transition-all ${newLabelColor === c ? "ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110" : "hover:scale-110"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button type="button" onClick={() => setShowLabelForm(false)} className="px-4 py-2 rounded-lg border border-neutral-800 text-xs font-semibold text-white/60 hover:text-white">Cancel</button>
+                  <button type="button" onClick={handleCreateLabel} className="px-4 py-2 rounded-lg bg-yellow-400 text-black text-xs font-bold hover:bg-yellow-300">Create Label</button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {labels.length === 0 ? (
+                <p className="text-sm text-white/40 text-center py-6">No labels created yet.</p>
+              ) : labels.map(label => (
+                <div key={label.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-800 bg-neutral-950/40 group hover:border-neutral-700 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: label.color }} />
+                    <span className="text-sm font-medium text-white">{label.name}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteLabel(label.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* Danger Zone */}
-      <div className="bg-red-950/20 border border-red-500/20 rounded-2xl p-6 sm:p-8 flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <ShieldAlert className="w-6 h-6 text-red-500" />
-          <h3 className="text-lg font-bold text-red-500 tracking-tight">Danger Zone</h3>
+          {/* Danger Zone */}
+          <div className="bg-red-950/20 border border-red-500/20 rounded-2xl p-6 sm:p-8 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="w-6 h-6 text-red-500" />
+              <h3 className="text-lg font-bold text-red-500 tracking-tight">Danger Zone</h3>
+            </div>
+            <p className="text-sm text-red-500/70">
+              Deleting this project will permanently erase all issues, sprints, labels, and data. This action cannot be undone.
+            </p>
+            <div className="mt-2">
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm font-bold hover:bg-red-500/20 transition-colors flex items-center gap-2"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete Project
+              </button>
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-red-500/70">
-          Deleting this project will permanently erase all issues, sprints, labels, and data. This action cannot be undone.
-        </p>
-        <div className="mt-2">
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="px-5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm font-bold hover:bg-red-500/20 transition-colors flex items-center gap-2"
-          >
-            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete Project
-          </button>
+      )}
+
+      {activeTab === "workflows" && (
+        <div className="flex flex-col gap-8 animate-fadeIn">
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">Workflow Statuses</h3>
+                <p className="text-xs text-white/40 mt-1">Manage the statuses that issues can move through.</p>
+              </div>
+              <button
+                onClick={() => setShowWorkflowForm(!showWorkflowForm)}
+                className="flex items-center gap-2 rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-2 text-xs font-bold text-white/70 hover:text-white hover:border-yellow-400/40 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> New Status
+              </button>
+            </div>
+
+            {showWorkflowForm && (
+              <div className="mb-6 p-4 rounded-xl border border-neutral-800 bg-neutral-950/60 flex flex-col gap-4 animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Status Name</label>
+                    <input
+                      type="text"
+                      value={newWorkflowName}
+                      onChange={e => setNewWorkflowName(e.target.value)}
+                      placeholder="e.g. In QA, Blocked"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Category</label>
+                    <select
+                      value={newWorkflowCategory}
+                      onChange={e => setNewWorkflowCategory(e.target.value)}
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                    >
+                      <option value="To Do">To Do</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="In Review">In Review</option>
+                      <option value="Done">Done</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/50">WIP Limit (Optional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newWorkflowWipLimit}
+                    onChange={e => setNewWorkflowWipLimit(e.target.value ? Number(e.target.value) : "")}
+                    placeholder="Leave empty for no limit"
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
+                  />
+                </div>
+
+                <div className="flex gap-3 justify-end mt-2">
+                  <button type="button" onClick={() => setShowWorkflowForm(false)} className="px-4 py-2 rounded-lg border border-neutral-800 text-xs font-semibold text-white/60 hover:text-white">Cancel</button>
+                  <button type="button" onClick={handleCreateWorkflow} className="px-4 py-2 rounded-lg bg-yellow-400 text-black text-xs font-bold hover:bg-yellow-300">Create Status</button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {workflows.length === 0 ? (
+                <p className="text-sm text-white/40 text-center py-6">No custom statuses created yet.</p>
+              ) : workflows.map(wf => (
+                <div key={wf.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-800 bg-neutral-950/40 group hover:border-neutral-700 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-white">{wf.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-white/50">{wf.category}</span>
+                    {wf.wip_limit && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">WIP: {wf.wip_limit}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteWorkflow(wf.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === "automations" && (
+        <div className="flex flex-col gap-8 animate-fadeIn">
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">Automation Rules</h3>
+                <p className="text-xs text-white/40 mt-1">Automate tasks based on triggers and conditions.</p>
+              </div>
+              <button
+                onClick={() => setShowAutomationForm(!showAutomationForm)}
+                className="flex items-center gap-2 rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-2 text-xs font-bold text-white/70 hover:text-white hover:border-yellow-400/40 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> New Rule
+              </button>
+            </div>
+
+            {showAutomationForm && (
+              <div className="mb-6 p-4 rounded-xl border border-neutral-800 bg-neutral-950/60 flex flex-col gap-6 animate-fadeIn">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Rule Name</label>
+                  <input
+                    type="text"
+                    value={newAutoName}
+                    onChange={e => setNewAutoName(e.target.value)}
+                    placeholder="e.g. Set High Priority on Bug Status"
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-neutral-900/40 p-4 rounded-lg border border-neutral-800/50">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Trigger Type</label>
+                    <select
+                      value={newAutoTrigger}
+                      onChange={e => setNewAutoTrigger(e.target.value)}
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                    >
+                      <option value="Status Changed">Status Changed</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Condition (Status is)</label>
+                    <select
+                      value={newAutoCondition}
+                      onChange={e => setNewAutoCondition(e.target.value)}
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                    >
+                      {workflows.map(wf => (
+                        <option key={wf.id} value={wf.name}>{wf.name}</option>
+                      ))}
+                      {workflows.length === 0 && <option value="" disabled>No statuses available</option>}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-neutral-900/40 p-4 rounded-lg border border-neutral-800/50">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Action Type</label>
+                    <select
+                      value={newAutoAction}
+                      onChange={e => setNewAutoAction(e.target.value)}
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                    >
+                      <option value="Set Priority">Set Priority</option>
+                      <option value="Add Label">Add Label</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Action Value</label>
+                    <input
+                      type="text"
+                      value={newAutoActionValue}
+                      onChange={e => setNewAutoActionValue(e.target.value)}
+                      placeholder={newAutoAction === "Set Priority" ? "e.g. High" : "e.g. Bug"}
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button type="button" onClick={() => setShowAutomationForm(false)} className="px-4 py-2 rounded-lg border border-neutral-800 text-xs font-semibold text-white/60 hover:text-white">Cancel</button>
+                  <button type="button" onClick={handleCreateAutomation} className="px-4 py-2 rounded-lg bg-yellow-400 text-black text-xs font-bold hover:bg-yellow-300">Create Rule</button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {automations.length === 0 ? (
+                <p className="text-sm text-white/40 text-center py-6">No automation rules created yet.</p>
+              ) : automations.map(auto => {
+                let parsedConditions, parsedActions;
+                try { parsedConditions = JSON.parse(auto.conditions_json); } catch(e) {}
+                try { parsedActions = JSON.parse(auto.actions_json); } catch(e) {}
+
+                return (
+                  <div key={auto.id} className="flex flex-col gap-2 px-4 py-3 rounded-lg border border-neutral-800 bg-neutral-950/40 group hover:border-neutral-700 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-white">{auto.name}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-white/50">{auto.trigger_type}</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAutomation(auto.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {(parsedConditions || parsedActions) && (
+                      <div className="flex items-center gap-2 text-xs text-white/40 mt-1">
+                        {parsedConditions?.status && <span>If status is <strong>{parsedConditions.status}</strong>, </span>}
+                        {parsedActions?.[0] && <span>then {parsedActions[0].type}: <strong>{parsedActions[0].value}</strong></span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "customFields" && (
+        <div className="flex flex-col gap-8 animate-fadeIn">
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">Custom Fields</h3>
+                <p className="text-xs text-white/40 mt-1">Define additional data fields for issues in this project.</p>
+              </div>
+              <button
+                onClick={() => setShowCustomFieldForm(!showCustomFieldForm)}
+                className="flex items-center gap-2 rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-2 text-xs font-bold text-white/70 hover:text-white hover:border-yellow-400/40 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> New Field
+              </button>
+            </div>
+
+            {showCustomFieldForm && (
+              <div className="mb-6 p-4 rounded-xl border border-neutral-800 bg-neutral-950/60 flex flex-col gap-4 animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Field Name</label>
+                    <input
+                      type="text"
+                      value={newCustomFieldName}
+                      onChange={e => setNewCustomFieldName(e.target.value)}
+                      placeholder="e.g. Budget, Launch Date"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Field Type</label>
+                    <select
+                      value={newCustomFieldType}
+                      onChange={e => setNewCustomFieldType(e.target.value)}
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                    >
+                      <option value="Text">Text</option>
+                      <option value="Number">Number</option>
+                      <option value="Date">Date</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end mt-2">
+                  <button type="button" onClick={() => setShowCustomFieldForm(false)} className="px-4 py-2 rounded-lg border border-neutral-800 text-xs font-semibold text-white/60 hover:text-white">Cancel</button>
+                  <button type="button" onClick={handleCreateCustomField} className="px-4 py-2 rounded-lg bg-yellow-400 text-black text-xs font-bold hover:bg-yellow-300">Create Field</button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {customFields.length === 0 ? (
+                <p className="text-sm text-white/40 text-center py-6">No custom fields created yet.</p>
+              ) : customFields.map(field => (
+                <div key={field.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-800 bg-neutral-950/40 group hover:border-neutral-700 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-white">{field.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-white/50">{field.field_type}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCustomField(field.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

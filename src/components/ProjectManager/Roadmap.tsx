@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, Map } from "lucide-react";
-import type { LocalIssue } from "./types";
+import { Loader2, Map, Milestone } from "lucide-react";
+import type { LocalIssue, LocalVersion } from "./types";
 
 const STATUS_BAR_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   "To Do": { bg: "bg-neutral-600", border: "border-neutral-500", text: "text-neutral-300" },
@@ -48,6 +48,7 @@ interface EpicBar {
 
 export default function Roadmap({ projectId }: { projectId: number | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
+  const [versions, setVersions] = useState<LocalVersion[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,10 +56,14 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const data = await invoke<LocalIssue[]>("get_issues", { projectId });
-        setIssues(data);
+        const [issuesData, versionsData] = await Promise.all([
+          invoke<LocalIssue[]>("get_issues", { projectId }),
+          invoke<LocalVersion[]>("get_versions", { projectId })
+        ]);
+        setIssues(issuesData);
+        setVersions(versionsData);
       } catch (e) {
-        console.error("Failed to fetch issues for roadmap:", e);
+        console.error("Failed to fetch roadmap data:", e);
       }
       setLoading(false);
     };
@@ -85,18 +90,27 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
 
   // Compute the timeline range
   const { timelineStart, timelineEnd, months, totalDays } = useMemo(() => {
-    if (epics.length === 0) {
+    if (epics.length === 0 && versions.length === 0) {
       const now = new Date();
       const s = startOfMonth(now);
       const e = addMonths(s, 3);
       return { timelineStart: s, timelineEnd: e, months: [] as Date[], totalDays: daysBetween(s, e) };
     }
 
-    let earliest = epics[0].start;
-    let latest = epics[0].end;
+    let earliest = epics.length > 0 ? epics[0].start : new Date(versions[0]?.release_date || Date.now());
+    let latest = epics.length > 0 ? epics[0].end : new Date(versions[0]?.release_date || Date.now());
+    
     for (const epic of epics) {
       if (epic.start < earliest) earliest = epic.start;
       if (epic.end > latest) latest = epic.end;
+    }
+    
+    for (const v of versions) {
+       if (v.release_date) {
+         const vd = new Date(v.release_date);
+         if (vd < earliest) earliest = vd;
+         if (vd > latest) latest = vd;
+       }
     }
 
     // Add padding: 1 month before, 1 month after
@@ -150,13 +164,13 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
         )}
       </div>
 
-      {epics.length === 0 ? (
+      {epics.length === 0 && versions.length === 0 ? (
         <div className="flex flex-1 items-center justify-center bg-neutral-900/40 rounded-xl border border-neutral-800 p-6">
           <div className="text-center">
             <Map className="w-12 h-12 text-white/20 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-white/60">No Epics on the roadmap</h3>
+            <h3 className="text-lg font-semibold text-white/60">No Epics or Versions on the roadmap</h3>
             <p className="text-sm text-white/40 mt-2 max-w-md">
-              Create Epics with due dates to see them mapped on the timeline. Epics represent major features or milestones in your project.
+              Create Epics with due dates or Versions with release dates to see them mapped on the timeline.
             </p>
           </div>
         </div>
@@ -262,6 +276,31 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
                 }
                 return null;
               })()}
+
+              {/* Versions/Releases markers */}
+              {versions.filter(v => v.release_date).map(version => {
+                const vDate = new Date(version.release_date!);
+                if (vDate >= timelineStart && vDate <= timelineEnd) {
+                  const offset = daysBetween(timelineStart, vDate);
+                  const leftPct = (offset / totalDays) * 100;
+                  return (
+                    <div
+                      key={`version-${version.id}`}
+                      className="absolute top-0 bottom-0 w-px border-l-2 border-dashed border-blue-500/50 pointer-events-none z-10 flex flex-col items-center"
+                      style={{
+                        left: `calc(260px + (100% - 260px) * ${leftPct / 100})`,
+                      }}
+                      title={`Release: ${version.name} (${vDate.toLocaleDateString()})`}
+                    >
+                      <div className="mt-12 bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-blue-500/40 backdrop-blur-sm shadow-sm pointer-events-auto flex items-center gap-1">
+                        <Milestone className="w-3 h-3" />
+                        {version.name}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })}
             </div>
           </div>
         </div>

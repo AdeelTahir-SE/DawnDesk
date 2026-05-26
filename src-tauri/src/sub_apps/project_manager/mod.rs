@@ -4,6 +4,12 @@ use std::fs;
 use std::path::Path;
 use tauri::AppHandle;
 
+pub mod advanced;
+pub use advanced::*;
+
+pub mod jql;
+pub use jql::*;
+
 use crate::sub_apps::utils::storage_root;
 
 fn db_connection(app: &AppHandle) -> Result<Connection, String> {
@@ -98,8 +104,81 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             created_at TEXT NOT NULL,
             FOREIGN KEY(issue_id) REFERENCES issues(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            release_date TEXT,
+            released BOOLEAN NOT NULL DEFAULT 0,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS issue_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issue_id INTEGER NOT NULL,
+            field_name TEXT NOT NULL,
+            old_value TEXT,
+            new_value TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(issue_id) REFERENCES issues(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issue_id INTEGER NOT NULL,
+            file_name TEXT NOT NULL,
+            local_path TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(issue_id) REFERENCES issues(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS saved_filters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            jql_query TEXT NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS custom_fields (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS custom_field_values (
+            issue_id INTEGER NOT NULL,
+            field_id INTEGER NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY(issue_id, field_id),
+            FOREIGN KEY(issue_id) REFERENCES issues(id) ON DELETE CASCADE,
+            FOREIGN KEY(field_id) REFERENCES custom_fields(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS automation_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            trigger_type TEXT NOT NULL,
+            conditions_json TEXT NOT NULL,
+            actions_json TEXT NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS workflow_statuses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            wip_limit INTEGER,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
         "
     ).map_err(|e| e.to_string())?;
+
+    // Safe schema alter using explicit connection methods because execute_batch errors out if column already exists
+    let _ = conn.execute("ALTER TABLE issues ADD COLUMN original_estimate_minutes INTEGER", []);
+    let _ = conn.execute("ALTER TABLE issues ADD COLUMN rank REAL DEFAULT 0.0", []);
+    let _ = conn.execute("ALTER TABLE issues ADD COLUMN pinned BOOLEAN DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'Scrum'", []);
+    let _ = conn.execute("ALTER TABLE workflow_statuses ADD COLUMN wip_limit INTEGER", []);
 
     Ok(conn)
 }
@@ -116,6 +195,7 @@ pub struct Project {
     pub description: Option<String>,
     pub color_tag: String,
     pub created_at: String,
+    pub project_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -125,6 +205,7 @@ pub struct CreateProjectInput {
     pub description: Option<String>,
     pub color_tag: String,
     pub created_at: String,
+    pub project_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -134,14 +215,16 @@ pub struct UpdateProjectInput {
     pub key: String,
     pub description: Option<String>,
     pub color_tag: String,
+    pub project_type: Option<String>,
 }
 
 #[tauri::command]
 pub fn create_project(app: AppHandle, input: CreateProjectInput) -> Result<String, String> {
     let conn = db_connection(&app)?;
+    let p_type = input.project_type.unwrap_or_else(|| "Scrum".to_string());
     conn.execute(
-        "INSERT INTO projects (name, key, description, color_tag, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![input.name, input.key, input.description, input.color_tag, input.created_at],
+        "INSERT INTO projects (name, key, description, color_tag, created_at, project_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![input.name, input.key, input.description, input.color_tag, input.created_at, p_type],
     )
     .map_err(|e| e.to_string())?;
     Ok("Project created".to_string())
@@ -150,7 +233,7 @@ pub fn create_project(app: AppHandle, input: CreateProjectInput) -> Result<Strin
 #[tauri::command]
 pub fn get_projects(app: AppHandle) -> Result<Vec<Project>, String> {
     let conn = db_connection(&app)?;
-    let mut stmt = conn.prepare("SELECT id, name, key, description, color_tag, created_at FROM projects ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, name, key, description, color_tag, created_at, project_type FROM projects ORDER BY id DESC").map_err(|e| e.to_string())?;
 
     let rows = stmt.query_map([], |row| {
         Ok(Project {
@@ -160,6 +243,7 @@ pub fn get_projects(app: AppHandle) -> Result<Vec<Project>, String> {
             description: row.get(3)?,
             color_tag: row.get(4)?,
             created_at: row.get(5)?,
+            project_type: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -174,9 +258,10 @@ pub fn get_projects(app: AppHandle) -> Result<Vec<Project>, String> {
 #[tauri::command]
 pub fn update_project(app: AppHandle, input: UpdateProjectInput) -> Result<String, String> {
     let conn = db_connection(&app)?;
+    let p_type = input.project_type.unwrap_or_else(|| "Scrum".to_string());
     conn.execute(
-        "UPDATE projects SET name = ?1, key = ?2, description = ?3, color_tag = ?4 WHERE id = ?5",
-        params![input.name, input.key, input.description, input.color_tag, input.id],
+        "UPDATE projects SET name = ?1, key = ?2, description = ?3, color_tag = ?4, project_type = ?5 WHERE id = ?6",
+        params![input.name, input.key, input.description, input.color_tag, p_type, input.id],
     )
     .map_err(|e| e.to_string())?;
     Ok("Project updated".to_string())
@@ -283,6 +368,9 @@ pub struct Issue {
     pub priority: String,
     pub story_points: Option<i64>,
     pub time_spent_minutes: i64,
+    pub original_estimate_minutes: Option<i64>,
+    pub rank: f64,
+    pub pinned: bool,
     pub due_date: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -299,6 +387,7 @@ pub struct CreateIssueInput {
     pub status: String,
     pub priority: String,
     pub story_points: Option<i64>,
+    pub original_estimate_minutes: Option<i64>,
     pub due_date: Option<String>,
     pub created_at: String,
 }
@@ -323,9 +412,9 @@ pub fn create_issue(app: AppHandle, input: CreateIssueInput) -> Result<String, S
     let new_key = format!("{}-{}", proj_key, count + 1);
 
     conn.execute(
-        "INSERT INTO issues (project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, ?13)",
-        params![input.project_id, input.sprint_id, input.parent_id, input.issue_type, new_key, input.title, input.description, input.status, input.priority, input.story_points, input.due_date, input.created_at, input.created_at],
+        "INSERT INTO issues (project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, original_estimate_minutes, rank, pinned, due_date, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, 0.0, 0, ?12, ?13, ?14)",
+        params![input.project_id, input.sprint_id, input.parent_id, input.issue_type, new_key, input.title, input.description, input.status, input.priority, input.story_points, input.original_estimate_minutes, input.due_date, input.created_at, input.created_at],
     )
     .map_err(|e| e.to_string())?;
     Ok("Issue created".to_string())
@@ -334,7 +423,7 @@ pub fn create_issue(app: AppHandle, input: CreateIssueInput) -> Result<String, S
 #[tauri::command]
 pub fn get_issues(app: AppHandle, project_id: i64) -> Result<Vec<Issue>, String> {
     let conn = db_connection(&app)?;
-    let mut stmt = conn.prepare("SELECT id, project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at FROM issues WHERE project_id = ?1 ORDER BY created_at DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at, original_estimate_minutes, rank, pinned FROM issues WHERE project_id = ?1 ORDER BY created_at DESC").map_err(|e| e.to_string())?;
 
     let rows = stmt.query_map(params![project_id], |row| {
         Ok(Issue {
@@ -353,6 +442,9 @@ pub fn get_issues(app: AppHandle, project_id: i64) -> Result<Vec<Issue>, String>
             due_date: row.get(12)?,
             created_at: row.get(13)?,
             updated_at: row.get(14)?,
+            original_estimate_minutes: row.get(15)?,
+            rank: row.get(16)?,
+            pinned: row.get(17)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -374,6 +466,9 @@ pub struct UpdateIssueInput {
     pub priority: String,
     pub story_points: Option<i64>,
     pub time_spent_minutes: i64,
+    pub original_estimate_minutes: Option<i64>,
+    pub rank: f64,
+    pub pinned: bool,
     pub due_date: Option<String>,
     pub updated_at: String,
 }
@@ -382,8 +477,8 @@ pub struct UpdateIssueInput {
 pub fn update_issue(app: AppHandle, input: UpdateIssueInput) -> Result<String, String> {
     let conn = db_connection(&app)?;
     conn.execute(
-        "UPDATE issues SET sprint_id = ?1, issue_type = ?2, title = ?3, description = ?4, status = ?5, priority = ?6, story_points = ?7, time_spent_minutes = ?8, due_date = ?9, updated_at = ?10 WHERE id = ?11",
-        params![input.sprint_id, input.issue_type, input.title, input.description, input.status, input.priority, input.story_points, input.time_spent_minutes, input.due_date, input.updated_at, input.id],
+        "UPDATE issues SET sprint_id = ?1, issue_type = ?2, title = ?3, description = ?4, status = ?5, priority = ?6, story_points = ?7, time_spent_minutes = ?8, due_date = ?9, updated_at = ?10, original_estimate_minutes = ?11, rank = ?12, pinned = ?13 WHERE id = ?14",
+        params![input.sprint_id, input.issue_type, input.title, input.description, input.status, input.priority, input.story_points, input.time_spent_minutes, input.due_date, input.updated_at, input.original_estimate_minutes, input.rank, input.pinned, input.id],
     )
     .map_err(|e| e.to_string())?;
     Ok("Issue updated".to_string())

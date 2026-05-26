@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { LocalIssue, LocalSprint } from "./types";
+import { LocalIssue, LocalSprint, LocalWorkflowStatus, LocalAutomationRule } from "./types";
 import {
   Loader2,
   Plus,
@@ -13,8 +13,25 @@ import {
   Layers,
   GitBranch,
   AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
 import IssueDetailModal from "./IssueDetailModal";
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const COLUMNS = ["To Do", "In Progress", "In Review", "Done"] as const;
 
@@ -98,15 +115,161 @@ function StatusDropdown({
   );
 }
 
+function SortableIssueCard({
+  issue,
+  onOpen,
+  onQuickStatus,
+}: {
+  issue: LocalIssue;
+  onOpen: () => void;
+  onQuickStatus: (s: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: issue.id, data: { issue } });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onOpen}
+      className={`group bg-neutral-950 p-4 rounded-lg border ${
+        isDragging
+          ? "border-yellow-400/60 shadow-xl"
+          : "border-neutral-800 hover:border-yellow-400/40 hover:shadow-lg"
+      } transition-all cursor-pointer`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-white font-medium line-clamp-2 flex-1">
+          {issue.title}
+        </p>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <StatusDropdown
+            currentStatus={issue.status}
+            onChangeStatus={onQuickStatus}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">
+            {issue.key}
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-white/40">
+            {TYPE_ICONS[issue.issue_type] ?? null}
+            {issue.issue_type}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {issue.story_points != null && (
+            <span className="text-[10px] font-bold text-white/50 bg-neutral-800 px-2 py-0.5 rounded-full">
+              {issue.story_points} SP
+            </span>
+          )}
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${PRIORITY_COLORS[issue.priority] ?? "bg-neutral-500"}`}
+            title={issue.priority}
+          />
+        </div>
+      </div>
+
+      {issue.due_date && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <Calendar className="w-3 h-3 text-white/30" />
+          <span
+            className={`text-[10px] font-semibold ${
+              isOverdue(issue.due_date) ? "text-red-400" : "text-white/40"
+            }`}
+          >
+            {formatDate(issue.due_date)}
+            {isOverdue(issue.due_date) && " — Overdue"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Column({
+  status,
+  issues,
+  wipLimit,
+  onOpenModal,
+  onQuickStatus,
+  onOpenCreateModal,
+}: {
+  status: string;
+  issues: LocalIssue[];
+  wipLimit: number | null;
+  onOpenModal: (i: LocalIssue) => void;
+  onQuickStatus: (i: LocalIssue, s: string) => void;
+  onOpenCreateModal: () => void;
+}) {
+  const { setNodeRef } = useDroppable({ id: status });
+
+  const isOverWipLimit = wipLimit !== null && issues.length > wipLimit;
+
+  return (
+    <div className="flex flex-col w-80 shrink-0 bg-neutral-900/40 rounded-xl border border-neutral-800 p-3 h-full">
+      <div className={`flex items-center justify-between mb-3 px-1 ${isOverWipLimit ? "text-red-400" : ""}`}>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isOverWipLimit ? "text-red-400" : "text-white/60"}`}>
+            {status}
+          </span>
+          {isOverWipLimit && <AlertTriangle className="w-4 h-4 text-red-400" />}
+        </div>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isOverWipLimit ? "bg-red-400/20 text-red-400" : "bg-neutral-900 text-white/40"}`}>
+          {issues.length} {wipLimit !== null ? `/ ${wipLimit}` : ""}
+        </span>
+      </div>
+
+      <div
+        ref={setNodeRef}
+        className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pe-1"
+      >
+        <SortableContext
+          items={issues.map((i) => i.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {issues.map((issue) => (
+            <SortableIssueCard
+              key={issue.id}
+              issue={issue}
+              onOpen={() => onOpenModal(issue)}
+              onQuickStatus={(s) => onQuickStatus(issue, s)}
+            />
+          ))}
+        </SortableContext>
+      </div>
+
+      <button
+        onClick={() => onOpenCreateModal()}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-neutral-950/50 py-2.5 text-xs font-semibold text-white/50 hover:bg-neutral-900 hover:text-white transition-colors"
+      >
+        <Plus className="w-4 h-4" /> Create Issue
+      </button>
+    </div>
+  );
+}
+
 export default function Board({ projectId }: { projectId: number | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
+  const [workflowStatuses, setWorkflowStatuses] = useState<LocalWorkflowStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [selectedIssue, setSelectedIssue] = useState<LocalIssue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [createColumnStatus, setCreateColumnStatus] = useState<string | null>(null);
 
   const activeSprint = useMemo(
     () => sprints.find((s) => s.status === "active") ?? null,
@@ -131,12 +294,14 @@ export default function Board({ projectId }: { projectId: number | null }) {
     if (!projectId) return;
     setLoading(true);
     try {
-      const [issuesRes, sprintsRes] = await Promise.all([
+      const [issuesRes, sprintsRes, statusesRes] = await Promise.all([
         invoke<LocalIssue[]>("get_issues", { projectId }),
         invoke<LocalSprint[]>("get_sprints", { projectId }),
+        invoke<LocalWorkflowStatus[]>("get_workflow_statuses", { projectId }),
       ]);
       setIssues(issuesRes);
       setSprints(sprintsRes);
+      setWorkflowStatuses(statusesRes);
     } catch (e) {
       console.error(e);
     }
@@ -146,6 +311,43 @@ export default function Board({ projectId }: { projectId: number | null }) {
   useEffect(() => {
     fetchData();
   }, [projectId]);
+
+  const executeAutomationRules = async (issue: LocalIssue, newStatus: string) => {
+    if (!projectId) return;
+    try {
+      const rules = await invoke<LocalAutomationRule[]>("get_automation_rules", { projectId });
+      const statusRules = rules.filter(r => r.trigger_type === "Status Changed" && r.is_active);
+      
+      let currentIssue = { ...issue, status: newStatus };
+      let updated = false;
+
+      for (const rule of statusRules) {
+        try {
+          const conditions = JSON.parse(rule.conditions_json);
+          const actions = JSON.parse(rule.actions_json);
+          
+          if (conditions.status === newStatus) {
+            if (actions.type === "Set Priority" && actions.value) {
+              currentIssue.priority = actions.value;
+              updated = true;
+            }
+          }
+        } catch (e) {
+          console.error("Rule parse error:", e);
+        }
+      }
+
+      if (updated) {
+        currentIssue.updated_at = new Date().toISOString();
+        await invoke("update_issue", { input: currentIssue });
+        setIssues((prev) =>
+          prev.map((i) => (i.id === currentIssue.id ? currentIssue : i))
+        );
+      }
+    } catch (err) {
+      console.error("Failed to execute automation rules:", err);
+    }
+  };
 
   const handleQuickStatusChange = async (
     issue: LocalIssue,
@@ -163,29 +365,96 @@ export default function Board({ projectId }: { projectId: number | null }) {
           priority: issue.priority,
           story_points: issue.story_points,
           time_spent_minutes: issue.time_spent_minutes,
+          original_estimate_minutes: issue.original_estimate_minutes,
+          rank: issue.rank,
+          pinned: issue.pinned,
           due_date: issue.due_date,
           updated_at: new Date().toISOString(),
         },
       });
       setIssues((prev) =>
-        prev.map((i) =>
-          i.id === issue.id ? { ...i, status: newStatus } : i
-        )
+        prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
       );
+      await executeAutomationRules(issue, newStatus);
     } catch (err) {
       console.error("Failed to update status:", err);
     }
   };
 
-  const openCreateModal = (status?: string) => {
+  const openCreateModal = () => {
     setSelectedIssue(null);
-    setCreateColumnStatus(status ?? null);
     setIsModalOpen(true);
   };
 
   const openIssueModal = (issue: LocalIssue) => {
     setSelectedIssue(issue);
     setIsModalOpen(true);
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeIssueId = active.id as number;
+    const overId = over.id;
+
+    const activeIssue = issues.find((i) => i.id === activeIssueId);
+    if (!activeIssue) return;
+
+    let newStatus = activeIssue.status;
+    if (COLUMNS.includes(overId as any)) {
+      newStatus = overId as string;
+    } else {
+      const overIssue = issues.find((i) => i.id === overId);
+      if (overIssue) {
+        newStatus = overIssue.status;
+      }
+    }
+
+    if (newStatus !== activeIssue.status) {
+      setIssues((prev) =>
+        prev.map((i) => (i.id === activeIssueId ? { ...i, status: newStatus } : i))
+      );
+
+      try {
+        await invoke("update_issue", {
+          input: {
+            id: activeIssue.id,
+            sprint_id: activeIssue.sprint_id,
+            issue_type: activeIssue.issue_type,
+            title: activeIssue.title,
+            description: activeIssue.description,
+            status: newStatus,
+            priority: activeIssue.priority,
+            story_points: activeIssue.story_points,
+            time_spent_minutes: activeIssue.time_spent_minutes,
+            original_estimate_minutes: activeIssue.original_estimate_minutes,
+            rank: activeIssue.rank,
+            pinned: activeIssue.pinned,
+            due_date: activeIssue.due_date,
+            updated_at: new Date().toISOString(),
+          },
+        });
+        
+        await executeAutomationRules(activeIssue, newStatus);
+      } catch (err) {
+        console.error("Failed to update status:", err);
+        setIssues((prev) =>
+          prev.map((i) =>
+            i.id === activeIssueId ? { ...i, status: activeIssue.status } : i
+          )
+        );
+      }
+    }
   };
 
   if (loading && issues.length === 0) {
@@ -211,7 +480,6 @@ export default function Board({ projectId }: { projectId: number | null }) {
 
   return (
     <div className="flex flex-col h-full animate-fadeIn relative">
-      {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -236,7 +504,6 @@ export default function Board({ projectId }: { projectId: number | null }) {
           </div>
         </div>
 
-        {/* Search */}
         <div className="relative w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
           <input
@@ -249,123 +516,43 @@ export default function Board({ projectId }: { projectId: number | null }) {
         </div>
       </div>
 
-      {/* Columns */}
-      <div className="flex flex-1 gap-4 overflow-x-auto pb-4 custom-scrollbar">
-        {COLUMNS.map((status) => {
-          const columnIssues = filteredIssues.filter(
-            (i) => i.status === status
-          );
-          return (
-            <div
-              key={status}
-              className="flex flex-col w-80 shrink-0 bg-neutral-900/40 rounded-xl border border-neutral-800 p-3 h-full"
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
-                  {status}
-                </span>
-                <span className="text-xs font-bold text-white/40 bg-neutral-900 px-2 py-0.5 rounded-full">
-                  {columnIssues.length}
-                </span>
-              </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex flex-1 gap-4 overflow-x-auto pb-4 custom-scrollbar">
+          {COLUMNS.map((status) => {
+            const columnIssues = filteredIssues.filter(
+              (i) => i.status === status
+            );
+            const statusConfig = workflowStatuses.find((s) => s.name === status);
+            const wipLimit = statusConfig?.wip_limit ?? null;
 
-              {/* Cards */}
-              <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pe-1">
-                {columnIssues.map((issue) => (
-                  <div
-                    key={issue.id}
-                    onClick={() => openIssueModal(issue)}
-                    className="group bg-neutral-950 p-4 rounded-lg border border-neutral-800 hover:border-yellow-400/40 hover:shadow-lg transition-all cursor-pointer"
-                  >
-                    {/* Card top row: title + quick status */}
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm text-white font-medium line-clamp-2 flex-1">
-                        {issue.title}
-                      </p>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <StatusDropdown
-                          currentStatus={issue.status}
-                          onChangeStatus={(s) =>
-                            handleQuickStatusChange(issue, s)
-                          }
-                        />
-                      </div>
-                    </div>
+            return (
+              <Column
+                key={status}
+                status={status}
+                issues={columnIssues}
+                wipLimit={wipLimit}
+                onOpenModal={openIssueModal}
+                onQuickStatus={handleQuickStatusChange}
+                onOpenCreateModal={openCreateModal}
+              />
+            );
+          })}
+        </div>
+      </DndContext>
 
-                    {/* Card bottom metadata */}
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {/* Key */}
-                        <span className="text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded">
-                          {issue.key}
-                        </span>
-                        {/* Type */}
-                        <span className="flex items-center gap-1 text-[10px] font-semibold text-white/40">
-                          {TYPE_ICONS[issue.issue_type] ?? null}
-                          {issue.issue_type}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* Story Points */}
-                        {issue.story_points != null && (
-                          <span className="text-[10px] font-bold text-white/50 bg-neutral-800 px-2 py-0.5 rounded-full">
-                            {issue.story_points} SP
-                          </span>
-                        )}
-                        {/* Priority Dot */}
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${PRIORITY_COLORS[issue.priority] ?? "bg-neutral-500"}`}
-                          title={issue.priority}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Due date */}
-                    {issue.due_date && (
-                      <div className="mt-2 flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-white/30" />
-                        <span
-                          className={`text-[10px] font-semibold ${
-                            isOverdue(issue.due_date)
-                              ? "text-red-400"
-                              : "text-white/40"
-                          }`}
-                        >
-                          {formatDate(issue.due_date)}
-                          {isOverdue(issue.due_date) && " — Overdue"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Create Issue per column */}
-              <button
-                onClick={() => openCreateModal(status)}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-neutral-950/50 py-2.5 text-xs font-semibold text-white/50 hover:bg-neutral-900 hover:text-white transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Create Issue
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Issue Detail Modal */}
       {isModalOpen && projectId && (
         <IssueDetailModal
           issue={selectedIssue}
           projectId={projectId}
           onClose={() => {
             setIsModalOpen(false);
-            setCreateColumnStatus(null);
           }}
           onSaved={() => {
             setIsModalOpen(false);
-            setCreateColumnStatus(null);
             fetchData();
           }}
         />

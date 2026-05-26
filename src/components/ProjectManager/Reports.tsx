@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, LineChart, BarChart3, Clock, PieChartIcon } from "lucide-react";
+import { Loader2, LineChart, BarChart3, Clock, PieChartIcon, TrendingUp, Activity, Layers } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -14,8 +14,11 @@ import {
   CartesianGrid,
   AreaChart,
   Area,
+  LineChart as RechartsLineChart,
+  Line,
+  Legend,
 } from "recharts";
-import type { LocalIssue } from "./types";
+import type { LocalIssue, LocalSprint } from "./types";
 
 const STATUS_COLORS: Record<string, string> = {
   "To Do": "#a1a1aa",
@@ -93,6 +96,7 @@ function PieTooltipContent({
 
 export default function Reports({ projectId }: { projectId: number | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
+  const [sprints, setSprints] = useState<LocalSprint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -100,10 +104,14 @@ export default function Reports({ projectId }: { projectId: number | null }) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const data = await invoke<LocalIssue[]>("get_issues", { projectId });
-        setIssues(data);
+        const [issuesData, sprintsData] = await Promise.all([
+          invoke<LocalIssue[]>("get_issues", { projectId }),
+          invoke<LocalSprint[]>("get_sprints", { projectId })
+        ]);
+        setIssues(issuesData);
+        setSprints(sprintsData);
       } catch (e) {
-        console.error("Failed to fetch issues for reports:", e);
+        console.error("Failed to fetch issues or sprints for reports:", e);
       }
       setLoading(false);
     };
@@ -176,6 +184,79 @@ export default function Reports({ projectId }: { projectId: number | null }) {
       hours: Math.round((minutes / 60) * 10) / 10,
       minutes,
     }));
+  }, [issues]);
+
+  // --- Chart 5: Burndown Chart (Dummy Data for active sprint) ---
+  const burndownData = useMemo(() => {
+    const activeSprint = sprints.find((s) => s.status === "active") || sprints[0];
+    if (!activeSprint || issues.length === 0) return [];
+    
+    // Using dummy data as requested to represent a standard burndown curve
+    return [
+      { day: "Day 1", remaining: 50, ideal: 50 },
+      { day: "Day 2", remaining: 45, ideal: 40 },
+      { day: "Day 3", remaining: 40, ideal: 30 },
+      { day: "Day 4", remaining: 20, ideal: 20 },
+      { day: "Day 5", remaining: 15, ideal: 10 },
+      { day: "Day 6", remaining: 5, ideal: 0 },
+    ];
+  }, [sprints, issues]);
+
+  // --- Chart 6: Velocity Chart ---
+  const velocityData = useMemo(() => {
+    const sprintMap: Record<number, { name: string; completed: number; planned: number }> = {};
+    for (const sprint of sprints) {
+      if (sprint.status !== "planned") {
+        sprintMap[sprint.id] = { name: sprint.name, completed: 0, planned: 0 };
+      }
+    }
+
+    for (const issue of issues) {
+      if (issue.sprint_id && sprintMap[issue.sprint_id]) {
+        const sp = issue.story_points || 0;
+        sprintMap[issue.sprint_id].planned += sp;
+        if (issue.status === "Done") {
+          sprintMap[issue.sprint_id].completed += sp;
+        }
+      }
+    }
+    return Object.values(sprintMap);
+  }, [issues, sprints]);
+
+  // --- Chart 7: Cumulative Flow Diagram (Issues per status over time) ---
+  const cfdData = useMemo(() => {
+    const data = [];
+    const now = new Date();
+    // Simulate past 14 days
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const label = d.toLocaleDateString("default", { month: "short", day: "numeric" });
+
+      let todo = 0;
+      let inProgress = 0;
+      let inReview = 0;
+      let done = 0;
+
+      for (const issue of issues) {
+        const created = new Date(issue.created_at);
+        const updated = new Date(issue.updated_at);
+        
+        if (created <= d) {
+          if (issue.status === "Done" && updated <= d) {
+            done++;
+          } else if (issue.status === "In Review" && updated <= d) {
+            inReview++;
+          } else if (issue.status === "In Progress" && updated <= d) {
+            inProgress++;
+          } else {
+            todo++;
+          }
+        }
+      }
+      data.push({ date: label, "To Do": todo, "In Progress": inProgress, "In Review": inReview, "Done": done });
+    }
+    return data;
   }, [issues]);
 
   if (projectId === null) {
@@ -365,7 +446,7 @@ export default function Reports({ projectId }: { projectId: number | null }) {
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5">
           <div className="flex items-center gap-3 mb-5">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-neutral-950/60">
-              <Clock className="h-4.5 w-4.5 text-yellow-400" />
+               <Clock className="h-4.5 w-4.5 text-yellow-400" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Time Tracking Summary</h3>
@@ -396,6 +477,104 @@ export default function Reports({ projectId }: { projectId: number | null }) {
                   Log time on issues to see tracking data here
                 </p>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Chart 5: Burndown Chart */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-neutral-950/60">
+              <TrendingUp className="h-4.5 w-4.5 text-yellow-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Sprint Burndown</h3>
+              <p className="text-xs text-white/40">Remaining vs Ideal effort in current sprint</p>
+            </div>
+          </div>
+          {burndownData.length > 0 ? (
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsLineChart data={burndownData} margin={{ top: 10, right: 20, bottom: 5, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+                  <XAxis dataKey="day" tick={{ fill: "#ffffff99", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#ffffff99", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltipContent />} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Line type="monotone" dataKey="ideal" name="Ideal" stroke="#a1a1aa" strokeDasharray="5 5" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="remaining" name="Remaining" stroke="#facc15" strokeWidth={3} dot={{ fill: "#facc15", r: 4 }} activeDot={{ r: 6 }} />
+                </RechartsLineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-[280px] items-center justify-center text-sm text-white/40">
+              No active sprint data
+            </div>
+          )}
+        </div>
+
+        {/* Chart 6: Velocity Chart */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-neutral-950/60">
+              <Activity className="h-4.5 w-4.5 text-yellow-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Velocity Chart</h3>
+              <p className="text-xs text-white/40">Story points completed per sprint</p>
+            </div>
+          </div>
+          {velocityData.length > 0 ? (
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={velocityData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#ffffff99", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#ffffff99", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltipContent />} cursor={{ fill: "#ffffff08" }} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Bar dataKey="planned" name="Planned" fill="#a1a1aa" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="completed" name="Completed" fill="#4ade80" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-[280px] items-center justify-center text-sm text-white/40">
+              No sprint velocity data
+            </div>
+          )}
+        </div>
+
+        {/* Chart 7: Cumulative Flow Diagram */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 xl:col-span-2">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-neutral-950/60">
+              <Layers className="h-4.5 w-4.5 text-yellow-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Cumulative Flow Diagram</h3>
+              <p className="text-xs text-white/40">Issues per status over time (Last 14 Days)</p>
+            </div>
+          </div>
+          {cfdData.length > 0 ? (
+            <div className="h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={cfdData} margin={{ top: 10, right: 20, bottom: 5, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+                  <XAxis dataKey="date" tick={{ fill: "#ffffff99", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#ffffff99", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<CustomTooltipContent />} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Area type="monotone" dataKey="Done" stackId="1" stroke={STATUS_COLORS["Done"]} fill={STATUS_COLORS["Done"]} />
+                  <Area type="monotone" dataKey="In Review" stackId="1" stroke={STATUS_COLORS["In Review"]} fill={STATUS_COLORS["In Review"]} />
+                  <Area type="monotone" dataKey="In Progress" stackId="1" stroke={STATUS_COLORS["In Progress"]} fill={STATUS_COLORS["In Progress"]} />
+                  <Area type="monotone" dataKey="To Do" stackId="1" stroke={STATUS_COLORS["To Do"]} fill={STATUS_COLORS["To Do"]} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-[320px] items-center justify-center text-sm text-white/40">
+              No flow data available
             </div>
           )}
         </div>

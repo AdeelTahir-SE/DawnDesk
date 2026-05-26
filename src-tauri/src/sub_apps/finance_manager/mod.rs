@@ -200,6 +200,162 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
     )
     .map_err(|e| e.to_string())?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS chart_of_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            account_type TEXT NOT NULL,
+            balance REAL NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS journal_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            description TEXT NOT NULL,
+            total_debit REAL NOT NULL,
+            total_credit REAL NOT NULL,
+            status TEXT NOT NULL,
+            lines_json TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS vendor_bills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_name TEXT NOT NULL,
+            bill_number TEXT NOT NULL,
+            date TEXT NOT NULL,
+            due_date TEXT NOT NULL,
+            total_amount REAL NOT NULL,
+            status TEXT NOT NULL,
+            items_json TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS fixed_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            purchase_date TEXT NOT NULL,
+            purchase_price REAL NOT NULL,
+            useful_life_years INTEGER NOT NULL,
+            salvage_value REAL NOT NULL,
+            status TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS purchase_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_name TEXT NOT NULL,
+            date TEXT NOT NULL,
+            total_amount REAL NOT NULL,
+            status TEXT NOT NULL,
+            items_json TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS inventory_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_cost REAL NOT NULL,
+            unit_price REAL NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tax_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL,
+            description TEXT NOT NULL,
+            rate_percent REAL NOT NULL,
+            active BOOLEAN NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            user TEXT NOT NULL,
+            action TEXT NOT NULL,
+            description TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS period_closes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            task TEXT NOT NULL,
+            assigned_to TEXT NOT NULL,
+            status TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS exchange_rates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pair TEXT NOT NULL,
+            rate REAL NOT NULL,
+            date TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ar_recurring_billing (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_name TEXT NOT NULL,
+            plan_name TEXT NOT NULL,
+            amount REAL NOT NULL,
+            next_billing_date TEXT NOT NULL,
+            status TEXT NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ar_dunning_campaigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            trigger_days_overdue INTEGER NOT NULL,
+            email_subject TEXT NOT NULL,
+            is_active BOOLEAN NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ar_revrec_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_name TEXT NOT NULL,
+            total_amount REAL NOT NULL,
+            recognized_amount REAL NOT NULL,
+            deferred_amount REAL NOT NULL,
+            months INTEGER NOT NULL
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
     Ok(conn)
 }
 
@@ -542,4 +698,627 @@ pub fn get_invoices(app: AppHandle) -> Result<Vec<InvoiceItem>, String> {
         invs.push(row.map_err(|e| e.to_string())?);
     }
     Ok(invs)
+}
+
+// ERP Phase 1 Structs & Commands
+#[derive(serde::Serialize, Deserialize)]
+pub struct ChartOfAccount {
+    pub id: i64,
+    pub code: String,
+    pub name: String,
+    pub account_type: String,
+    pub balance: f64,
+}
+#[derive(Deserialize)]
+pub struct CreateChartOfAccountInput {
+    pub code: String,
+    pub name: String,
+    pub account_type: String,
+    pub initial_balance: f64,
+}
+
+#[tauri::command]
+pub fn create_chart_of_account(app: AppHandle, input: CreateChartOfAccountInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO chart_of_accounts (code, name, account_type, balance) VALUES (?1, ?2, ?3, ?4)",
+        params![input.code, input.name, input.account_type, input.initial_balance],
+    ).map_err(|e| e.to_string())?;
+    Ok("Account created".to_string())
+}
+
+#[tauri::command]
+pub fn get_chart_of_accounts(app: AppHandle) -> Result<Vec<ChartOfAccount>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, code, name, account_type, balance FROM chart_of_accounts ORDER BY code ASC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ChartOfAccount {
+            id: row.get(0)?,
+            code: row.get(1)?,
+            name: row.get(2)?,
+            account_type: row.get(3)?,
+            balance: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct JournalEntry {
+    pub id: i64,
+    pub date: String,
+    pub reference: String,
+    pub description: String,
+    pub total_debit: f64,
+    pub total_credit: f64,
+    pub status: String,
+    pub lines_json: String,
+}
+#[derive(Deserialize)]
+pub struct CreateJournalEntryInput {
+    pub date: String,
+    pub reference: String,
+    pub description: String,
+    pub total_debit: f64,
+    pub total_credit: f64,
+    pub status: String,
+    pub lines_json: String,
+}
+
+#[tauri::command]
+pub fn create_journal_entry(app: AppHandle, input: CreateJournalEntryInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO journal_entries (date, reference, description, total_debit, total_credit, status, lines_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![input.date, input.reference, input.description, input.total_debit, input.total_credit, input.status, input.lines_json],
+    ).map_err(|e| e.to_string())?;
+    Ok("Journal entry created".to_string())
+}
+
+#[tauri::command]
+pub fn get_journal_entries(app: AppHandle) -> Result<Vec<JournalEntry>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, date, reference, description, total_debit, total_credit, status, lines_json FROM journal_entries ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(JournalEntry {
+            id: row.get(0)?,
+            date: row.get(1)?,
+            reference: row.get(2)?,
+            description: row.get(3)?,
+            total_debit: row.get(4)?,
+            total_credit: row.get(5)?,
+            status: row.get(6)?,
+            lines_json: row.get(7)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct VendorBill {
+    pub id: i64,
+    pub vendor_name: String,
+    pub bill_number: String,
+    pub date: String,
+    pub due_date: String,
+    pub total_amount: f64,
+    pub status: String,
+    pub items_json: String,
+}
+#[derive(Deserialize)]
+pub struct CreateVendorBillInput {
+    pub vendor_name: String,
+    pub bill_number: String,
+    pub date: String,
+    pub due_date: String,
+    pub total_amount: f64,
+    pub status: String,
+    pub items_json: String,
+}
+
+#[tauri::command]
+pub fn create_vendor_bill(app: AppHandle, input: CreateVendorBillInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO vendor_bills (vendor_name, bill_number, date, due_date, total_amount, status, items_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![input.vendor_name, input.bill_number, input.date, input.due_date, input.total_amount, input.status, input.items_json],
+    ).map_err(|e| e.to_string())?;
+    Ok("Vendor bill created".to_string())
+}
+
+#[tauri::command]
+pub fn get_vendor_bills(app: AppHandle) -> Result<Vec<VendorBill>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, vendor_name, bill_number, date, due_date, total_amount, status, items_json FROM vendor_bills ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(VendorBill {
+            id: row.get(0)?,
+            vendor_name: row.get(1)?,
+            bill_number: row.get(2)?,
+            date: row.get(3)?,
+            due_date: row.get(4)?,
+            total_amount: row.get(5)?,
+            status: row.get(6)?,
+            items_json: row.get(7)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(items)
+}
+
+// Phases 2, 3, 4 Structs & Commands
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct FixedAsset {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub purchase_date: String,
+    pub purchase_price: f64,
+    pub useful_life_years: i64,
+    pub salvage_value: f64,
+    pub status: String,
+}
+#[derive(Deserialize)]
+pub struct CreateFixedAssetInput {
+    pub name: String,
+    pub description: String,
+    pub purchase_date: String,
+    pub purchase_price: f64,
+    pub useful_life_years: i64,
+    pub salvage_value: f64,
+    pub status: String,
+}
+
+#[tauri::command]
+pub fn create_fixed_asset(app: AppHandle, input: CreateFixedAssetInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO fixed_assets (name, description, purchase_date, purchase_price, useful_life_years, salvage_value, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![input.name, input.description, input.purchase_date, input.purchase_price, input.useful_life_years, input.salvage_value, input.status],
+    ).map_err(|e| e.to_string())?;
+    Ok("Asset created".to_string())
+}
+
+#[tauri::command]
+pub fn get_fixed_assets(app: AppHandle) -> Result<Vec<FixedAsset>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, name, description, purchase_date, purchase_price, useful_life_years, salvage_value, status FROM fixed_assets ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(FixedAsset {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            purchase_date: row.get(3)?,
+            purchase_price: row.get(4)?,
+            useful_life_years: row.get(5)?,
+            salvage_value: row.get(6)?,
+            status: row.get(7)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct PurchaseOrder {
+    pub id: i64,
+    pub vendor_name: String,
+    pub date: String,
+    pub total_amount: f64,
+    pub status: String,
+    pub items_json: String,
+}
+#[derive(Deserialize)]
+pub struct CreatePurchaseOrderInput {
+    pub vendor_name: String,
+    pub date: String,
+    pub total_amount: f64,
+    pub status: String,
+    pub items_json: String,
+}
+
+#[tauri::command]
+pub fn create_purchase_order(app: AppHandle, input: CreatePurchaseOrderInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO purchase_orders (vendor_name, date, total_amount, status, items_json) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![input.vendor_name, input.date, input.total_amount, input.status, input.items_json],
+    ).map_err(|e| e.to_string())?;
+    Ok("PO created".to_string())
+}
+
+#[tauri::command]
+pub fn get_purchase_orders(app: AppHandle) -> Result<Vec<PurchaseOrder>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, vendor_name, date, total_amount, status, items_json FROM purchase_orders ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(PurchaseOrder {
+            id: row.get(0)?,
+            vendor_name: row.get(1)?,
+            date: row.get(2)?,
+            total_amount: row.get(3)?,
+            status: row.get(4)?,
+            items_json: row.get(5)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct InventoryItem {
+    pub id: i64,
+    pub sku: String,
+    pub name: String,
+    pub description: String,
+    pub quantity: i64,
+    pub unit_cost: f64,
+    pub unit_price: f64,
+}
+#[derive(Deserialize)]
+pub struct CreateInventoryItemInput {
+    pub sku: String,
+    pub name: String,
+    pub description: String,
+    pub quantity: i64,
+    pub unit_cost: f64,
+    pub unit_price: f64,
+}
+
+#[tauri::command]
+pub fn create_inventory_item(app: AppHandle, input: CreateInventoryItemInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO inventory_items (sku, name, description, quantity, unit_cost, unit_price) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![input.sku, input.name, input.description, input.quantity, input.unit_cost, input.unit_price],
+    ).map_err(|e| e.to_string())?;
+    Ok("Item created".to_string())
+}
+
+#[tauri::command]
+pub fn get_inventory_items(app: AppHandle) -> Result<Vec<InventoryItem>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, sku, name, description, quantity, unit_cost, unit_price FROM inventory_items ORDER BY name ASC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(InventoryItem {
+            id: row.get(0)?,
+            sku: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            quantity: row.get(4)?,
+            unit_cost: row.get(5)?,
+            unit_price: row.get(6)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct TaxCode {
+    pub id: i64,
+    pub code: String,
+    pub description: String,
+    pub rate_percent: f64,
+    pub active: bool,
+}
+#[derive(Deserialize)]
+pub struct CreateTaxCodeInput {
+    pub code: String,
+    pub description: String,
+    pub rate_percent: f64,
+    pub active: bool,
+}
+
+#[tauri::command]
+pub fn create_tax_code(app: AppHandle, input: CreateTaxCodeInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO tax_codes (code, description, rate_percent, active) VALUES (?1, ?2, ?3, ?4)",
+        params![input.code, input.description, input.rate_percent, input.active],
+    ).map_err(|e| e.to_string())?;
+    Ok("Tax code created".to_string())
+}
+
+#[tauri::command]
+pub fn get_tax_codes(app: AppHandle) -> Result<Vec<TaxCode>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, code, description, rate_percent, active FROM tax_codes").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(TaxCode {
+            id: row.get(0)?,
+            code: row.get(1)?,
+            description: row.get(2)?,
+            rate_percent: row.get(3)?,
+            active: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct AuditLog {
+    pub id: i64,
+    pub timestamp: String,
+    pub user: String,
+    pub action: String,
+    pub description: String,
+}
+#[derive(Deserialize)]
+pub struct CreateAuditLogInput {
+    pub timestamp: String,
+    pub user: String,
+    pub action: String,
+    pub description: String,
+}
+
+#[tauri::command]
+pub fn create_audit_log(app: AppHandle, input: CreateAuditLogInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO audit_logs (timestamp, user, action, description) VALUES (?1, ?2, ?3, ?4)",
+        params![input.timestamp, input.user, input.action, input.description],
+    ).map_err(|e| e.to_string())?;
+    Ok("Audit log created".to_string())
+}
+
+#[tauri::command]
+pub fn get_audit_logs(app: AppHandle) -> Result<Vec<AuditLog>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, timestamp, user, action, description FROM audit_logs ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(AuditLog {
+            id: row.get(0)?,
+            timestamp: row.get(1)?,
+            user: row.get(2)?,
+            action: row.get(3)?,
+            description: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct PeriodClose {
+    pub id: i64,
+    pub period: String,
+    pub task: String,
+    pub assigned_to: String,
+    pub status: String,
+}
+#[derive(Deserialize)]
+pub struct CreatePeriodCloseInput {
+    pub period: String,
+    pub task: String,
+    pub assigned_to: String,
+    pub status: String,
+}
+
+#[tauri::command]
+pub fn create_period_close(app: AppHandle, input: CreatePeriodCloseInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO period_closes (period, task, assigned_to, status) VALUES (?1, ?2, ?3, ?4)",
+        params![input.period, input.task, input.assigned_to, input.status],
+    ).map_err(|e| e.to_string())?;
+    Ok("Period close task created".to_string())
+}
+
+#[tauri::command]
+pub fn get_period_closes(app: AppHandle) -> Result<Vec<PeriodClose>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, period, task, assigned_to, status FROM period_closes").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(PeriodClose {
+            id: row.get(0)?,
+            period: row.get(1)?,
+            task: row.get(2)?,
+            assigned_to: row.get(3)?,
+            status: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct ExchangeRate {
+    pub id: i64,
+    pub pair: String,
+    pub rate: f64,
+    pub date: String,
+}
+#[derive(Deserialize)]
+pub struct CreateExchangeRateInput {
+    pub pair: String,
+    pub rate: f64,
+    pub date: String,
+}
+
+#[tauri::command]
+pub fn create_exchange_rate(app: AppHandle, input: CreateExchangeRateInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO exchange_rates (pair, rate, date) VALUES (?1, ?2, ?3)",
+        params![input.pair, input.rate, input.date],
+    ).map_err(|e| e.to_string())?;
+    Ok("Exchange rate created".to_string())
+}
+
+#[tauri::command]
+pub fn get_exchange_rates(app: AppHandle) -> Result<Vec<ExchangeRate>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, pair, rate, date FROM exchange_rates ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ExchangeRate {
+            id: row.get(0)?,
+            pair: row.get(1)?,
+            rate: row.get(2)?,
+            date: row.get(3)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct ArRecurringBilling {
+    pub id: i64,
+    pub client_name: String,
+    pub plan_name: String,
+    pub amount: f64,
+    pub next_billing_date: String,
+    pub status: String,
+}
+#[derive(Deserialize)]
+pub struct CreateArRecurringBillingInput {
+    pub client_name: String,
+    pub plan_name: String,
+    pub amount: f64,
+    pub next_billing_date: String,
+    pub status: String,
+}
+
+#[tauri::command]
+pub fn create_ar_recurring_billing(app: AppHandle, input: CreateArRecurringBillingInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO ar_recurring_billing (client_name, plan_name, amount, next_billing_date, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![input.client_name, input.plan_name, input.amount, input.next_billing_date, input.status],
+    ).map_err(|e| e.to_string())?;
+    Ok("Recurring billing created".to_string())
+}
+
+#[tauri::command]
+pub fn get_ar_recurring_billing(app: AppHandle) -> Result<Vec<ArRecurringBilling>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, client_name, plan_name, amount, next_billing_date, status FROM ar_recurring_billing ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ArRecurringBilling {
+            id: row.get(0)?,
+            client_name: row.get(1)?,
+            plan_name: row.get(2)?,
+            amount: row.get(3)?,
+            next_billing_date: row.get(4)?,
+            status: row.get(5)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct ArDunningCampaign {
+    pub id: i64,
+    pub name: String,
+    pub trigger_days_overdue: i64,
+    pub email_subject: String,
+    pub is_active: bool,
+}
+#[derive(Deserialize)]
+pub struct CreateArDunningCampaignInput {
+    pub name: String,
+    pub trigger_days_overdue: i64,
+    pub email_subject: String,
+    pub is_active: bool,
+}
+
+#[tauri::command]
+pub fn create_ar_dunning_campaign(app: AppHandle, input: CreateArDunningCampaignInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO ar_dunning_campaigns (name, trigger_days_overdue, email_subject, is_active) VALUES (?1, ?2, ?3, ?4)",
+        params![input.name, input.trigger_days_overdue, input.email_subject, input.is_active],
+    ).map_err(|e| e.to_string())?;
+    Ok("Dunning campaign created".to_string())
+}
+
+#[tauri::command]
+pub fn get_ar_dunning_campaigns(app: AppHandle) -> Result<Vec<ArDunningCampaign>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, name, trigger_days_overdue, email_subject, is_active FROM ar_dunning_campaigns ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ArDunningCampaign {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            trigger_days_overdue: row.get(2)?,
+            email_subject: row.get(3)?,
+            is_active: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
+}
+
+#[derive(serde::Serialize, Deserialize)]
+pub struct ArRevrecSchedule {
+    pub id: i64,
+    pub client_name: String,
+    pub total_amount: f64,
+    pub recognized_amount: f64,
+    pub deferred_amount: f64,
+    pub months: i64,
+}
+#[derive(Deserialize)]
+pub struct CreateArRevrecScheduleInput {
+    pub client_name: String,
+    pub total_amount: f64,
+    pub recognized_amount: f64,
+    pub deferred_amount: f64,
+    pub months: i64,
+}
+
+#[tauri::command]
+pub fn create_ar_revrec_schedule(app: AppHandle, input: CreateArRevrecScheduleInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO ar_revrec_schedules (client_name, total_amount, recognized_amount, deferred_amount, months) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![input.client_name, input.total_amount, input.recognized_amount, input.deferred_amount, input.months],
+    ).map_err(|e| e.to_string())?;
+    Ok("Revrec schedule created".to_string())
+}
+
+#[tauri::command]
+pub fn get_ar_revrec_schedules(app: AppHandle) -> Result<Vec<ArRevrecSchedule>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn.prepare("SELECT id, client_name, total_amount, recognized_amount, deferred_amount, months FROM ar_revrec_schedules ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ArRevrecSchedule {
+            id: row.get(0)?,
+            client_name: row.get(1)?,
+            total_amount: row.get(2)?,
+            recognized_amount: row.get(3)?,
+            deferred_amount: row.get(4)?,
+            months: row.get(5)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows { items.push(row.map_err(|e| e.to_string())?); }
+    Ok(items)
 }

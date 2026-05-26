@@ -19,6 +19,22 @@ import {
   X,
 } from "lucide-react";
 import IssueDetailModal from "./IssueDetailModal";
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const PRIORITY_COLORS: Record<string, string> = {
   Highest: "bg-red-400",
@@ -139,6 +155,11 @@ function SprintAssignDropdown({
   );
 }
 
+function DroppableContainer({ id, children, className }: { id: string; children: React.ReactNode; className?: string }) {
+  const { setNodeRef } = useDroppable({ id });
+  return <div ref={setNodeRef} className={className}>{children}</div>;
+}
+
 export default function Backlog({ projectId }: { projectId: number | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
@@ -186,13 +207,15 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
   }, [projectId]);
 
   const filteredIssues = useMemo(() => {
-    return issues.filter((i) => {
-      if (filterType !== "All" && i.issue_type !== filterType) return false;
-      if (filterPriority !== "All" && i.priority !== filterPriority)
-        return false;
-      if (filterStatus !== "All" && i.status !== filterStatus) return false;
-      return true;
-    });
+    return issues
+      .filter((i) => {
+        if (filterType !== "All" && i.issue_type !== filterType) return false;
+        if (filterPriority !== "All" && i.priority !== filterPriority)
+          return false;
+        if (filterStatus !== "All" && i.status !== filterStatus) return false;
+        return true;
+      })
+      .sort((a, b) => (a.rank || 0) - (b.rank || 0));
   }, [issues, filterType, filterPriority, filterStatus]);
 
   // Group: sprints first (sorted: active, planned, closed), then backlog
@@ -274,8 +297,11 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
           priority: issue.priority,
           story_points: issue.story_points,
           time_spent_minutes: issue.time_spent_minutes,
+          original_estimate_minutes: issue.original_estimate_minutes,
           due_date: issue.due_date,
           updated_at: new Date().toISOString(),
+          rank: issue.rank,
+          pinned: issue.pinned,
         },
       });
       setIssues((prev) =>
@@ -320,7 +346,118 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     );
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeIssueId = active.id as number;
+    const overId = over.id;
+
+    const activeIssue = issues.find((i) => i.id === activeIssueId);
+    if (!activeIssue) return;
+
+    let targetContainer = "";
+    let targetIndex = -1;
+
+    if (overId === "backlog" || String(overId).startsWith("sprint-")) {
+      targetContainer = String(overId);
+    } else {
+      const overIssue = issues.find((i) => i.id === overId);
+      if (overIssue) {
+        targetContainer = overIssue.sprint_id
+          ? `sprint-${overIssue.sprint_id}`
+          : "backlog";
+        const containerIssues = overIssue.sprint_id
+          ? issues.filter((i) => i.sprint_id === overIssue.sprint_id).sort((a, b) => (a.rank || 0) - (b.rank || 0))
+          : issues.filter((i) => i.sprint_id === null).sort((a, b) => (a.rank || 0) - (b.rank || 0));
+        targetIndex = containerIssues.findIndex((i) => i.id === overId);
+      } else {
+        return;
+      }
+    }
+
+    const newSprintId =
+      targetContainer === "backlog"
+        ? null
+        : parseInt(targetContainer.replace("sprint-", ""));
+
+    const list =
+      newSprintId === null
+        ? backlogIssues
+        : sprintSections.find((s) => s.sprint.id === newSprintId)?.issues || [];
+    const cleanList = list.filter((i) => i.id !== activeIssueId);
+
+    if (targetIndex === -1) {
+      targetIndex = cleanList.length;
+    }
+
+    const prev = cleanList[targetIndex - 1];
+    const next = cleanList[targetIndex];
+
+    let newRank = activeIssue.rank || 0;
+    if (prev && next) {
+      newRank = Math.floor((prev.rank + next.rank) / 2);
+      if (newRank === prev.rank) newRank = prev.rank + 1;
+    } else if (prev) {
+      newRank = prev.rank + 100;
+    } else if (next) {
+      newRank = next.rank - 100;
+    } else {
+      newRank = 1000;
+    }
+
+    if (newSprintId !== activeIssue.sprint_id || newRank !== activeIssue.rank) {
+      setIssues((prevIssues) =>
+        prevIssues.map((i) =>
+          i.id === activeIssueId
+            ? { ...i, sprint_id: newSprintId, rank: newRank }
+            : i
+        )
+      );
+
+      try {
+        await invoke("update_issue", {
+          input: {
+            id: activeIssue.id,
+            sprint_id: newSprintId,
+            issue_type: activeIssue.issue_type,
+            title: activeIssue.title,
+            description: activeIssue.description,
+            status: activeIssue.status,
+            priority: activeIssue.priority,
+            story_points: activeIssue.story_points,
+            time_spent_minutes: activeIssue.time_spent_minutes,
+            original_estimate_minutes: activeIssue.original_estimate_minutes,
+            due_date: activeIssue.due_date,
+            updated_at: new Date().toISOString(),
+            rank: newRank,
+            pinned: activeIssue.pinned,
+          },
+        });
+      } catch (err) {
+        console.error("Failed to move issue:", err);
+        setIssues((prevIssues) =>
+          prevIssues.map((i) =>
+            i.id === activeIssueId
+              ? { ...i, sprint_id: activeIssue.sprint_id, rank: activeIssue.rank }
+              : i
+          )
+        );
+      }
+    }
+  };
+
   return (
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
     <div className="flex flex-col h-full animate-fadeIn relative">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
@@ -557,27 +694,29 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
 
               {/* Sprint Issues */}
               {!isCollapsed && (
-                <div className="border-t border-neutral-800">
+                <DroppableContainer id={`sprint-${sprint.id}`} className="border-t border-neutral-800">
                   {sectionIssues.length === 0 ? (
                     <div className="flex items-center justify-center h-16 text-xs text-white/30">
-                      No issues in this sprint
+                      Drop issues here
                     </div>
                   ) : (
                     <div className="divide-y divide-neutral-800/60">
-                      {sectionIssues.map((issue) => (
-                        <IssueRow
-                          key={issue.id}
-                          issue={issue}
-                          sprints={sprints}
-                          onClick={() => openIssueModal(issue)}
-                          onAssignSprint={(sprintId) =>
-                            handleAssignSprint(issue, sprintId)
-                          }
-                        />
-                      ))}
+                      <SortableContext items={sectionIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                        {sectionIssues.map((issue) => (
+                          <SortableIssueRow
+                            key={issue.id}
+                            issue={issue}
+                            sprints={sprints}
+                            onClick={() => openIssueModal(issue)}
+                            onAssignSprint={(sprintId) =>
+                              handleAssignSprint(issue, sprintId)
+                            }
+                          />
+                        ))}
+                      </SortableContext>
                     </div>
                   )}
-                </div>
+                </DroppableContainer>
               )}
             </div>
           );
@@ -610,31 +749,33 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
           </div>
 
           {!collapsedSections["backlog"] && (
-            <div className="border-t border-neutral-800">
+            <DroppableContainer id="backlog" className="border-t border-neutral-800">
               {backlogIssues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-24 text-white/30">
                   <ListTodo className="w-8 h-8 mb-2" />
                   <p className="text-xs">
-                    No unassigned issues. Create issues to fill your backlog.
+                    Drop issues here to move to backlog
                   </p>
                 </div>
               ) : (
                 <div className="divide-y divide-neutral-800/60">
-                  {backlogIssues.map((issue) => (
-                    <IssueRow
-                      key={issue.id}
-                      issue={issue}
-                      sprints={sprints}
-                      onClick={() => openIssueModal(issue)}
-                      onAssignSprint={(sprintId) =>
-                        handleAssignSprint(issue, sprintId)
-                      }
-                      showAssign
-                    />
-                  ))}
+                  <SortableContext items={backlogIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                    {backlogIssues.map((issue) => (
+                      <SortableIssueRow
+                        key={issue.id}
+                        issue={issue}
+                        sprints={sprints}
+                        onClick={() => openIssueModal(issue)}
+                        onAssignSprint={(sprintId) =>
+                          handleAssignSprint(issue, sprintId)
+                        }
+                        showAssign
+                      />
+                    ))}
+                  </SortableContext>
                 </div>
               )}
-            </div>
+            </DroppableContainer>
           )}
         </div>
       </div>
@@ -652,12 +793,13 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
         />
       )}
     </div>
+    </DndContext>
   );
 }
 
-/* ---- Issue Row Component ---- */
+/* ---- Sortable Issue Row Component ---- */
 
-function IssueRow({
+function SortableIssueRow({
   issue,
   sprints,
   onClick,
@@ -670,10 +812,27 @@ function IssueRow({
   onAssignSprint: (sprintId: number | null) => void;
   showAssign?: boolean;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: issue.id, data: { issue } });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
       onClick={onClick}
-      className="flex items-center justify-between px-4 py-3 hover:bg-neutral-800/30 cursor-pointer transition-colors group"
+      className={`flex items-center justify-between px-4 py-3 bg-neutral-900 ${
+        isDragging
+          ? "shadow-xl border border-yellow-400/60 z-10 relative"
+          : "hover:bg-neutral-800/30"
+      } cursor-pointer transition-colors group`}
     >
       <div className="flex items-center gap-4 flex-1 min-w-0">
         {/* Key */}
@@ -715,7 +874,7 @@ function IssueRow({
           {issue.status}
         </span>
 
-        {/* Assign to sprint dropdown (always visible for backlog, on hover for sprint issues) */}
+        {/* Assign to sprint dropdown */}
         <div
           className={
             showAssign
