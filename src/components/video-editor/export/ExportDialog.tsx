@@ -1,11 +1,13 @@
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { RESOLUTION_PRESETS, FRAME_RATE_PRESETS } from '../../../engine/video-editor/constants';
 import { X, Download } from 'lucide-react';
+import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 import ExportPresets from './ExportPresets';
 
 export default function ExportDialog() {
   const { state, dispatch } = useVideoEditor();
   const es = state.exportSettings;
+  const { exportProject, cancelExport } = useFFmpeg();
 
   const update = (patch: Record<string, unknown>) => {
     dispatch({ type: 'SET_EXPORT_SETTINGS', payload: patch });
@@ -28,7 +30,18 @@ export default function ExportDialog() {
         </div>
 
         <div className="dd-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-          <div className="ve-export-grid">
+          {state.isExporting ? (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <h3 style={{ marginBottom: 20 }}>Exporting... {state.exportProgress}%</h3>
+              <div style={{ width: '100%', height: 8, background: 'var(--ve-bg-surface)', borderRadius: 4, overflow: 'hidden', marginBottom: 20 }}>
+                <div style={{ width: `${state.exportProgress}%`, height: '100%', background: '#FACC15', transition: 'width 0.2s' }} />
+              </div>
+              {state.exportError && <div style={{ color: '#ef4444', marginBottom: 20 }}>Error: {state.exportError}</div>}
+              <button className="dd-btn-secondary" onClick={() => cancelExport()}>Cancel Export</button>
+            </div>
+          ) : (
+            <>
+              <div className="ve-export-grid">
             {/* Left: Video */}
             <div>
               <div className="ve-panel-section-title" style={{ marginBottom: 10 }}>Video</div>
@@ -141,14 +154,15 @@ export default function ExportDialog() {
           </div>
 
           <div style={{ marginTop: 20 }}>
-            <div className="ve-panel-section-title" style={{ marginBottom: 10 }}>Platform Presets</div>
-            <ExportPresets />
-          </div>
+              <div className="ve-panel-section-title" style={{ marginBottom: 10 }}>Platform Presets</div>
+              <ExportPresets />
+            </div>
+          </>)}
         </div>
 
         <div className="dd-modal-footer">
-          <button className="dd-btn-secondary" onClick={() => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' })}>Cancel</button>
-          <button className="dd-btn-primary" onClick={() => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' })}>
+          <button className="dd-btn-secondary" onClick={() => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' })} disabled={state.isExporting}>Close</button>
+          <button className="dd-btn-primary" onClick={() => exportProject(es)} disabled={state.isExporting}>
             <Download size={14} style={{ marginRight: 6 }} /> Export
           </button>
         </div>

@@ -57,11 +57,61 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
     );
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drop-target');
+    
+    try {
+      const data = e.dataTransfer.getData('application/json');
+      if (!data) return;
+      
+      const mediaItem = JSON.parse(data);
+
+      if ((track.type === 'video' && mediaItem.type === 'audio') ||
+          (track.type === 'audio' && mediaItem.type !== 'audio')) {
+        return;
+      }
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const dropTime = Math.max(0, x / state.timelineZoom);
+
+      dispatch({
+        type: 'ADD_CLIP',
+        payload: {
+          trackId: track.id,
+          clip: {
+            id: `clip-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            trackId: track.id,
+            mediaId: mediaItem.id,
+            mediaName: mediaItem.name,
+            mediaType: mediaItem.type,
+            startTime: dropTime,
+            duration: mediaItem.duration || 5,
+            inPoint: mediaItem.inPoint || 0,
+            outPoint: mediaItem.outPoint || mediaItem.duration || 5,
+            speed: 1,
+            reversed: false,
+            volume: 1,
+            opacity: 1,
+            effects: [],
+            transition: null,
+            color: '',
+            locked: false,
+            label: '',
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Drop failed', err);
+    }
+  };
+
   return (
     <div className="ve-track-clips" style={{ height: track.height }}
       onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drop-target'); }}
       onDragLeave={e => e.currentTarget.classList.remove('drop-target')}
-      onDrop={e => { e.currentTarget.classList.remove('drop-target'); }}>
+      onDrop={handleDrop}>
       {track.clips.map(clip => (
         <TimelineClip key={clip.id} clip={clip} trackId={track.id} zoom={state.timelineZoom} />
       ))}

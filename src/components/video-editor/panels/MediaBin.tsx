@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
+import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 import { Search, Plus, Grid3X3, List, Film, Music, Image, X } from 'lucide-react';
 import type { MediaItem } from '../../../engine/video-editor/types';
 
@@ -36,6 +37,7 @@ const flagColors: Record<string, string> = {
 
 export default function MediaBin() {
   const { state, dispatch } = useVideoEditor();
+  const { importMedia } = useFFmpeg();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -87,7 +89,7 @@ export default function MediaBin() {
         <button className={`ve-tool-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={13} /></button>
       </div>
 
-      <button className="ve-tool-btn" style={{ width: '100%', height: 32, borderRadius: 6, border: '1px dashed rgba(255,255,255,0.15)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+      <button onClick={importMedia} className="ve-tool-btn" style={{ width: '100%', height: 32, borderRadius: 6, border: '1px dashed rgba(255,255,255,0.15)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
         <Plus size={14} /> Import Media
       </button>
 

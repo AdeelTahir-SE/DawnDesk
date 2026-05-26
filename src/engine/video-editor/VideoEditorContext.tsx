@@ -161,6 +161,12 @@ export const initialState: VideoEditorState = {
   exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
   renderQueue: [],
   showExportDialog: false,
+  isExporting: false,
+  exportProgress: 0,
+  exportError: null,
+
+  // FFmpeg
+  ffmpegStatus: { available: false, error: null },
 
   // History
   history: [],
@@ -852,6 +858,21 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
 
     case 'REMOVE_RENDER_JOB':
       return { ...state, renderQueue: state.renderQueue.filter(j => j.id !== action.payload) };
+
+    case 'EXPORT_START':
+      return { ...state, isExporting: true, exportProgress: 0, exportError: null };
+
+    case 'EXPORT_PROGRESS':
+      return { ...state, exportProgress: action.payload };
+
+    case 'EXPORT_COMPLETE':
+      return { ...state, isExporting: false, exportProgress: 100 };
+
+    case 'EXPORT_ERROR':
+      return { ...state, isExporting: false, exportError: action.payload };
+
+    case 'SET_FFMPEG_STATUS':
+      return { ...state, ffmpegStatus: action.payload };
 
     // ── History ──────────────────────────────────────────────────────────
     case 'UNDO': {

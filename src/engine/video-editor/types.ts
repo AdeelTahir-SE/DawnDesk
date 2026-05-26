@@ -470,6 +470,20 @@ export type RightPanelTab = 'properties' | 'effects' | 'color' | 'text' | 'audio
 export type LeftPanelTab = 'media' | 'effects' | 'transitions';
 export type ScopeType = 'waveform' | 'vectorscope' | 'histogram' | 'parade';
 
+export interface FFmpegStatus {
+  available: boolean;
+  error: string | null;
+}
+
+export interface MediaProbeResult {
+  duration: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  has_audio: boolean;
+  has_video: boolean;
+}
+
 export interface VideoEditorState {
   // Project
   project: Project | null;
@@ -525,6 +539,12 @@ export interface VideoEditorState {
   exportSettings: ExportSettings;
   renderQueue: RenderJob[];
   showExportDialog: boolean;
+  isExporting: boolean;
+  exportProgress: number;
+  exportError: string | null;
+
+  // FFmpeg
+  ffmpegStatus: FFmpegStatus;
 
   // History
   history: HistoryEntry[];
@@ -669,6 +689,11 @@ export type VideoEditorAction =
   | { type: 'ADD_RENDER_JOB'; payload: RenderJob }
   | { type: 'UPDATE_RENDER_JOB'; payload: { jobId: string; updates: Partial<RenderJob> } }
   | { type: 'REMOVE_RENDER_JOB'; payload: string }
+  | { type: 'EXPORT_START' }
+  | { type: 'EXPORT_PROGRESS'; payload: number }
+  | { type: 'EXPORT_COMPLETE' }
+  | { type: 'EXPORT_ERROR'; payload: string }
+  | { type: 'SET_FFMPEG_STATUS'; payload: FFmpegStatus }
 
   // History
   | { type: 'UNDO' }

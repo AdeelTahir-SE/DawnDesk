@@ -10,12 +10,17 @@ import RightPanel from './panels/RightPanel';
 import Timeline from './timeline/Timeline';
 import StatusBar from './StatusBar';
 import ExportDialog from './export/ExportDialog';
+import PlaybackEngine from './preview/PlaybackEngine';
+
+import { useFFmpeg } from '../../engine/video-editor/useFFmpeg';
 
 export default function VideoEditorInner() {
   const { state, dispatch } = useVideoEditor();
+  const { checkFFmpeg } = useFFmpeg();
 
-  // Auto-create project if none exists
+  // Auto-create project and check FFmpeg
   useEffect(() => {
+    checkFFmpeg();
     if (!state.project) {
       dispatch({ type: 'NEW_PROJECT', payload: DEFAULT_PROJECT_SETTINGS });
     }
@@ -64,6 +69,7 @@ export default function VideoEditorInner() {
 
   return (
     <div className="ve-layout">
+      <PlaybackEngine />
       <MenuBar />
       <EditorToolbar />
       {state.leftPanelOpen && <LeftPanel />}

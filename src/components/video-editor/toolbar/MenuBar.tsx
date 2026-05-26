@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
+import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 
 interface MenuItem {
   label: string;
@@ -11,6 +12,7 @@ interface MenuItem {
 
 export default function MenuBar() {
   const { state, dispatch } = useVideoEditor();
+  const { importMedia, saveProject, loadProject } = useFFmpeg();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleMenuClick = (menu: string) => {
@@ -26,11 +28,11 @@ export default function MenuBar() {
   const menus: Record<string, MenuItem[]> = {
     File: [
       { label: 'New Project', shortcut: 'Ctrl+N', action: () => dispatch({ type: 'NEW_PROJECT', payload: { name: 'Untitled Project', width: 1920, height: 1080, frameRate: 30, sampleRate: 48000, backgroundColor: '#000000' } }) },
-      { label: 'Open Project', shortcut: 'Ctrl+O' },
-      { label: 'Save', shortcut: 'Ctrl+S' },
-      { label: 'Save As...', shortcut: 'Ctrl+Shift+S' },
+      { label: 'Open Project', shortcut: 'Ctrl+O', action: loadProject },
+      { label: 'Save', shortcut: 'Ctrl+S', action: saveProject },
+      { label: 'Save As...', shortcut: 'Ctrl+Shift+S', action: saveProject },
       { label: '', separator: true },
-      { label: 'Import Media', shortcut: 'Ctrl+I' },
+      { label: 'Import Media', shortcut: 'Ctrl+I', action: importMedia },
       { label: '', separator: true },
       { label: 'Project Settings' },
       { label: '', separator: true },

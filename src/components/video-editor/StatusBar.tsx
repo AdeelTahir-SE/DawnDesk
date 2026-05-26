@@ -42,6 +42,10 @@ export default function StatusBar() {
       <div className="ve-status-item">
         <span>{fps}fps</span>
       </div>
+      <div className="ve-status-item" style={{ color: state.ffmpegStatus.available ? '#22c55e' : '#ef4444' }}>
+        <Film size={10} />
+        <span>{state.ffmpegStatus.available ? 'FFmpeg Ready' : 'FFmpeg Missing'}</span>
+      </div>
     </div>
   );
 }

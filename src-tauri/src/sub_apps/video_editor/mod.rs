@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{env, fs, path::PathBuf};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Emitter};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 
@@ -169,9 +169,9 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value) -> R
     // to show the export progress working.
     
     let out_name = settings.get("name").and_then(|n| n.as_str()).unwrap_or("export");
-    let out_dir = match dirs::download_dir() {
-        Some(dir) => dir,
-        None => PathBuf::from("."),
+    let out_dir = match app.path().download_dir() {
+        Ok(dir) => dir,
+        Err(_) => PathBuf::from("."),
     };
     
     let out_path = out_dir.join(format!("{}.mp4", out_name));
