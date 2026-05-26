@@ -1,9 +1,26 @@
-import { useState, useEffect } from "react";
-import { 
-  ArrowRight, Folder, LayoutList, Users, LineChart, Flag,
-  Wallet, TrendingUp, Receipt, PieChart, ShieldCheck, Box,
-  Terminal, Sparkles, Code2, Database, Activity, Cpu,
-  MessageSquare, Wand2, Lightbulb, Bookmark
+import { useEffect, useState } from "react";
+import {
+  Activity,
+  ArrowRight,
+  Bookmark,
+  Box,
+  Code2,
+  Cpu,
+  Database,
+  Flag,
+  Folder,
+  LayoutList,
+  Lightbulb,
+  LineChart,
+  MessageSquare,
+  PieChart,
+  Receipt,
+  ShieldCheck,
+  Sparkles,
+  Terminal,
+  TrendingUp,
+  Wallet,
+  Wand2,
 } from "lucide-react";
 
 import projectWelcomeImg from "../assets/project-welcome-clean.png";
@@ -18,15 +35,19 @@ interface WelcomeScreenProps {
   children: React.ReactNode;
 }
 
+type Feature = {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+};
+
 export default function WelcomeScreen({ appKey, title, description, children }: WelcomeScreenProps) {
   const [showWelcome, setShowWelcome] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const hasSeenWelcome = localStorage.getItem(`welcomed_${appKey}`);
-    if (!hasSeenWelcome) {
-      setShowWelcome(true);
-    }
+    if (!hasSeenWelcome) setShowWelcome(true);
     setLoading(false);
   }, [appKey]);
 
@@ -36,157 +57,141 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
   };
 
   if (loading) return null;
+  if (!showWelcome) return <>{children}</>;
 
-  if (!showWelcome) {
-    return <>{children}</>;
-  }
-
-  // Define content based on appKey
   let content = {
     appName: "DawnDesk Module",
-    appIcon: <Box className="w-5 h-5 text-yellow-400" />,
-    title: title,
+    appIcon: <Box className="h-5 w-5 text-yellow-400" />,
+    title,
     titleHighlight: "",
-    subtitle: description || "Welcome to this new module!",
-    features: [] as { icon: React.ReactNode, title: string, desc: string }[],
+    subtitle: description || "Open this DawnDesk workspace.",
+    features: [] as Feature[],
     buttonText: "Get Started",
-    image: ""
+    image: "",
   };
 
   if (appKey === "project-manager") {
     content = {
       appName: "DawnDesk Project Manager",
-      appIcon: <Folder className="w-5 h-5 text-yellow-400" />,
+      appIcon: <Folder className="h-5 w-5 text-yellow-400" />,
       title: "Welcome to\n",
       titleHighlight: "Project Manager",
-      subtitle: "Plan. Organize. Collaborate. Deliver.\nManage your projects, track progress, collaborate with your team, and achieve your goals — all in one powerful workspace.",
+      subtitle: "Plan, organize, and deliver work from one focused local workspace.",
       features: [
-        { icon: <LayoutList className="w-5 h-5 text-yellow-400" />, title: "Plan with Clarity", desc: "Break down ideas into actionable tasks and clear timelines." },
-        { icon: <Users className="w-5 h-5 text-yellow-400" />, title: "Collaborate Seamlessly", desc: "Work together with your team and keep everyone aligned." },
-        { icon: <LineChart className="w-5 h-5 text-yellow-400" />, title: "Track Progress", desc: "Monitor milestones, tasks, and deadlines in real time." },
-        { icon: <Flag className="w-5 h-5 text-yellow-400" />, title: "Deliver Results", desc: "Stay focused, meet goals, and celebrate every win." }
+        { icon: <LayoutList className="h-5 w-5 text-yellow-400" />, title: "Plan Clearly", desc: "Break work into manageable tasks and priorities." },
+        { icon: <LineChart className="h-5 w-5 text-yellow-400" />, title: "Track Progress", desc: "See what is planned, active, and complete." },
+        { icon: <Flag className="h-5 w-5 text-yellow-400" />, title: "Ship Work", desc: "Keep delivery visible without extra noise." },
       ],
-      buttonText: "Get Started with Project Manager",
-      image: projectWelcomeImg
+      buttonText: "Open Project Manager",
+      image: projectWelcomeImg,
     };
   } else if (appKey === "finance") {
     content = {
       appName: "DawnDesk Finance Manager",
-      appIcon: <Wallet className="w-5 h-5 text-yellow-400" />,
+      appIcon: <Wallet className="h-5 w-5 text-yellow-400" />,
       title: "Welcome to\n",
       titleHighlight: "Finance Manager",
-      subtitle: "Take control of your finances.\nTrack income, manage expenses, analyze trends, and plan for a smarter financial future — all in one powerful workspace.",
+      subtitle: "Track money, budgets, goals, and invoices in a private local workspace.",
       features: [
-        { icon: <TrendingUp className="w-5 h-5 text-yellow-400" />, title: "Track & Analyze", desc: "Get real-time insights into your income and expenses." },
-        { icon: <Receipt className="w-5 h-5 text-yellow-400" />, title: "Smart Budgeting", desc: "Create budgets, set limits, and stay on track." },
-        { icon: <PieChart className="w-5 h-5 text-yellow-400" />, title: "Visual Reports", desc: "Understand your money with beautiful reports." },
-        { icon: <ShieldCheck className="w-5 h-5 text-yellow-400" />, title: "Secure & Private", desc: "Your data is encrypted and always protected." }
+        { icon: <TrendingUp className="h-5 w-5 text-yellow-400" />, title: "Analyze Flow", desc: "Understand income, expenses, and trends." },
+        { icon: <Receipt className="h-5 w-5 text-yellow-400" />, title: "Track Records", desc: "Keep accounts and transactions organized." },
+        { icon: <PieChart className="h-5 w-5 text-yellow-400" />, title: "Plan Ahead", desc: "Use budgets, goals, and renewals to stay ready." },
+        { icon: <ShieldCheck className="h-5 w-5 text-yellow-400" />, title: "Stay Private", desc: "Your finance workspace stays on this device." },
       ],
-      buttonText: "Explore Finance Manager",
-      image: financeWelcomeImg
+      buttonText: "Open Finance Manager",
+      image: financeWelcomeImg,
     };
   } else if (appKey === "devtools") {
     content = {
       appName: "DawnDesk Developer Tools",
-      appIcon: <Terminal className="w-5 h-5 text-yellow-400" />,
+      appIcon: <Terminal className="h-5 w-5 text-yellow-400" />,
       title: "Welcome to\n",
       titleHighlight: "Developer Tools",
-      subtitle: "Supercharge your development.\nA suite of powerful utilities, database managers, and performance monitors designed to help you build faster and smarter.",
+      subtitle: "Use practical utilities for code, data, and environment work.",
       features: [
-        { icon: <Code2 className="w-5 h-5 text-yellow-400" />, title: "Code Utilities", desc: "Formatters, linters, and quick-converters." },
-        { icon: <Database className="w-5 h-5 text-yellow-400" />, title: "Local DB Management", desc: "Inspect and manage your SQLite databases." },
-        { icon: <Activity className="w-5 h-5 text-yellow-400" />, title: "System Monitoring", desc: "Track memory, CPU, and network requests in real-time." },
-        { icon: <Cpu className="w-5 h-5 text-yellow-400" />, title: "Environment Configs", desc: "Seamlessly manage local environments and secrets." }
+        { icon: <Code2 className="h-5 w-5 text-yellow-400" />, title: "Code Utilities", desc: "Format, inspect, and transform common inputs." },
+        { icon: <Database className="h-5 w-5 text-yellow-400" />, title: "Data Tools", desc: "Work with local development data faster." },
+        { icon: <Activity className="h-5 w-5 text-yellow-400" />, title: "System View", desc: "Keep an eye on useful runtime signals." },
+        { icon: <Cpu className="h-5 w-5 text-yellow-400" />, title: "Environment Help", desc: "Reduce friction around local setup tasks." },
       ],
       buttonText: "Open DevTools",
-      image: devtoolsWelcomeImg
+      image: devtoolsWelcomeImg,
     };
   } else if (appKey === "prompts") {
     content = {
       appName: "DawnDesk Prompt Manager",
-      appIcon: <Sparkles className="w-5 h-5 text-yellow-400" />,
+      appIcon: <Sparkles className="h-5 w-5 text-yellow-400" />,
       title: "Welcome to\n",
       titleHighlight: "Prompt Manager",
-      subtitle: "Elevate your AI interactions.\nCraft, test, organize, and perfect your AI prompts in a dedicated offline workspace built for engineers and creatives.",
+      subtitle: "Save, search, and reuse your most reliable AI prompt templates.",
       features: [
-        { icon: <MessageSquare className="w-5 h-5 text-yellow-400" />, title: "Craft & Test", desc: "Design complex prompts and test them interactively." },
-        { icon: <Bookmark className="w-5 h-5 text-yellow-400" />, title: "Organize Library", desc: "Save your best prompts into categories and folders." },
-        { icon: <Wand2 className="w-5 h-5 text-yellow-400" />, title: "Variable Injection", desc: "Use dynamic variables like {{name}} to reuse templates." },
-        { icon: <Lightbulb className="w-5 h-5 text-yellow-400" />, title: "Discover Ideas", desc: "Get inspiration for new ways to interact with AI." }
+        { icon: <MessageSquare className="h-5 w-5 text-yellow-400" />, title: "Write Once", desc: "Keep dependable instructions ready." },
+        { icon: <Bookmark className="h-5 w-5 text-yellow-400" />, title: "Organize Simply", desc: "Group templates without clutter." },
+        { icon: <Wand2 className="h-5 w-5 text-yellow-400" />, title: "Reuse Variables", desc: "Use placeholders like [Topic] and [Code]." },
+        { icon: <Lightbulb className="h-5 w-5 text-yellow-400" />, title: "Move Faster", desc: "Copy the right prompt when work begins." },
       ],
       buttonText: "Open Prompt Manager",
-      image: promptsWelcomeImg
+      image: promptsWelcomeImg,
     };
   }
 
   return (
-    <div className="relative flex w-full h-full bg-[#0a0a0a] text-white overflow-hidden animate-in fade-in zoom-in-95 duration-500">
-      
-      {/* Background Image */}
-      {content.image ? (
-        <img 
-          src={content.image} 
-          alt="Welcome background" 
-          className="absolute inset-0 w-full h-full object-cover object-center sm:object-right"
-        />
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden">
-           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-400/5 rounded-full blur-[100px]" />
-           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[100px]" />
-           <div className="w-48 h-48 rounded-full border-[12px] border-white/5 flex items-center justify-center shadow-2xl">
-             {content.appIcon}
-           </div>
-        </div>
-      )}
-
-      {/* Gradient Overlay for Text Readability */}
+    <div className="relative flex h-full w-full overflow-hidden bg-neutral-950 text-white animate-in fade-in zoom-in-95 duration-500">
       {content.image && (
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] from-30% via-[#0a0a0a]/80 via-60% to-transparent to-100% w-full pointer-events-none" />
+        <>
+          <img src={content.image} alt="" className="absolute inset-0 h-full w-full object-cover object-center sm:object-right" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-neutral-950 from-30% via-neutral-950/88 via-64% to-neutral-950/10" />
+        </>
       )}
-      
-      {/* LEFT COLUMN: Content */}
-      <div className="w-full lg:w-[55%] p-6 sm:p-8 xl:p-12 flex flex-col justify-center h-full overflow-y-auto custom-scrollbar relative z-10">
-        
-        {/* Removed App Logo/Name */}
 
-        {/* Title & Subtitle */}
-        <h1 className="text-[2.5rem] sm:text-[3rem] leading-[1.1] font-bold text-white mb-3 tracking-tight mt-4 whitespace-pre-line">
-          {content.title}
-          <span className="text-[#facc15]">{content.titleHighlight}</span>
-        </h1>
-        
-        {/* Small Yellow Line */}
-        <div className="w-12 h-[3px] bg-gradient-to-r from-[#facc15] to-[#facc15]/30 rounded-full mb-4"></div>
-        
-        <div className="text-base sm:text-[1.05rem] text-white/70 mb-4 leading-relaxed max-w-md whitespace-pre-line">
-          {content.subtitle}
+      {!content.image && (
+        <div className="absolute inset-0 grid place-items-center">
+          <div className="flex h-48 w-48 items-center justify-center rounded-full border-[12px] border-white/5 shadow-2xl">
+            {content.appIcon}
+          </div>
+        </div>
+      )}
+
+      <div className="custom-scrollbar relative z-10 flex h-full w-full flex-col justify-center overflow-y-auto p-6 sm:p-8 lg:w-[55%] xl:p-12">
+        <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-neutral-800 bg-neutral-900/70 px-3 py-1 text-xs font-semibold text-white/60">
+          {content.appIcon}
+          {content.appName}
         </div>
 
-        {/* Features List */}
+        <h1 className="font-heading whitespace-pre-line text-[2.5rem] font-black leading-[1.05] tracking-tight text-white sm:text-[3rem]">
+          {content.title}
+          <span className="text-yellow-400">{content.titleHighlight}</span>
+        </h1>
+
+        <div className="mb-5 mt-5 h-[3px] w-12 rounded-full bg-yellow-400" />
+
+        <p className="mb-5 max-w-md text-base leading-relaxed text-white/65 sm:text-[1.05rem]">
+          {content.subtitle}
+        </p>
+
         {content.features.length > 0 && (
-          <div className="flex flex-col gap-3 mb-4">
-            {content.features.map((feat, idx) => (
-              <div key={idx} className="flex gap-4 sm:gap-4 items-start">
-                <div className="w-9 h-9 shrink-0 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-inner">
-                  {feat.icon}
+          <div className="mb-5 grid gap-3">
+            {content.features.map((feature) => (
+              <div key={feature.title} className="flex items-start gap-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950">
+                  {feature.icon}
                 </div>
-                <div className="flex flex-col">
-                  <h3 className="text-white font-semibold text-base mb-0.5">{feat.title}</h3>
-                  <p className="text-white/50 text-sm leading-snug">{feat.desc}</p>
+                <div>
+                  <h3 className="mb-0.5 text-sm font-semibold text-white">{feature.title}</h3>
+                  <p className="text-sm leading-snug text-white/50">{feature.desc}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Action Button */}
-        <div className="mt-auto pt-2 pb-2">
-          <button 
+        <div className="mt-auto pb-2 pt-2">
+          <button
             onClick={handleEnter}
-            className="flex items-center justify-between w-[340px] bg-[#facc15] hover:bg-[#fbbf24] text-black font-semibold py-4 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-500/20 group"
+            className="group flex w-full max-w-[340px] items-center justify-between rounded-xl bg-yellow-400 px-6 py-4 font-bold text-black shadow-lg shadow-yellow-500/10 transition-colors hover:bg-yellow-300 active:scale-[0.99]"
           >
-            <span className="text-lg tracking-wide">{content.buttonText}</span>
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <span className="text-base tracking-wide">{content.buttonText}</span>
+            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
       </div>

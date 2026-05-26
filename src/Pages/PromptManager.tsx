@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, X, FileQuestion, Edit, Trash2, Check, Copy } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Copy, Edit, FileQuestion, Plus, Search, Trash2, Variable, X } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
 
 interface Prompt {
@@ -11,95 +11,87 @@ interface Prompt {
 }
 
 const SEEDED_PROMPTS: Prompt[] = [
-  // Marketing
   {
     id: "marketing-1",
     category: "Marketing",
     title: "Social Media Hook Generator",
-    content: "Write a high-converting social media post hook for the following topic: [Topic]. Ensure it is hooky, targets a pain point, and includes a call to action. Tone: [Tone]",
-    isCustom: false
+    content: "Write a high-converting social media post hook for the following topic: [Topic]. Ensure it targets a pain point, builds curiosity, and includes a call to action. Tone: [Tone]",
+    isCustom: false,
   },
   {
     id: "marketing-2",
     category: "Marketing",
     title: "SEO Blog Post Outline",
-    content: "Generate a detailed SEO-friendly blog post outline for the keyword: [Keyword]. Include recommended heading levels (H2, H3), search intent, target length, and LSI keywords to target.",
-    isCustom: false
+    content: "Generate a detailed SEO-friendly blog post outline for the keyword: [Keyword]. Include search intent, H2/H3 structure, target length, and related terms to include.",
+    isCustom: false,
   },
   {
     id: "marketing-3",
     category: "Marketing",
     title: "Cold Outreach Email",
-    content: "Create a personalized, compelling cold outreach email to a prospect in the [Industry] industry. The offer is [Offer] and the goal is to book a 15-minute discovery call. Keep it concise, focused on their benefit, and conversational.",
-    isCustom: false
+    content: "Create a personalized cold outreach email for a prospect in [Industry]. The offer is [Offer] and the goal is a 15-minute discovery call. Keep it concise, benefit-led, and conversational.",
+    isCustom: false,
   },
-  // Development
   {
     id: "dev-1",
     category: "Development",
     title: "Code Refactor Specialist",
-    content: "Refactor the following [Language] code for readability, performance, and compliance with best practices. Explain the specific optimizations and changes made:\n\n[Code]",
-    isCustom: false
+    content: "Refactor the following [Language] code for readability, performance, and best practices. Explain the most important changes made:\n\n[Code]",
+    isCustom: false,
   },
   {
     id: "dev-2",
     category: "Development",
     title: "Regex Pattern Generator",
-    content: "Generate a regular expression pattern that matches the following criteria: [Criteria]. Provide example matching strings and a detailed breakdown of how each part of the regex works in [Language/Standard].",
-    isCustom: false
+    content: "Generate a regular expression pattern that matches: [Criteria]. Provide example matches, non-matches, and a concise breakdown for [Language/Standard].",
+    isCustom: false,
   },
   {
     id: "dev-3",
     category: "Development",
     title: "Code Documentation Writer",
-    content: "Write comprehensive, professional JSDoc/TSDoc or docstring documentation for the following function/class. Describe all parameters, return types, throws, and include a usage example:\n\n[Code]",
-    isCustom: false
+    content: "Write professional JSDoc/TSDoc or docstring documentation for the following function or class. Include parameters, return values, thrown errors, and a usage example:\n\n[Code]",
+    isCustom: false,
   },
-  // Writing & Design
   {
     id: "writing-1",
     category: "Writing & Design",
     title: "Tone & Voice Adjuster",
-    content: "Rewrite the following text to have a [Desired Tone] tone. Maintain the core message but adjust vocabulary, syntax, and sentence length accordingly:\n\n[Text]",
-    isCustom: false
+    content: "Rewrite the following text in a [Desired Tone] tone. Keep the original meaning, but adjust vocabulary, rhythm, and sentence structure:\n\n[Text]",
+    isCustom: false,
   },
   {
     id: "writing-2",
     category: "Writing & Design",
     title: "Catchy Headline Copywriter",
-    content: "Brainstorm 10 catchy, attention-grabbing headlines for a product named '[Product Name]'. It is a [Product Description] targeting [Target Audience]. Focus on emotional appeal and benefit-driven angles.",
-    isCustom: false
+    content: "Brainstorm 10 benefit-driven headlines for [Product Name]. It is a [Product Description] for [Target Audience]. Prioritize clarity, emotional pull, and specificity.",
+    isCustom: false,
   },
   {
     id: "writing-3",
     category: "Writing & Design",
     title: "Component Style Architect",
-    content: "As an expert frontend architect, suggest the CSS/Tailwind classes, color palette, typography, and interactive hover/focus states to make a premium, modern [Component Name] component. The vibe should be [Vibe, e.g. glassmorphism dark mode].",
-    isCustom: false
-  }
+    content: "As a frontend design lead, suggest structure, Tailwind classes, color palette, typography, and interaction states for a premium [Component Name]. Vibe: [Vibe].",
+    isCustom: false,
+  },
 ];
 
+const extractVariables = (content: string) => Array.from(new Set(content.match(/\[[^\]]+\]/g) ?? []));
+
 export default function PromptManager() {
-
-
-  // State
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // Dialog / Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
-
   const [formTitle, setFormTitle] = useState("");
   const [formCategory, setFormCategory] = useState("Marketing");
   const [customCategory, setCustomCategory] = useState("");
   const [formContent, setFormContent] = useState("");
   const [formError, setFormError] = useState("");
 
-  // Load from LocalStorage or seed defaults
   useEffect(() => {
     const stored = localStorage.getItem("dawndesk_prompts");
     if (stored) {
@@ -115,40 +107,31 @@ export default function PromptManager() {
     }
   }, []);
 
-  // Sync to local storage
-  const savePrompts = (newPrompts: Prompt[]) => {
-    setPrompts(newPrompts);
-    localStorage.setItem("dawndesk_prompts", JSON.stringify(newPrompts));
+  const savePrompts = (nextPrompts: Prompt[]) => {
+    setPrompts(nextPrompts);
+    localStorage.setItem("dawndesk_prompts", JSON.stringify(nextPrompts));
   };
 
-  // Categories list
-  const categories = ["All", ...Array.from(new Set(prompts.map((p) => p.category)))];
+  const categories = useMemo(() => ["All", ...Array.from(new Set(prompts.map((prompt) => prompt.category)))], [prompts]);
 
-  // Filter & Search Prompts
-  const filteredPrompts = prompts.filter((prompt) => {
-    const matchesCategory = activeCategory === "All" || prompt.category === activeCategory;
-    const matchesSearch =
-      prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prompt.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prompt.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredPrompts = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return prompts.filter((prompt) => {
+      const matchesCategory = activeCategory === "All" || prompt.category === activeCategory;
+      const matchesSearch = `${prompt.title} ${prompt.category} ${prompt.content}`.toLowerCase().includes(query);
+      return matchesCategory && matchesSearch;
+    });
+  }, [activeCategory, prompts, searchQuery]);
 
-  // Actions
   const handleCopy = (id: string, text: string) => {
     void navigator.clipboard.writeText(text);
     setCopiedId(id);
-    setTimeout(() => {
-      setCopiedId(null);
-    }, 2000);
+    window.setTimeout(() => setCopiedId(null), 1400);
   };
 
-
   const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this prompt template?")) {
-      const updated = prompts.filter((p) => p.id !== id);
-      savePrompts(updated);
-    }
+    if (!window.confirm("Delete this prompt template?")) return;
+    savePrompts(prompts.filter((prompt) => prompt.id !== id));
   };
 
   const openCreateModal = () => {
@@ -166,8 +149,6 @@ export default function PromptManager() {
     setModalMode("edit");
     setEditingPromptId(prompt.id);
     setFormTitle(prompt.title);
-    
-    // Check if category is standard or custom
     setFormCategory(prompt.category);
     setCustomCategory("");
     setFormContent(prompt.content);
@@ -175,11 +156,10 @@ export default function PromptManager() {
     setIsModalOpen(true);
   };
 
-  const handleSavePrompt = (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleSavePrompt = (event: React.FormEvent) => {
+    event.preventDefault();
     const title = formTitle.trim();
-    const finalCategory = (formCategory === "New Category..." ? customCategory.trim() : formCategory.trim());
+    const finalCategory = formCategory === "New Category..." ? customCategory.trim() : formCategory.trim();
     const content = formContent.trim();
 
     if (!title || !finalCategory || !content) {
@@ -188,325 +168,244 @@ export default function PromptManager() {
     }
 
     if (modalMode === "create") {
-      const newPrompt: Prompt = {
-        id: `custom-${Date.now()}`,
-        title,
-        category: finalCategory,
-        content,
-        isCustom: true
-      };
-      savePrompts([...prompts, newPrompt]);
-    } else if (modalMode === "edit" && editingPromptId) {
-      const updated = prompts.map((p) =>
-        p.id === editingPromptId
-          ? { ...p, title, category: finalCategory, content, isCustom: p.isCustom ?? true }
-          : p
+      savePrompts([{ id: `custom-${Date.now()}`, title, category: finalCategory, content, isCustom: true }, ...prompts]);
+    } else if (editingPromptId) {
+      savePrompts(
+        prompts.map((prompt) =>
+          prompt.id === editingPromptId
+            ? { ...prompt, title, category: finalCategory, content, isCustom: prompt.isCustom ?? true }
+            : prompt,
+        ),
       );
-      savePrompts(updated);
     }
 
     setIsModalOpen(false);
   };
 
-  // Get Category Badge Style
-  const getCategoryBadgeClass = (category: string) => {
-    switch (category) {
-      case "Marketing":
-        return "bg-orange-500/10 text-orange-400 border border-orange-500/30";
-      case "Development":
-        return "bg-blue-500/10 text-blue-400 border border-blue-500/30";
-      case "Writing & Design":
-        return "bg-purple-500/10 text-purple-400 border border-purple-500/30";
-      default:
-        return "bg-yellow-500/10 text-yellow-300 border border-yellow-500/30";
-    }
-  };
-
   return (
     <WelcomeScreen appKey="prompts" title="Prompt Manager" description="Organize your AI prompt library securely offline.">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full flex-col gap-6 p-8 text-white max-w-7xl animate-fadeIn">
-        {/* Header section */}
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-500 bg-clip-text text-transparent">
-              Prompt Manager
-            </h1>
-            <p className="mt-1.5 text-sm text-white/60 max-w-xl">
-              Browse, search, and organize high-quality AI templates. Click 'Use in Chat' to instantly draft your messages in the AI workspace.
-            </p>
-          </div>
-          <button
-            onClick={openCreateModal}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-semibold text-black hover:bg-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.15)] hover:shadow-[0_0_25px_rgba(250,204,21,0.3)] hover:scale-[1.02] transition-all duration-300 shrink-0"
-          >
-            <Plus className="w-4 h-4" strokeWidth={2.5} />
-            Add New Prompt
-          </button>
-        </div>
-
-        {/* Filter and Search Panel */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 backdrop-blur-md">
-          {/* Search */}
-          <div className="relative flex items-center">
-            <Search className="absolute left-4 w-5 h-5 text-white/40" strokeWidth={2} />
-            <input
-              type="text"
-              placeholder="Search prompt titles, categories, or keywords..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-950/60 py-3 pl-12 pr-4 text-sm text-white placeholder-white/30 outline-none focus:border-yellow-400/60 focus:bg-neutral-950 transition-all duration-200"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-4 text-white/40 hover:text-white"
-              >
-                <X className="w-4 h-4" strokeWidth={2} />
-              </button>
-            )}
+      <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-neutral-950 text-white animate-fadeIn">
+        <aside className="flex h-full w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/60">
+          <div className="border-b border-neutral-800 p-5">
+            <div className="flex items-center gap-3">
+              
+              <div>
+                <h1 className="font-heading text-base font-bold text-white">Prompts</h1>
+                <p className="text-xs text-white/50">{prompts.length} templates</p>
+              </div>
+            </div>
           </div>
 
-          {/* Horizontal Category Tabs */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-neutral-800/60 pt-3 overflow-x-auto no-scrollbar">
-            <span className="text-xs font-semibold tracking-wider text-white/40 uppercase mr-2">
-              Categories:
-            </span>
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={`rounded-lg px-4 py-2 text-xs font-medium transition-all duration-200 ${
-                  activeCategory === category
-                    ? "bg-yellow-400 text-black font-semibold shadow-[0_0_12px_rgba(250,204,21,0.2)]"
-                    : "bg-neutral-950/40 border border-neutral-800/80 text-white/60 hover:bg-neutral-800/60 hover:text-white"
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Prompts Cards Grid */}
-        {filteredPrompts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900/30 p-12 text-center backdrop-blur-sm">
-            <FileQuestion className="w-12 h-12 text-white/20 mb-4" strokeWidth={1.5} />
-            <h3 className="text-lg font-medium text-white/80">No templates found</h3>
-            <p className="mt-1 text-sm text-white/40 max-w-sm">
-              {searchQuery
-                ? "We couldn't find any prompts matching your search terms. Try refining your keywords."
-                : "There are no prompts stored in this category yet. Click '+ Add New Prompt' to make one."}
-            </p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="mt-4 rounded-lg border border-neutral-700 bg-neutral-800/40 px-4 py-2 text-xs hover:bg-neutral-800 hover:text-white transition-colors"
-              >
-                Clear Search Query
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredPrompts.map((prompt) => (
-              <div
-                key={prompt.id}
-                className="group flex flex-col justify-between rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 hover:bg-neutral-900/70 hover:border-yellow-400/30 transition-all duration-300 shadow-xl hover:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)] hover:scale-[1.01]"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-3.5">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${getCategoryBadgeClass(
-                        prompt.category
-                      )}`}
-                    >
-                      {prompt.category}
-                    </span>
-                    <div className="flex items-center gap-1.5 opacity-40 group-hover:opacity-100 transition-opacity duration-200">
-                      <button
-                        onClick={() => openEditModal(prompt)}
-                        className="rounded p-1 hover:bg-neutral-800 text-white/60 hover:text-white transition-colors"
-                        title="Edit Prompt"
-                      >
-                        <Edit className="w-3.5 h-3.5" strokeWidth={2} />
-                      </button>
-                      {(prompt.isCustom !== false) && (
-                        <button
-                          onClick={() => handleDelete(prompt.id)}
-                          className="rounded p-1 hover:bg-red-500/10 text-white/60 hover:text-red-400 transition-colors"
-                          title="Delete Prompt"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <h3 className="text-base font-bold text-white tracking-wide group-hover:text-yellow-300/90 transition-colors duration-200">
-                    {prompt.title}
-                  </h3>
-
-                  <div 
-                    onClick={() => handleCopy(prompt.id, prompt.content)}
-                    className="mt-3 block rounded-xl border border-neutral-800/80 bg-neutral-950/50 p-3.5 text-xs text-neutral-300 font-mono leading-relaxed min-h-[90px] max-h-[140px] overflow-y-auto hover:bg-neutral-950/80 hover:border-neutral-700/50 cursor-pointer transition-all duration-200 select-all group/code shadow-inner no-scrollbar"
-                    title="Click to copy prompt template"
-                  >
-                    <p className="whitespace-pre-wrap break-words">{prompt.content}</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between border-t border-neutral-800/60 pt-3 gap-2">
+          <nav className="custom-scrollbar flex-1 overflow-y-auto p-3">
+            <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">Categories</p>
+            <div className="space-y-1">
+              {categories.map((category) => {
+                const count = category === "All" ? prompts.length : prompts.filter((prompt) => prompt.category === category).length;
+                return (
                   <button
-                    onClick={() => handleCopy(prompt.id, prompt.content)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-300 ${
-                      copiedId === prompt.id
-                        ? "bg-green-500/10 border-green-500/40 text-green-400"
-                        : "bg-neutral-950/40 border-neutral-800/80 text-white/70 hover:bg-neutral-800/60 hover:text-white"
+                    key={category}
+                    onClick={() => setActiveCategory(category)}
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      activeCategory === category ? "bg-yellow-400/10 text-yellow-300" : "text-white/55 hover:bg-neutral-800/60 hover:text-white"
                     }`}
                   >
-                    {copiedId === prompt.id ? (
-                      <>
-                        <Check className="w-3 h-3 text-green-400 animate-scaleUp" strokeWidth={3} />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-white/50" strokeWidth={2} />
-                        Copy
-                      </>
-                    )}
+                    <span className="truncate">{category}</span>
+                    <span className="text-xs text-white/35">{count}</span>
                   </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
+
+        <main className="custom-scrollbar flex-1 overflow-y-auto p-8">
+          <div className="mx-auto max-w-7xl space-y-6">
+            <section className="rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-yellow-400">Prompt Manager</p>
+                  <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Reusable Prompt Library</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-white/60 sm:text-base">
+                    Keep your best AI instructions organized, searchable, and ready to copy.
+                  </p>
+                </div>
+                <button
+                  onClick={openCreateModal}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Prompt
+                </button>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search prompt titles, categories, or body text..."
+                  className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-10 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/45 hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/60">
+              <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Library</h3>
+                  <p className="mt-1 text-xs text-white/50">{filteredPrompts.length} matching templates</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Modern Creation/Editing Glassmorphic Dialog Modal */}
+              {filteredPrompts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                  <FileQuestion className="mb-4 h-10 w-10 text-white/25" />
+                  <h3 className="text-base font-semibold text-white">No prompts found</h3>
+                  <p className="mt-1 text-sm text-white/45">Try a different category or search term.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-neutral-800">
+                  {filteredPrompts.map((prompt) => {
+                    const variables = extractVariables(prompt.content);
+                    return (
+                      <article key={prompt.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-neutral-800/35 lg:grid-cols-[1fr_180px_132px] lg:items-center">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="truncate text-sm font-semibold text-white">{prompt.title}</h4>
+                            <span className="rounded-full border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-300">
+                              {prompt.category}
+                            </span>
+                          </div>
+                          <p className="mt-2 line-clamp-2 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-white/55">{prompt.content}</p>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-white/45">
+                          <Variable className="h-3.5 w-3.5" />
+                          {variables.length ? variables.join(", ") : "No variables"}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleCopy(prompt.id, prompt.content)}
+                            className={`grid h-9 w-9 place-items-center rounded-lg border transition-colors ${
+                              copiedId === prompt.id
+                                ? "border-green-500/30 bg-green-500/10 text-green-300"
+                                : "border-neutral-800 bg-neutral-950 text-white/55 hover:text-white"
+                            }`}
+                            title="Copy prompt"
+                          >
+                            {copiedId === prompt.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          </button>
+                          <button
+                            onClick={() => openEditModal(prompt)}
+                            className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:text-white"
+                            title="Edit prompt"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          {prompt.isCustom !== false && (
+                            <button
+                              onClick={() => handleDelete(prompt.id)}
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:border-red-500/30 hover:text-red-300"
+                              title="Delete prompt"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        </main>
+
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-            <div
-              className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl flex flex-col gap-4 animate-scaleUp"
-              role="dialog"
-              aria-modal="true"
-            >
-              {/* Modal Title */}
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <h2 className="text-xl font-bold text-white">
-                  {modalMode === "create" ? "Add New AI Prompt" : "Edit AI Prompt"}
-                </h2>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-lg p-1 hover:bg-neutral-800 text-white/50 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" strokeWidth={2} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4 backdrop-blur-md animate-fadeIn">
+            <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl animate-scaleUp" role="dialog" aria-modal="true">
+              <div className="flex items-center justify-between border-b border-neutral-800 p-6">
+                <div>
+                  <h2 className="font-heading text-xl font-bold text-white">{modalMode === "create" ? "Create Prompt" : "Edit Prompt"}</h2>
+                  <p className="mt-1 text-xs text-white/50">Use bracketed placeholders like [Topic] to keep prompts reusable.</p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-lg text-white/50 hover:bg-neutral-800 hover:text-white">
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
-              {/* Modal Body / Form */}
-              <form onSubmit={handleSavePrompt} className="flex flex-col gap-4">
-                {/* Form Error */}
-                {formError && (
-                  <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300">
-                    {formError}
-                  </div>
-                )}
+              <form onSubmit={handleSavePrompt} className="custom-scrollbar flex max-h-[72vh] flex-col gap-5 overflow-y-auto p-6">
+                {formError && <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm font-semibold text-red-300">{formError}</div>}
 
-                {/* Title input */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-white/70 tracking-wide uppercase">
-                    Prompt Title
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.2fr_0.8fr]">
+                  <label className="flex flex-col gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Prompt Title</span>
+                    <input
+                      type="text"
+                      value={formTitle}
+                      onChange={(event) => setFormTitle(event.target.value)}
+                      placeholder="e.g. Product Requirements Reviewer"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                      required
+                    />
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Code Refactor Specialist"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3.5 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-yellow-400/60 focus:bg-neutral-950 transition-all duration-200"
-                    required
-                  />
-                </div>
-
-                {/* Category selector */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-white/70 tracking-wide uppercase">
-                    Category
-                  </label>
-                  <div className="flex flex-col gap-2">
+                  <label className="flex flex-col gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Category</span>
                     <select
                       value={formCategory}
-                      onChange={(e) => {
-                        setFormCategory(e.target.value);
-                        if (e.target.value !== "New Category...") {
-                          setCustomCategory("");
-                        }
+                      onChange={(event) => {
+                        setFormCategory(event.target.value);
+                        if (event.target.value !== "New Category...") setCustomCategory("");
                       }}
-                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60 focus:bg-neutral-950 transition-all duration-200 cursor-pointer"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60"
                     >
-                      {/* Unique active categories except 'All' */}
-                      {Array.from(
-                        new Set(
-                          prompts
-                            .map((p) => p.category)
-                            .filter((cat) => cat !== "All")
-                        )
-                      ).map((cat) => (
-                        <option key={cat} value={cat} className="bg-neutral-900">
-                          {cat}
-                        </option>
+                      {categories.filter((category) => category !== "All").map((category) => (
+                        <option key={category} value={category}>{category}</option>
                       ))}
-                      <option value="New Category..." className="bg-neutral-900 font-semibold text-yellow-300">
-                        + Create New Category...
-                      </option>
+                      <option value="New Category...">Create new category...</option>
                     </select>
-
-                    {/* Custom Category Input (Conditional) */}
-                    {formCategory === "New Category..." && (
-                      <input
-                        type="text"
-                        placeholder="Enter new category name..."
-                        value={customCategory}
-                        onChange={(e) => setCustomCategory(e.target.value)}
-                        className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3.5 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-yellow-400/60 focus:bg-neutral-950 transition-all duration-200 animate-slideDown"
-                        required
-                      />
-                    )}
-                  </div>
+                  </label>
                 </div>
 
-                {/* Content textarea */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-white/77 tracking-wide uppercase">
-                      Prompt Template
-                    </label>
-                    <span className="text-[10px] text-white/30 font-normal normal-case">
-                      Use [Tag] for placeholders (e.g. [Keyword], [Code])
-                    </span>
-                  </div>
+                {formCategory === "New Category..." && (
+                  <label className="flex flex-col gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-white/50">New Category Name</span>
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(event) => setCustomCategory(event.target.value)}
+                      placeholder="e.g. Product Strategy"
+                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                      required
+                    />
+                  </label>
+                )}
+
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Prompt Template</span>
                   <textarea
-                    placeholder="Type your prompt template here. For example:&#10;Analyze the following [Language] class for potential security flaws:&#10;&#10;[Code]"
                     value={formContent}
-                    onChange={(e) => setFormContent(e.target.value)}
-                    rows={5}
-                    className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3.5 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-yellow-400/60 focus:bg-neutral-950 transition-all duration-200 resize-none font-mono"
+                    onChange={(event) => setFormContent(event.target.value)}
+                    rows={12}
+                    placeholder="Analyze [Input] for [Goal]. Return concise recommendations and a prioritized action list."
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 font-mono text-sm leading-relaxed text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
                     required
                   />
-                </div>
+                </label>
 
-                {/* Action Buttons */}
-                <div className="mt-2 flex items-center justify-end gap-3 border-t border-neutral-800 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="rounded-xl border border-neutral-800 bg-neutral-950/40 px-4 py-2.5 text-xs font-semibold text-white/70 hover:bg-neutral-800/60 hover:text-white transition-colors"
-                  >
+                <div className="flex justify-end gap-3 border-t border-neutral-800 pt-5">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white/60 hover:text-white">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="rounded-xl bg-yellow-400 px-5 py-2.5 text-xs font-bold text-black hover:bg-yellow-300 transition-colors shadow-[0_0_12px_rgba(250,204,21,0.1)]"
-                  >
+                  <button type="submit" className="rounded-lg bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black hover:bg-yellow-300">
                     {modalMode === "create" ? "Add Template" : "Save Changes"}
                   </button>
                 </div>
