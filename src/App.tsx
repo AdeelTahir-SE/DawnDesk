@@ -12,6 +12,7 @@ import PromptManager from "./Pages/PromptManager";
 import ProjectManager from "./Pages/ProjectManager";
 import DevTools from "./Pages/DevTools";
 import FinanceManager from "./Pages/FinanceManager";
+import NotesApp from "./Pages/NotesApp";
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
         <Route path="project-manager" element={<ProjectManager />} />
         <Route path="dev-tools" element={<DevTools />} />
         <Route path="finance" element={<FinanceManager />} />
+        <Route path="notes" element={<NotesApp />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

@@ -127,17 +127,17 @@ export default function DashboardView() {
   return (
     <div className="flex flex-col gap-6 p-6 animate-in fade-in zoom-in-95 duration-300">
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_0.9fr]">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 shadow-lg shadow-black/20">
+        <div className="dd-card-elevated shadow-lg shadow-black/20">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-yellow-400">Command center</p>
-              <h2 className="mt-2 font-heading text-3xl font-black tracking-tight text-white">Financial Control Room</h2>
-              <p className="mt-2 max-w-2xl text-sm text-white/60">
+              <p className="dd-label">Command center</p>
+              <h2 className="mt-2 dd-page-title">Financial Control Room</h2>
+              <p className="mt-2 max-w-2xl dd-body">
                 Live cash position, accounts receivable aging, and pending vendor bills.
               </p>
             </div>
             <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-right">
-              <p className="text-xs text-white/50">System Health</p>
+              <p className="dd-subtext">System Health</p>
               <p className="text-3xl font-black text-green-400">{metrics.healthScore}</p>
             </div>
           </div>
@@ -150,9 +150,9 @@ export default function DashboardView() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 shadow-lg shadow-black/20">
+        <div className="dd-card-elevated shadow-lg shadow-black/20">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">Upcoming Payables</h3>
+            <h3 className="dd-card-title">Upcoming Payables</h3>
             <AlertTriangle className="h-5 w-5 text-yellow-300" />
           </div>
           <div className="mt-5 space-y-4">
@@ -166,16 +166,16 @@ export default function DashboardView() {
                 />
               ))
             ) : (
-              <div className="text-sm text-white/50 py-4 text-center border border-dashed border-neutral-800 rounded-xl">No pending bills.</div>
+              <div className="dd-empty py-4">No pending bills.</div>
             )}
           </div>
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_0.8fr]">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 shadow-lg shadow-black/20">
+        <div className="dd-card-elevated shadow-lg shadow-black/20">
           <div className="mb-5 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-lg font-bold text-white">
+            <h3 className="flex items-center gap-2 dd-section-title">
               <TrendingUp className="h-5 w-5 text-yellow-400" />
               Liquidity Trend
             </h3>
@@ -204,8 +204,8 @@ export default function DashboardView() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 shadow-lg shadow-black/20">
-          <h3 className="mb-5 text-lg font-bold text-white">Asset Mix</h3>
+        <div className="dd-card-elevated shadow-lg shadow-black/20">
+          <h3 className="mb-5 dd-section-title">Asset Mix</h3>
           <div className="h-[220px]">
             {metrics.categoryData.length > 0 && metrics.categoryData[0].value > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -219,7 +219,7 @@ export default function DashboardView() {
                 </RechartsPieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="grid h-full place-items-center text-sm text-white/50 border border-dashed border-neutral-800 rounded-xl">No asset data yet</div>
+              <div className="grid h-full place-items-center dd-empty p-0 border-0">No asset data yet</div>
             )}
           </div>
           <div className="mt-4 space-y-2">
@@ -237,23 +237,23 @@ export default function DashboardView() {
       </section>
 
       <section className="grid grid-cols-1 gap-4">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6">
-          <h3 className="mb-4 text-lg font-bold text-white">Recent Journal Entries</h3>
+        <div className="dd-card-elevated">
+          <h3 className="mb-4 dd-section-title">Recent Journal Entries</h3>
           <div className="space-y-2">
             {journalEntries.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-neutral-800 p-8 text-center text-sm text-white/50">
+              <div className="dd-empty">
                 No recent journal entries to display.
               </div>
             ) : (
               journalEntries.slice(0, 5).map((je) => (
-                <div key={je.id} className="flex items-center justify-between rounded-xl border border-neutral-800/60 bg-neutral-950/70 px-4 py-3 hover:bg-neutral-900/60 transition-colors">
+                <div key={je.id} className="dd-list-item">
                   <div className="flex items-center gap-4">
                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-900">
                         <FileText className="h-5 w-5 text-white/60" />
                      </div>
                     <div>
-                      <p className="text-sm font-bold text-white">{je.description || "General Journal"}</p>
-                      <p className="text-xs text-white/50">{je.reference} - {je.date}</p>
+                      <p className="dd-card-title">{je.description || "General Journal"}</p>
+                      <p className="dd-subtext">{je.reference} - {je.date}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -291,7 +291,7 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+    <div className="dd-card-inset">
       <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-900/60 ${toneClass}`}>
         {icon}
       </div>

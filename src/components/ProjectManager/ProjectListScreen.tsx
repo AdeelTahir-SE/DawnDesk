@@ -81,41 +81,41 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     <div className="flex flex-col h-[calc(100vh-4rem)] w-full max-w-7xl mx-auto p-4 sm:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
       
       {/* Header */}
-      <section className="rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6">
+      <section className="dd-hero">
         <div className="flex flex-wrap items-center justify-between gap-5">
         <div className="flex items-center gap-5">
           <div className="w-16 h-16 rounded-2xl bg-neutral-950/40 flex items-center justify-center border border-neutral-800">
             <Folder className="w-8 h-8 text-yellow-400" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-yellow-400">Project Manager</p>
-            <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Project Hub</h1>
-            <p className="mt-2 max-w-2xl text-sm text-white/60 sm:text-base">Manage all your projects and tasks locally.</p>
+            <p className="dd-label">Project Manager</p>
+            <h1 className="dd-page-title mt-2">Project Hub</h1>
+            <p className="dd-body-lg max-w-2xl mt-2">Manage all your projects and tasks locally.</p>
           </div>
         </div>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300"
+            className="dd-btn-primary"
           >
             <Plus className="h-4 w-4" />
             New Workspace
           </button>
         </div>
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/50">
+          <div className="dd-card-inset">
+            <div className="dd-form-label flex items-center gap-2">
               <Layout className="h-4 w-4" /> Workspaces
             </div>
             <div className="mt-2 text-2xl font-bold text-white">{projects.length}</div>
           </div>
-          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/50">
+          <div className="dd-card-inset">
+            <div className="dd-form-label flex items-center gap-2">
               <Clock className="h-4 w-4 text-yellow-400" /> Active Tasks
             </div>
             <div className="mt-2 text-2xl font-bold text-white">{activeTasks}</div>
           </div>
-          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/50">
+          <div className="dd-card-inset">
+            <div className="dd-form-label flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Completed
             </div>
             <div className="mt-2 text-2xl font-bold text-white">{completedTasks}<span className="text-sm text-white/45"> / {totalTasks}</span></div>
@@ -126,7 +126,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
       {/* Projects Grid */}
       <section className="space-y-6 flex-1 overflow-auto pb-8 custom-scrollbar">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <h2 className="dd-section-title flex items-center gap-2">
             <Layout className="w-5 h-5 text-white/60" /> Active Workspaces
           </h2>
         </div>
@@ -158,7 +158,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
               <button 
                 key={p.id}
                 onClick={() => onProjectSelect(p.id)}
-                className="group flex flex-col rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 text-left hover:border-yellow-400/40 hover:shadow-2xl transition-all h-full min-h-[240px] relative overflow-hidden"
+                className="dd-card-elevated group flex flex-col text-left hover:border-yellow-400/40 hover:shadow-2xl transition-all h-full min-h-[240px] relative overflow-hidden"
               >
                 
                 <div className="flex-1">
@@ -168,7 +168,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
                   <h3 className="text-xl font-bold text-white group-hover:text-yellow-300 transition-colors line-clamp-1">{p.name}</h3>
                   <p className="text-sm text-white/60 mt-2 line-clamp-2 leading-relaxed">{p.description || "No description provided."}</p>
                 </div>
-                <div className="mt-5 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+                <div className="dd-card-inset mt-5">
                   <div className="mb-2 flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1.5 font-semibold text-white/50"><BarChart3 className="h-3.5 w-3.5" /> Progress</span>
                     <span className="font-bold text-white">{progress}%</span>
@@ -197,32 +197,32 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
 
       {/* CREATE PROJECT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scaleUp">
-            <div className="flex items-center justify-between p-6 border-b border-neutral-800">
+        <div className="dd-modal-overlay !z-[100]">
+          <div className="dd-modal-sm">
+            <div className="dd-modal-header">
               <div>
-                <h2 className="font-heading text-xl font-bold text-white tracking-tight">Create Workspace</h2>
-                <p className="text-xs text-white/60 mt-1">A dedicated space for your project and its tasks.</p>
+                <h2 className="dd-modal-title">Create Workspace</h2>
+                <p className="dd-subtext mt-1">A dedicated space for your project and its tasks.</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-lg text-white/50 hover:bg-neutral-800 hover:text-white transition-colors">
+              <button onClick={() => setIsModalOpen(false)} className="dd-icon-btn h-9 w-9">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleCreateProject} className="p-6 flex flex-col gap-5">
+            <form onSubmit={handleCreateProject} className="dd-modal-body">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Project Name</label>
-                <input type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)} placeholder="e.g. Website Redesign" className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60 transition-colors" required />
+                <label className="dd-form-label">Project Name</label>
+                <input type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)} placeholder="e.g. Website Redesign" className="dd-input" required />
               </div>
               
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Description (Optional)</label>
-                <textarea value={newProjDesc} onChange={e=>setNewProjDesc(e.target.value)} placeholder="Brief description..." className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white placeholder-white/35 outline-none focus:border-yellow-400/60 transition-colors resize-none h-24 custom-scrollbar" />
+                <label className="dd-form-label">Description (Optional)</label>
+                <textarea value={newProjDesc} onChange={e=>setNewProjDesc(e.target.value)} placeholder="Brief description..." className="dd-input resize-none h-24 custom-scrollbar" />
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-neutral-800 pt-5 mt-2">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white/60 hover:text-white transition-colors">Cancel</button>
-                <button type="submit" disabled={creating} className="px-6 py-2.5 rounded-lg bg-yellow-400 text-black text-sm font-bold hover:bg-yellow-300 transition-colors flex items-center gap-2">
+              <div className="dd-modal-footer mt-2">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="dd-btn-secondary">Cancel</button>
+                <button type="submit" disabled={creating} className="dd-btn-primary px-6">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Workspace"}
                 </button>
               </div>

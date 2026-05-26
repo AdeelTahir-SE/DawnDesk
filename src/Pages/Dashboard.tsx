@@ -54,18 +54,18 @@ useEffect(() => {
 
     return (
         <div className="p-8 mx-auto w-full max-w-7xl space-y-6">
-            <section className="rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-yellow-400">Dashboard</p>
-                <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Welcome back to DawnDesk</h1>
-                <p className="mt-2 max-w-2xl text-sm text-white/60 sm:text-base">
+            <section className="dd-hero">
+                <p className="dd-label">Dashboard</p>
+                <h1 className="mt-2 dd-page-title">Welcome back to DawnDesk</h1>
+                <p className="mt-2 max-w-2xl dd-body-lg">
                     Monitor your workflow, jump into tools quickly, and keep track of current activity from one place.
                 </p>
             </section>
 
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {kpis.map((item) => (
-                    <article key={item.label} className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
-                        <p className="text-sm text-white/60">{item.label}</p>
+                    <article key={item.label} className="dd-card">
+                        <p className="dd-body">{item.label}</p>
                         <p className="mt-2 text-2xl font-bold text-white">{item.value}</p>
                         <p className="mt-2 text-xs font-semibold text-yellow-300">{item.change}</p>
                     </article>
@@ -75,15 +75,15 @@ useEffect(() => {
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
                 <div className="xl:col-span-8 space-y-4">
 
-                            <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
+                            <article className="dd-card">
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div>
-                                                        <h2 className="text-lg font-semibold text-white">Latest Pending Tasks</h2>
-                                                        <p className="mt-1 text-xs text-white/50">Track your newest todo items at a glance</p>
+                                                        <h2 className="dd-section-title">Latest Pending Tasks</h2>
+                                                        <p className="mt-1 dd-subtext">Track your newest todo items at a glance</p>
                                                     </div>
 
                                                     <div className="flex items-center gap-2">
-                                                        <span className="rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs font-semibold text-yellow-300">
+                                                        <span className="dd-badge">
                                                             {pendingTodos.length} items
                                                         </span>
                                                         <Link
@@ -102,14 +102,14 @@ useEffect(() => {
                                                                 <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
                                                                     <div className="min-w-0">
                                                                         <p className="truncate text-sm font-medium text-white/90">{item.title}</p>
-                                                                        <p className="mt-1 text-xs text-white/45">Task #{item.id}</p>
+                                                                        <p className="mt-1 dd-subtext">Task #{item.id}</p>
                                                                     </div>
 
                                                                     <span
-                                                                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                                        className={`shrink-0 ${
                                                                             item.completed
-                                                                                ? "bg-green-500/10 text-green-300"
-                                                                                : "bg-yellow-500/10 text-yellow-300"
+                                                                                ? "dd-chip-success"
+                                                                                : "dd-chip-warning"
                                                                         }`}
                                                                     >
                                                                         {item.completed ? "Completed" : "Pending"}
@@ -124,10 +124,10 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                         </article>
-                    <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
+                    <article className="dd-card">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-white">Productivity (7 Days)</h2>
-                            <span className="text-xs text-white/50">Sessions completed</span>
+                            <h2 className="dd-section-title">Productivity (7 Days)</h2>
+                            <span className="dd-subtext">Sessions completed</span>
                         </div>
 
                         <div className="mt-5 flex h-40 items-end justify-between gap-2">
@@ -137,7 +137,7 @@ useEffect(() => {
                                         className="w-full rounded-t-md bg-yellow-400/90"
                                         style={{ height: `${value}%` }}
                                     />
-                                    <span className="text-xs text-white/50">D{index + 1}</span>
+                                    <span className="dd-subtext">D{index + 1}</span>
                                 </div>
                             ))}
                         </div>
@@ -149,9 +149,9 @@ useEffect(() => {
                 <div className="xl:col-span-4 space-y-4">
                     
 
-                    <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-                        <h2 className="text-lg font-semibold text-white">Quick Tools</h2>
-                        <p className="mt-1 text-xs text-white/50">Jump straight into your active tools</p>
+                    <article className="dd-card">
+                        <h2 className="dd-section-title">Quick Tools</h2>
+                        <p className="mt-1 dd-subtext">Jump straight into your active tools</p>
                         <div className="mt-4 grid grid-cols-2 gap-3">
                             <Link to="/todo" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
                                 <ListTodo className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
@@ -179,13 +179,13 @@ useEffect(() => {
                             </Link>
                         </div>
                     </article>
-                                  <article className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5">
-                        <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+                                  <article className="dd-card">
+                        <h2 className="dd-section-title">Recent Activity</h2>
                         <ul className="mt-4 space-y-3">
                             {activities.map((item) => (
                                 <li key={item.title} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
                                     <span className="text-sm text-white/85">{item.title}</span>
-                                    <span className="text-xs text-white/50">{item.time}</span>
+                                    <span className="dd-subtext">{item.time}</span>
                                 </li>
                             ))}
                         </ul>

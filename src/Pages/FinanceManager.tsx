@@ -92,19 +92,19 @@ export default function FinanceManager() {
       title="Advanced Finance Manager"
       description="Powerful enterprise resource planning (ERP) capabilities - securely offline."
     >
-      <div className="flex h-full w-full overflow-hidden bg-neutral-950 text-white animate-fadeIn">
-        <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/60">
-          <div className="border-b border-neutral-800/70 p-5">
+      <div className="dd-page">
+        <aside className="dd-sidebar">
+          <div className="dd-sidebar-header">
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-xl border border-neutral-800 bg-neutral-950 text-yellow-400">
+              <div className="dd-icon-box">
                 <Wallet className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="font-heading text-lg font-black tracking-tight text-white">Finance OS</h1>
-                <p className="text-xs text-white/50">Enterprise ERP Workspace</p>
+                <h1 className="dd-sidebar-title">Finance OS</h1>
+                <p className="dd-subtext">Enterprise ERP Workspace</p>
               </div>
             </div>
-            <button className="mt-5 flex w-full items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left text-xs text-white/50 transition-colors hover:border-white/30">
+            <button className="dd-search mt-5">
               <Search className="h-4 w-4" />
               Search transactions, bills...
             </button>
@@ -115,10 +115,8 @@ export default function FinanceManager() {
               <button
                 key={item.id}
                 onClick={() => setActiveView(item.id)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-all duration-200 ${
-                  activeView === item.id
-                    ? "bg-yellow-400/10 text-yellow-400 shadow-[inset_3px_0_0_#F7C948]"
-                    : "text-white/50 hover:bg-neutral-800/60 hover:text-white"
+                className={`dd-nav-item ${
+                  activeView === item.id ? "dd-nav-item-active" : ""
                 }`}
               >
                 {item.icon}
@@ -128,16 +126,16 @@ export default function FinanceManager() {
           </nav>
 
           <div className="space-y-3 border-t border-neutral-800 p-4">
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+            <div className="dd-sidebar-notice">
               <div className="flex items-center gap-2 text-xs font-bold text-white">
                 <ShieldCheck className="h-4 w-4 text-green-400" />
                 Local-first vault
               </div>
-              <p className="mt-1 text-xs leading-relaxed text-white/50">
+              <p className="dd-subtext mt-1 leading-relaxed">
                 Ledger, accounts, and reports stay on this device.
               </p>
             </div>
-            <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-white/50 transition-all hover:bg-neutral-800/60 hover:text-white">
+            <button className="dd-nav-item">
               <Bell className="h-5 w-5" />
               Alerts
               <span className="ml-auto rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-bold text-black">3</span>
@@ -146,14 +144,14 @@ export default function FinanceManager() {
         </aside>
 
         <main className="relative flex-1 overflow-hidden">
-          <header className="absolute left-0 right-0 top-0 z-20 flex h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/90 px-6 backdrop-blur-xl">
+          <header className="dd-topbar">
             <div className="flex items-center gap-3">
-              <div className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-900/60 text-yellow-400">
+              <div className="dd-icon-box-sm">
                 {activeItem.icon}
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Workspace</p>
-                <h2 className="text-sm font-bold text-white">{activeItem.label}</h2>
+                <p className="dd-label-muted">Workspace</p>
+                <h2 className="dd-card-title">{activeItem.label}</h2>
               </div>
             </div>
           </header>

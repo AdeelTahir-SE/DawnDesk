@@ -27,6 +27,7 @@ import projectWelcomeImg from "../assets/project-welcome-clean.png";
 import financeWelcomeImg from "../assets/finance-welcome-clean.png";
 import devtoolsWelcomeImg from "../assets/devtools-welcome-bg.png";
 import promptsWelcomeImg from "../assets/prompts-welcome-bg.png";
+import notesWelcomeImg from "../assets/notes-welcome-bg.png";
 
 interface WelcomeScreenProps {
   appKey: string;
@@ -46,8 +47,8 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem(`welcomed_${appKey}`);
-    if (!hasSeenWelcome) setShowWelcome(true);
+    // Always show welcome screen as requested
+    setShowWelcome(true);
     setLoading(false);
   }, [appKey]);
 
@@ -133,10 +134,26 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
       buttonText: "Open Prompt Manager",
       image: promptsWelcomeImg,
     };
+  } else if (appKey === "notes") {
+    content = {
+      appName: "DawnDesk Notes",
+      appIcon: <Lightbulb className="h-5 w-5 text-yellow-400" />,
+      title: "Welcome to\n",
+      titleHighlight: "Notes & Knowledge Base",
+      subtitle: "Capture ideas, link knowledge, and build your second brain — all offline.",
+      features: [
+        { icon: <Lightbulb className="h-5 w-5 text-yellow-400" />, title: "Capture Ideas", desc: "Rich text editor with markdown, code blocks, and media." },
+        { icon: <Bookmark className="h-5 w-5 text-yellow-400" />, title: "Organize Everything", desc: "Notebooks, tags, and favorites keep notes findable." },
+        { icon: <Activity className="h-5 w-5 text-yellow-400" />, title: "Link Knowledge", desc: "Wiki-style linking, backlinks, and graph view." },
+        { icon: <Database className="h-5 w-5 text-yellow-400" />, title: "Stay Private", desc: "All your notes stay on this device, always." },
+      ],
+      buttonText: "Open Notes",
+      image: notesWelcomeImg,
+    };
   }
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden bg-neutral-950 text-white animate-in fade-in zoom-in-95 duration-500">
+    <div className="relative dd-page duration-500">
       {content.image && (
         <>
           <img src={content.image} alt="" className="absolute inset-0 h-full w-full object-cover object-center sm:object-right" />
@@ -144,41 +161,30 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         </>
       )}
 
-      {!content.image && (
-        <div className="absolute inset-0 grid place-items-center">
-          <div className="flex h-48 w-48 items-center justify-center rounded-full border-[12px] border-white/5 shadow-2xl">
-            {content.appIcon}
-          </div>
-        </div>
-      )}
-
       <div className="custom-scrollbar relative z-10 flex h-full w-full flex-col justify-center overflow-y-auto p-6 sm:p-8 lg:w-[55%] xl:p-12">
-        <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-neutral-800 bg-neutral-900/70 px-3 py-1 text-xs font-semibold text-white/60">
-          {content.appIcon}
-          {content.appName}
-        </div>
 
-        <h1 className="font-heading whitespace-pre-line text-[2.5rem] font-black leading-[1.05] tracking-tight text-white sm:text-[3rem]">
+
+        <h1 className="text-[2.75rem] sm:text-[3.25rem] leading-[1.1] font-bold text-white mb-4 tracking-tight">
           {content.title}
           <span className="text-yellow-400">{content.titleHighlight}</span>
         </h1>
 
         <div className="mb-5 mt-5 h-[3px] w-12 rounded-full bg-yellow-400" />
 
-        <p className="mb-5 max-w-md text-base leading-relaxed text-white/65 sm:text-[1.05rem]">
+        <p className="mb-5 max-w-md dd-body-lg leading-relaxed sm:text-[1.05rem]">
           {content.subtitle}
         </p>
 
         {content.features.length > 0 && (
           <div className="mb-5 grid gap-3">
             {content.features.map((feature) => (
-              <div key={feature.title} className="flex items-start gap-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950">
+              <div key={feature.title} className="flex items-start gap-4 dd-card p-3">
+                <div className="shrink-0 dd-icon-box-sm bg-neutral-950">
                   {feature.icon}
                 </div>
                 <div>
-                  <h3 className="mb-0.5 text-sm font-semibold text-white">{feature.title}</h3>
-                  <p className="text-sm leading-snug text-white/50">{feature.desc}</p>
+                  <h3 className="mb-0.5 dd-card-title">{feature.title}</h3>
+                  <p className="leading-snug dd-subtext">{feature.desc}</p>
                 </div>
               </div>
             ))}
@@ -188,7 +194,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         <div className="mt-auto pb-2 pt-2">
           <button
             onClick={handleEnter}
-            className="group flex w-full max-w-[340px] items-center justify-between rounded-xl bg-yellow-400 px-6 py-4 font-bold text-black shadow-lg shadow-yellow-500/10 transition-colors hover:bg-yellow-300 active:scale-[0.99]"
+            className="group flex w-full max-w-[340px] items-center justify-between dd-btn-primary py-4 shadow-lg shadow-yellow-500/10"
           >
             <span className="text-base tracking-wide">{content.buttonText}</span>
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />

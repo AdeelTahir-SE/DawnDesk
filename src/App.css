@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DAWNDESK GLOBAL DESIGN SYSTEM
+   ─────────────────────────────────────────────────────────────────────────
+   Fonts : Sora (headings) · Manrope (body) · JetBrains Mono (code)
+   Colors: brand-* tokens from tailwind.config.js
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -29,13 +38,335 @@
   animation: slideDown 0.2s ease-out forwards;
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+/* ── Scrollbar Utilities ───────────────────────────────────────────────── */
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
-.no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.16);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENT LAYER – reusable classes consumed by all DawnDesk apps
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+
+  /* ─── Page-level Containers ──────────────────────────────────────────── */
+
+  /** Full-height flex container for sub-app roots (Finance, Notes, etc.) */
+  .dd-page {
+    @apply flex h-full w-full overflow-hidden bg-brand-base text-brand-text animate-fadeIn;
+  }
+
+  /** Scrollable main content area within a sub-app */
+  .dd-main {
+    @apply custom-scrollbar flex-1 overflow-y-auto p-8;
+  }
+
+  /** Max-width content wrapper inside dd-main */
+  .dd-content {
+    @apply mx-auto max-w-7xl space-y-6;
+  }
+
+  /* ─── Typography ─────────────────────────────────────────────────────── */
+
+  /** Page title  – "Welcome back to DawnDesk", "Project Hub" (h1)
+      Font: Sora · 24px / 30px responsive · bold · white */
+  .dd-page-title {
+    @apply font-heading text-2xl font-bold tracking-tight text-white sm:text-3xl;
+  }
+
+  /** Section heading – "Latest Pending Tasks", "Quick Tools" (h2)
+      Font: Sora · 18px · semibold · white */
+  .dd-section-title {
+    @apply font-heading text-lg font-semibold text-white;
+  }
+
+  /** Card/subsection heading – "Upcoming Payables" (h3)
+      Font: Sora · 14px · bold · white */
+  .dd-card-title {
+    @apply font-heading text-sm font-bold text-white;
+  }
+
+  /** Small uppercase label – "Dashboard", "Command center"
+      Font: Manrope · 12px · uppercase · wide tracking · accent yellow */
+  .dd-label {
+    @apply text-xs font-bold uppercase tracking-[0.2em] text-brand-accent;
+  }
+
+  /** Section label (non-accent) – "Planning", "Categories"
+      Font: Manrope · 12px · uppercase · wide tracking · muted */
+  .dd-label-muted {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-white/40;
+  }
+
+  /** Body text – descriptions, subtitles
+      Font: Manrope · 14px · white/60 */
+  .dd-body {
+    @apply text-sm text-white/60;
+  }
+
+  /** Body text responsive (can be 16px on sm+) */
+  .dd-body-lg {
+    @apply text-sm text-white/60 sm:text-base;
+  }
+
+  /** Muted subtext – metadata, counts, timestamps
+      Font: Manrope · 12px · white/50 */
+  .dd-subtext {
+    @apply text-xs text-white/50;
+  }
+
+  /** Sidebar app title – "Finance OS", "Notes"
+      Font: Sora · 18px · extra-bold · white */
+  .dd-sidebar-title {
+    @apply font-heading text-lg font-black tracking-tight text-white;
+  }
+
+  /** Modal title – "Create Workspace", "Edit Prompt"
+      Font: Sora · 20px · bold · white */
+  .dd-modal-title {
+    @apply font-heading text-xl font-bold tracking-tight text-white;
+  }
+
+  /* ─── Cards & Panels ─────────────────────────────────────────────────── */
+
+  /** Standard content card (dashboard KPIs, tool sections, etc.) */
+  .dd-card {
+    @apply rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5;
+  }
+
+  /** Hero / header banner with gradient */
+  .dd-hero {
+    @apply rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6;
+  }
+
+  /** Inset card (nested inside another card, e.g. stats inside hero) */
+  .dd-card-inset {
+    @apply rounded-xl border border-neutral-800 bg-neutral-950/60 p-4;
+  }
+
+  /** Elevated card (Settings panels, About panel) */
+  .dd-card-elevated {
+    @apply rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6;
+  }
+
+  /* ─── Sidebar ────────────────────────────────────────────────────────── */
+
+  /** Sub-app sidebar container (Finance, Notes, Projects, Prompts) */
+  .dd-sidebar {
+    @apply flex h-full w-[280px] shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/60;
+  }
+
+  /** Narrow sidebar (Project Manager inner view) */
+  .dd-sidebar-narrow {
+    @apply flex h-full w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/60;
+  }
+
+  /** Sidebar header block (top brand/title area) */
+  .dd-sidebar-header {
+    @apply border-b border-neutral-800/70 p-5;
+  }
+
+  /** Sidebar nav link – inactive state */
+  .dd-nav-item {
+    @apply flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold
+           transition-all duration-200
+           text-white/50 hover:bg-neutral-800/60 hover:text-white;
+  }
+
+  /** Sidebar nav link – active state (add alongside dd-nav-item) */
+  .dd-nav-item-active {
+    @apply bg-yellow-400/10 text-yellow-400 shadow-[inset_3px_0_0_#F7C948];
+  }
+
+  /** Compact sidebar nav link (Project Manager, Prompts) */
+  .dd-nav-item-sm {
+    @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium
+           transition-colors
+           text-white/55 hover:bg-neutral-800/60 hover:text-white;
+  }
+
+  /** Compact sidebar nav link – active */
+  .dd-nav-item-sm-active {
+    @apply bg-yellow-400/10 text-yellow-300;
+  }
+
+  /** Sidebar privacy/info notice */
+  .dd-sidebar-notice {
+    @apply rounded-xl border border-neutral-800 bg-neutral-950 p-3;
+  }
+
+  /* ─── Icon Containers ────────────────────────────────────────────────── */
+
+  /** Large icon box (sidebar brand icons, settings icons) – 44×44 */
+  .dd-icon-box {
+    @apply grid h-11 w-11 place-items-center rounded-xl border border-neutral-800 bg-neutral-950 text-yellow-400;
+  }
+
+  /** Small icon box (header bar icons, feature card icons) – 36×36 */
+  .dd-icon-box-sm {
+    @apply grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-900/60 text-yellow-400;
+  }
+
+  /** Mini icon box (toolbar buttons) – 32×32 */
+  .dd-icon-btn {
+    @apply grid h-8 w-8 place-items-center rounded-lg text-white/50
+           transition-colors hover:bg-neutral-800 hover:text-white;
+  }
+
+  /* ─── Buttons ────────────────────────────────────────────────────────── */
+
+  /** Primary CTA – yellow bg, black text */
+  .dd-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black
+           transition-colors hover:bg-yellow-300 active:scale-[0.98];
+  }
+
+  /** Secondary / ghost button – bordered neutral */
+  .dd-btn-secondary {
+    @apply rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-2.5
+           text-sm font-semibold text-white/60
+           transition-colors hover:text-white;
+  }
+
+  /** Danger button */
+  .dd-btn-danger {
+    @apply rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2
+           text-sm font-bold text-red-400
+           transition-colors hover:bg-red-500/20;
+  }
+
+  /* ─── Inputs & Form Controls ─────────────────────────────────────────── */
+
+  /** Text input / textarea */
+  .dd-input {
+    @apply rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3
+           text-sm text-white outline-none
+           placeholder:text-white/35
+           focus:border-yellow-400/60 transition-colors;
+  }
+
+  /** Sidebar search bar (smaller padding) */
+  .dd-search {
+    @apply flex w-full items-center gap-2 rounded-xl border border-neutral-800
+           bg-neutral-950 px-3 py-2.5 text-left text-xs text-white/50
+           transition-colors hover:border-white/30;
+  }
+
+  /** Form label */
+  .dd-form-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-white/50;
+  }
+
+  /** Select dropdown */
+  .dd-select {
+    @apply rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3
+           text-sm text-white outline-none
+           focus:border-yellow-400/60;
+  }
+
+  /* ─── Badges & Pills ─────────────────────────────────────────────────── */
+
+  /** Accent badge (item count, status indicator) */
+  .dd-badge {
+    @apply rounded-full border border-yellow-400/30 bg-yellow-400/10
+           px-3 py-1 text-xs font-semibold text-yellow-300;
+  }
+
+  /** Category pill */
+  .dd-pill {
+    @apply rounded-full border border-neutral-800 bg-neutral-950
+           px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-300;
+  }
+
+  /** Status chip – success */
+  .dd-chip-success {
+    @apply rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-semibold text-green-300;
+  }
+
+  /** Status chip – warning / pending */
+  .dd-chip-warning {
+    @apply rounded-full bg-yellow-500/10 px-2.5 py-1 text-xs font-semibold text-yellow-300;
+  }
+
+  /* ─── Header Bars (sub-app top bars) ─────────────────────────────────── */
+
+  .dd-topbar {
+    @apply absolute left-0 right-0 top-0 z-20
+           flex h-16 items-center justify-between
+           border-b border-neutral-800 bg-neutral-950/90 px-6 backdrop-blur-xl;
+  }
+
+  .dd-topbar-compact {
+    @apply absolute left-0 right-0 top-0 z-20
+           flex h-14 items-center justify-between
+           border-b border-neutral-800 bg-neutral-950/90 px-5 backdrop-blur-xl;
+  }
+
+  /* ─── Modals / Dialogs ───────────────────────────────────────────────── */
+
+  .dd-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center
+           bg-neutral-950/80 p-4 backdrop-blur-md animate-fadeIn;
+  }
+
+  .dd-modal {
+    @apply flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl
+           border border-neutral-800 bg-neutral-900 shadow-2xl animate-scaleUp;
+  }
+
+  .dd-modal-sm {
+    @apply flex w-full max-w-md flex-col overflow-hidden rounded-2xl
+           border border-neutral-800 bg-neutral-900 shadow-2xl animate-scaleUp;
+  }
+
+  .dd-modal-header {
+    @apply flex items-center justify-between border-b border-neutral-800 p-6;
+  }
+
+  .dd-modal-body {
+    @apply custom-scrollbar flex max-h-[72vh] flex-col gap-5 overflow-y-auto p-6;
+  }
+
+  .dd-modal-footer {
+    @apply flex justify-end gap-3 border-t border-neutral-800 pt-5;
+  }
+
+  /* ─── Dividers ───────────────────────────────────────────────────────── */
+
+  .dd-divider {
+    @apply border-t border-neutral-800;
+  }
+
+  .dd-divider-light {
+    @apply border-t border-neutral-800/60;
+  }
+
+  /* ─── Empty / Placeholder States ─────────────────────────────────────── */
+
+  .dd-empty {
+    @apply rounded-xl border border-dashed border-neutral-800 p-8
+           text-center text-sm text-white/50;
+  }
+
+  /* ─── List Items ─────────────────────────────────────────────────────── */
+
+  .dd-list-item {
+    @apply flex items-center justify-between rounded-xl
+           border border-neutral-800/60 bg-neutral-950/70 px-4 py-3
+           hover:bg-neutral-900/60 transition-colors;
+  }
 }

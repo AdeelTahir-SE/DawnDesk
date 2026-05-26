@@ -248,7 +248,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
   const currentSlide = slides[step];
 
   return (
-    <div className="relative z-[100] w-full h-full min-h-[calc(100vh-4rem)] overflow-hidden bg-black flex font-sans select-none">
+    <div className=" relative z-[100] w-full h-full min-h-[calc(100vh-4rem)] overflow-hidden bg-black flex font-sans select-none ">
       {/* Background image */}
       {bgImages.map((img, idx) => (
         <img 

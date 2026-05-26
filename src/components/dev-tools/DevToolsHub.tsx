@@ -1,12 +1,8 @@
-import { DevTool, devTools } from "./devToolsList";
+import { devTools } from "./devToolsList";
 import { useState } from "react";
 import { Search, ArrowRight } from "lucide-react";
 
-interface DevToolsHubProps {
-  onSelectTool: (tool: DevTool) => void;
-}
-
-export default function DevToolsHub({ onSelectTool }: DevToolsHubProps) {
+export default function DevToolsHub() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const categories = ["V1 - Core Tools", "V2 - Workflow Tools", "V3 - Advanced Tools"];
@@ -61,9 +57,8 @@ export default function DevToolsHub({ onSelectTool }: DevToolsHubProps) {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {toolsInCategory.map((tool) => (
-                  <button
+                  <div
                     key={tool.id}
-                    onClick={() => onSelectTool(tool)}
                     className="group relative flex flex-col items-start gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 text-left hover:bg-neutral-800/60 hover:border-neutral-700 transition-all duration-300"
                   >
                     <div className="flex w-full items-center justify-between">
@@ -89,7 +84,7 @@ export default function DevToolsHub({ onSelectTool }: DevToolsHubProps) {
                     <div className="absolute right-4 bottom-5 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 text-yellow-400">
                       <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>

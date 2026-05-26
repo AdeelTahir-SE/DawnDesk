@@ -184,20 +184,20 @@ export default function PromptManager() {
 
   return (
     <WelcomeScreen appKey="prompts" title="Prompt Manager" description="Organize your AI prompt library securely offline.">
-      <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-neutral-950 text-white animate-fadeIn">
-        <aside className="flex h-full w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/60">
-          <div className="border-b border-neutral-800 p-5">
+      <div className="dd-page">
+        <aside className="dd-sidebar-narrow">
+          <div className="dd-sidebar-header">
             <div className="flex items-center gap-3">
               
               <div>
-                <h1 className="font-heading text-base font-bold text-white">Prompts</h1>
-                <p className="text-xs text-white/50">{prompts.length} templates</p>
+                <h1 className="dd-sidebar-title text-base">Prompts</h1>
+                <p className="dd-subtext">{prompts.length} templates</p>
               </div>
             </div>
           </div>
 
           <nav className="custom-scrollbar flex-1 overflow-y-auto p-3">
-            <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">Categories</p>
+            <p className="dd-label-muted mb-2 px-2">Categories</p>
             <div className="space-y-1">
               {categories.map((category) => {
                 const count = category === "All" ? prompts.length : prompts.filter((prompt) => prompt.category === category).length;
@@ -205,8 +205,8 @@ export default function PromptManager() {
                   <button
                     key={category}
                     onClick={() => setActiveCategory(category)}
-                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      activeCategory === category ? "bg-yellow-400/10 text-yellow-300" : "text-white/55 hover:bg-neutral-800/60 hover:text-white"
+                    className={`dd-nav-item-sm justify-between ${
+                      activeCategory === category ? "dd-nav-item-sm-active" : ""
                     }`}
                   >
                     <span className="truncate">{category}</span>
@@ -220,18 +220,18 @@ export default function PromptManager() {
 
         <main className="custom-scrollbar flex-1 overflow-y-auto p-8">
           <div className="mx-auto max-w-7xl space-y-6">
-            <section className="rounded-2xl border border-neutral-800 bg-gradient-to-r from-neutral-900 to-neutral-950 p-5 sm:p-6">
+            <section className="dd-hero">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-yellow-400">Prompt Manager</p>
-                  <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Reusable Prompt Library</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-white/60 sm:text-base">
+                  <p className="dd-label">Prompt Manager</p>
+                  <h2 className="dd-page-title mt-2">Reusable Prompt Library</h2>
+                  <p className="dd-body-lg max-w-2xl mt-2">
                     Keep your best AI instructions organized, searchable, and ready to copy.
                   </p>
                 </div>
                 <button
                   onClick={openCreateModal}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300"
+                  className="dd-btn-primary"
                 >
                   <Plus className="h-4 w-4" />
                   New Prompt
@@ -239,14 +239,14 @@ export default function PromptManager() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+            <section className="dd-card-inset">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                 <input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search prompt titles, categories, or body text..."
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-10 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                  className="dd-input w-full !px-10"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/45 hover:text-white">
@@ -259,8 +259,8 @@ export default function PromptManager() {
             <section className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/60">
               <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Library</h3>
-                  <p className="mt-1 text-xs text-white/50">{filteredPrompts.length} matching templates</p>
+                  <h3 className="dd-section-title">Library</h3>
+                  <p className="dd-subtext mt-1">{filteredPrompts.length} matching templates</p>
                 </div>
               </div>
 
@@ -278,12 +278,12 @@ export default function PromptManager() {
                       <article key={prompt.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-neutral-800/35 lg:grid-cols-[1fr_180px_132px] lg:items-center">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="truncate text-sm font-semibold text-white">{prompt.title}</h4>
-                            <span className="rounded-full border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-300">
+                            <h4 className="dd-card-title truncate">{prompt.title}</h4>
+                            <span className="dd-pill">
                               {prompt.category}
                             </span>
                           </div>
-                          <p className="mt-2 line-clamp-2 max-w-4xl whitespace-pre-wrap text-sm leading-relaxed text-white/55">{prompt.content}</p>
+                          <p className="dd-body mt-2 line-clamp-2 max-w-4xl whitespace-pre-wrap leading-relaxed">{prompt.content}</p>
                         </div>
 
                         <div className="flex items-center gap-2 text-xs text-white/45">
@@ -330,42 +330,42 @@ export default function PromptManager() {
         </main>
 
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4 backdrop-blur-md animate-fadeIn">
-            <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl animate-scaleUp" role="dialog" aria-modal="true">
-              <div className="flex items-center justify-between border-b border-neutral-800 p-6">
+          <div className="dd-modal-overlay">
+            <div className="dd-modal" role="dialog" aria-modal="true">
+              <div className="dd-modal-header">
                 <div>
-                  <h2 className="font-heading text-xl font-bold text-white">{modalMode === "create" ? "Create Prompt" : "Edit Prompt"}</h2>
-                  <p className="mt-1 text-xs text-white/50">Use bracketed placeholders like [Topic] to keep prompts reusable.</p>
+                  <h2 className="dd-modal-title">{modalMode === "create" ? "Create Prompt" : "Edit Prompt"}</h2>
+                  <p className="dd-subtext mt-1">Use bracketed placeholders like [Topic] to keep prompts reusable.</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-lg text-white/50 hover:bg-neutral-800 hover:text-white">
+                <button onClick={() => setIsModalOpen(false)} className="dd-icon-btn h-9 w-9">
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleSavePrompt} className="custom-scrollbar flex max-h-[72vh] flex-col gap-5 overflow-y-auto p-6">
+              <form onSubmit={handleSavePrompt} className="dd-modal-body">
                 {formError && <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm font-semibold text-red-300">{formError}</div>}
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.2fr_0.8fr]">
                   <label className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Prompt Title</span>
+                    <span className="dd-form-label">Prompt Title</span>
                     <input
                       type="text"
                       value={formTitle}
                       onChange={(event) => setFormTitle(event.target.value)}
                       placeholder="e.g. Product Requirements Reviewer"
-                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                      className="dd-input"
                       required
                     />
                   </label>
                   <label className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Category</span>
+                    <span className="dd-form-label">Category</span>
                     <select
                       value={formCategory}
                       onChange={(event) => {
                         setFormCategory(event.target.value);
                         if (event.target.value !== "New Category...") setCustomCategory("");
                       }}
-                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60"
+                      className="dd-select"
                     >
                       {categories.filter((category) => category !== "All").map((category) => (
                         <option key={category} value={category}>{category}</option>
@@ -377,35 +377,35 @@ export default function PromptManager() {
 
                 {formCategory === "New Category..." && (
                   <label className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-white/50">New Category Name</span>
+                    <span className="dd-form-label">New Category Name</span>
                     <input
                       type="text"
                       value={customCategory}
                       onChange={(event) => setCustomCategory(event.target.value)}
                       placeholder="e.g. Product Strategy"
-                      className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                      className="dd-input"
                       required
                     />
                   </label>
                 )}
 
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Prompt Template</span>
+                  <span className="dd-form-label">Prompt Template</span>
                   <textarea
                     value={formContent}
                     onChange={(event) => setFormContent(event.target.value)}
                     rows={12}
                     placeholder="Analyze [Input] for [Goal]. Return concise recommendations and a prioritized action list."
-                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 font-mono text-sm leading-relaxed text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
+                    className="dd-input font-mono leading-relaxed"
                     required
                   />
                 </label>
 
-                <div className="flex justify-end gap-3 border-t border-neutral-800 pt-5">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white/60 hover:text-white">
+                <div className="dd-modal-footer">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="dd-btn-secondary">
                     Cancel
                   </button>
-                  <button type="submit" className="rounded-lg bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black hover:bg-yellow-300">
+                  <button type="submit" className="dd-btn-primary">
                     {modalMode === "create" ? "Add Template" : "Save Changes"}
                   </button>
                 </div>

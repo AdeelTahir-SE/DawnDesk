@@ -43,9 +43,9 @@ export default function ProjectManager() {
           onProjectSelect={(id) => { setActiveProjectId(id); setActiveTab("board"); }}
         />
       ) : (
-        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-neutral-950 text-white animate-fadeIn">
-          <aside className="flex h-full w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/60">
-            <div className="border-b border-neutral-800 p-5">
+        <div className="dd-page">
+          <aside className="dd-sidebar-narrow">
+            <div className="dd-sidebar-header">
               <div className="flex flex-col gap-4">
                 <button
                   onClick={() => { setActiveProjectId(null); setSearchQuery(""); }}
@@ -59,8 +59,8 @@ export default function ProjectManager() {
                     <Loader2 className="w-5 h-5 text-white/60 animate-spin" />
                   ) : (
                     <>
-                      <h1 className="font-heading text-lg font-bold text-white tracking-tight line-clamp-1">{activeProject?.name}</h1>
-                      <p className="mt-1 text-xs text-white/50 line-clamp-2">{activeProject?.key} Workspace</p>
+                      <h1 className="dd-sidebar-title line-clamp-1">{activeProject?.name}</h1>
+                      <p className="dd-subtext mt-1 line-clamp-2">{activeProject?.key} Workspace</p>
                     </>
                   )}
                 </div>
@@ -82,7 +82,7 @@ export default function ProjectManager() {
             </div>
 
             <nav className="custom-scrollbar flex-1 overflow-y-auto p-3">
-              <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">Planning</p>
+              <p className="dd-label-muted mb-2 px-2">Planning</p>
               <div className="space-y-1 mb-6">
                 {[
                   { id: "roadmap", label: "Roadmap", icon: Map },
@@ -92,10 +92,8 @@ export default function ProjectManager() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? "bg-yellow-400/10 text-yellow-300"
-                        : "text-white/55 hover:bg-neutral-800/60 hover:text-white"
+                    className={`dd-nav-item-sm ${
+                      activeTab === tab.id ? "dd-nav-item-sm-active" : ""
                     }`}
                   >
                     <tab.icon className="w-4 h-4" />
@@ -104,7 +102,7 @@ export default function ProjectManager() {
                 ))}
               </div>
 
-              <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">Project</p>
+              <p className="dd-label-muted mb-2 px-2">Project</p>
               <div className="space-y-1">
                 {[
                   { id: "reports", label: "Reports", icon: LineChart },
@@ -113,10 +111,8 @@ export default function ProjectManager() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? "bg-yellow-400/10 text-yellow-300"
-                        : "text-white/55 hover:bg-neutral-800/60 hover:text-white"
+                    className={`dd-nav-item-sm ${
+                      activeTab === tab.id ? "dd-nav-item-sm-active" : ""
                     }`}
                   >
                     <tab.icon className="w-4 h-4" />
