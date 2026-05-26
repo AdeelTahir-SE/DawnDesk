@@ -23,11 +23,11 @@ import {
   Wand2,
 } from "lucide-react";
 
-import projectWelcomeImg from "../assets/project-welcome-clean.png";
-import financeWelcomeImg from "../assets/finance-welcome-clean.png";
-import devtoolsWelcomeImg from "../assets/devtools-welcome-bg.png";
-import promptsWelcomeImg from "../assets/prompts-welcome-bg.png";
-import notesWelcomeImg from "../assets/notes-welcome-bg.png";
+import ProjectBackground from "./backgrounds/ProjectBackground";
+import FinanceBackground from "./backgrounds/FinanceBackground";
+import DevToolsBackground from "./backgrounds/DevToolsBackground";
+import PromptsBackground from "./backgrounds/PromptsBackground";
+import NotesBackground from "./backgrounds/NotesBackground";
 
 interface WelcomeScreenProps {
   appKey: string;
@@ -60,7 +60,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
   if (loading) return null;
   if (!showWelcome) return <>{children}</>;
 
-  let content = {
+  let content: any = {
     appName: "DawnDesk Module",
     appIcon: <Box className="h-5 w-5 text-yellow-400" />,
     title,
@@ -68,7 +68,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
     subtitle: description || "Open this DawnDesk workspace.",
     features: [] as Feature[],
     buttonText: "Get Started",
-    image: "",
+    BackgroundComponent: null,
   };
 
   if (appKey === "project-manager") {
@@ -84,7 +84,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         { icon: <Flag className="h-5 w-5 text-yellow-400" />, title: "Ship Work", desc: "Keep delivery visible without extra noise." },
       ],
       buttonText: "Open Project Manager",
-      image: projectWelcomeImg,
+      BackgroundComponent: ProjectBackground,
     };
   } else if (appKey === "finance") {
     content = {
@@ -100,7 +100,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         { icon: <ShieldCheck className="h-5 w-5 text-yellow-400" />, title: "Stay Private", desc: "Your finance workspace stays on this device." },
       ],
       buttonText: "Open Finance Manager",
-      image: financeWelcomeImg,
+      BackgroundComponent: FinanceBackground,
     };
   } else if (appKey === "devtools") {
     content = {
@@ -116,7 +116,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         { icon: <Cpu className="h-5 w-5 text-yellow-400" />, title: "Environment Help", desc: "Reduce friction around local setup tasks." },
       ],
       buttonText: "Open DevTools",
-      image: devtoolsWelcomeImg,
+      BackgroundComponent: DevToolsBackground,
     };
   } else if (appKey === "prompts") {
     content = {
@@ -132,7 +132,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         { icon: <Lightbulb className="h-5 w-5 text-yellow-400" />, title: "Move Faster", desc: "Copy the right prompt when work begins." },
       ],
       buttonText: "Open Prompt Manager",
-      image: promptsWelcomeImg,
+      BackgroundComponent: PromptsBackground,
     };
   } else if (appKey === "notes") {
     content = {
@@ -148,15 +148,15 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         { icon: <Database className="h-5 w-5 text-yellow-400" />, title: "Stay Private", desc: "All your notes stay on this device, always." },
       ],
       buttonText: "Open Notes",
-      image: notesWelcomeImg,
+      BackgroundComponent: NotesBackground,
     };
   }
 
   return (
     <div className="relative dd-page duration-500">
-      {content.image && (
+      {content.BackgroundComponent && (
         <>
-          <img src={content.image} alt="" className="absolute inset-0 h-full w-full object-cover object-center sm:object-right" />
+          <content.BackgroundComponent />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-neutral-950 from-30% via-neutral-950/88 via-64% to-neutral-950/10" />
         </>
       )}
@@ -177,7 +177,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
 
         {content.features.length > 0 && (
           <div className="mb-5 grid gap-3">
-            {content.features.map((feature) => (
+            {content.features.map((feature: Feature) => (
               <div key={feature.title} className="flex items-start gap-4 dd-card p-3">
                 <div className="shrink-0 dd-icon-box-sm bg-neutral-950">
                   {feature.icon}

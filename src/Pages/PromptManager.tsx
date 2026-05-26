@@ -196,7 +196,7 @@ export default function PromptManager() {
             </div>
           </div>
 
-          <nav className="custom-scrollbar flex-1 overflow-y-auto p-3">
+          <nav className="custom-scrollbar h-full flex-1 overflow-y-auto p-3">
             <p className="dd-label-muted mb-2 px-2">Categories</p>
             <div className="space-y-1">
               {categories.map((category) => {

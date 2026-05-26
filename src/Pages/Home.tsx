@@ -1,22 +1,17 @@
 import { Link } from "react-router-dom";
+import OnboardingBackground from "../components/backgrounds/OnboardingBackground";
 
 export default function Home(){
     return(
           <div className="flex flex-col items-center justify-center">
-      <video
-        className="fixed top-0 left-0 w-full h-full object-cover blur-sm"
-        src="/sunflower_field_with_lake.mp4"
-        autoPlay
-        loop
-        muted
-      />
+      <OnboardingBackground />
       <div className="relative w-full t-0 p-0 m-0 max-h-screen  z-10 flex flex-col items-center justify-center">
         <img
-          src="/realistic_logo.png"
+          src="/logo.svg"
           alt="DawnDesk Logo"
           width={100}
           height={100}
-          className=" w-[40vw]"
+          className="w-[30vw] max-w-[200px] mb-8"
         />
         <div className="px-[20px] flex flex-col items-center justify-center relative sm:bottom-10 xl:bottom-20 ">
           <h1 className="text-3xl sm:text-5xl md:text-7xl xl:text-8xl font-bold text-white mb-4">DawnDesk</h1>
