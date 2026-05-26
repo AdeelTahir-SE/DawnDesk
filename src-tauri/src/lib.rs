@@ -10,6 +10,9 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             sub_apps::project_manager::create_project,
@@ -63,6 +66,17 @@ pub fn run() {
             sub_apps::project_manager::create_automation_rule,
             sub_apps::project_manager::get_automation_rules,
             sub_apps::project_manager::delete_automation_rule,
+
+            sub_apps::video_editor::ve_probe_media,
+            sub_apps::video_editor::ve_generate_thumbnail,
+            sub_apps::video_editor::ve_generate_waveform,
+            sub_apps::video_editor::ve_import_media,
+            sub_apps::video_editor::ve_export_project,
+            sub_apps::video_editor::ve_get_export_progress,
+            sub_apps::video_editor::ve_cancel_export,
+            sub_apps::video_editor::ve_save_project,
+            sub_apps::video_editor::ve_load_project,
+            sub_apps::video_editor::ve_check_ffmpeg,
 
             sub_apps::photo_editor::photo_export_file,
 
