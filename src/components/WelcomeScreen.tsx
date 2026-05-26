@@ -161,8 +161,8 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
         </>
       )}
 
-      <div className="custom-scrollbar relative z-10 flex h-full w-full flex-col justify-center overflow-y-auto p-6 sm:p-8 lg:w-[55%] xl:p-12">
-
+      <div className="custom-scrollbar relative z-10 h-full w-full overflow-y-auto">
+        <div className="flex min-h-full w-full flex-col justify-center p-6 sm:p-8 lg:w-[55%] xl:p-12">
 
         <h1 className="text-[2.75rem] sm:text-[3.25rem] leading-[1.1] font-bold text-white mb-4 tracking-tight">
           {content.title}
@@ -199,6 +199,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
             <span className="text-base tracking-wide">{content.buttonText}</span>
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </button>
+        </div>
         </div>
       </div>
     </div>

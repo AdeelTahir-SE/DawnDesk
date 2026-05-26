@@ -66,7 +66,7 @@
 
   /** Full-height flex container for sub-app roots (Finance, Notes, etc.) */
   .dd-page {
-    @apply flex h-full w-full overflow-hidden bg-brand-base text-brand-text animate-fadeIn;
+    @apply flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-brand-base text-brand-text animate-fadeIn;
   }
 
   /** Scrollable main content area within a sub-app */
