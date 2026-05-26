@@ -2,7 +2,7 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 import {
   Plus, Film, Music, SkipBack, ChevronLeft, Play, Pause,
   ChevronRight, SkipForward, Repeat, Waves, Image,
-  KeySquare, ZoomOut, ZoomIn, Magnet,
+  KeySquare, ZoomOut, ZoomIn,
 } from 'lucide-react';
 
 export default function TimelineControls() {

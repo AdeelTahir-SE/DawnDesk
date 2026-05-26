@@ -28,7 +28,7 @@ export default function ExportPresets() {
               {preset.settings.width}×{preset.settings.height}
             </div>
             <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>
-              {(preset.settings.videoBitrate / 1000).toFixed(0)} Mbps
+              {((preset.settings.videoBitrate ?? 0) / 1000).toFixed(0)} Mbps
             </div>
           </div>
         );

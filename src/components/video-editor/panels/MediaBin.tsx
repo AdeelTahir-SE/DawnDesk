@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
-import { Search, Plus, Grid3X3, List, Film, Music, Image, FolderOpen, X } from 'lucide-react';
+import { Search, Plus, Grid3X3, List, Film, Music, Image, X } from 'lucide-react';
 import type { MediaItem } from '../../../engine/video-editor/types';
 
 const DEMO_MEDIA: MediaItem[] = [

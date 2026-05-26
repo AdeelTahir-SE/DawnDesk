@@ -1,7 +1,6 @@
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { Layers, Square, Circle, PenTool, Scissors, RotateCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import { BLEND_MODE_GROUPS } from '../../../engine/video-editor/constants';
 
 function Slider({ label, value, min, max, step, onChange }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void;

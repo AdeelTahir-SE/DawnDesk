@@ -31,7 +31,7 @@ function CollapsibleSection({ title, children, defaultOpen = false }: { title: s
 
 function AudioMeter() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>();
+  const animRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -109,7 +109,7 @@ export default function AudioPanel() {
         <AudioMeter />
       </div>
 
-      <CollapsibleSection title="Equalizer">
+      <CollapsibleSection title="Equalizer" defaultOpen={false}>
         {[
           { label: '60 Hz', freq: 60 },
           { label: '250 Hz', freq: 250 },

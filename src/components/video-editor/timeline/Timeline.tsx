@@ -4,7 +4,6 @@ import TimelineControls from './TimelineControls';
 import TimelineRuler from './TimelineRuler';
 import TimelineTrack from './TimelineTrack';
 import Playhead from './Playhead';
-import { TIMELINE_HEADER_WIDTH } from '../../../engine/video-editor/constants';
 
 export default function Timeline() {
   const { state, dispatch } = useVideoEditor();

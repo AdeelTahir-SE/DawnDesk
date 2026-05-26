@@ -1,12 +1,11 @@
-import { useState } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { TEXT_PRESETS } from '../../../engine/video-editor/constants';
-import { Type, AlignLeft, AlignCenter, AlignRight, Bold, Italic } from 'lucide-react';
+import { Type, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 
 export default function TextPanel() {
   const { state, dispatch } = useVideoEditor();
   const text = state.activeTextOverlay;
-  const [showPresets, setShowPresets] = useState(false);
+
 
   if (!text) {
     return (
@@ -81,8 +80,8 @@ export default function TextPanel() {
             { align: 'right', icon: AlignRight },
           ].map(({ align, icon: Icon }) => (
             <button key={align}
-              className={`ve-tool-btn ${text.textAlign === align ? 'active' : ''}`}
-              onClick={() => update({ textAlign: align })}>
+              className={`ve-tool-btn ${text.alignment === align ? 'active' : ''}`}
+              onClick={() => update({ alignment: align })}>
               <Icon size={14} />
             </button>
           ))}

@@ -88,9 +88,9 @@ export default function ColorGradingPanel() {
                     ctx.fill();
                   }
                   // Center dot
-                  const _w = cg[wheel];
+                  const wv = cg[wheel];
                   ctx.beginPath();
-                  ctx.arc(cx + (w.r - 0.5) * r * 2, cy + (w.g - 0.5) * r * 2, 4, 0, Math.PI * 2);
+                  ctx.arc(cx + (wv.r - 0.5) * r * 2, cy + (wv.g - 0.5) * r * 2, 4, 0, Math.PI * 2);
                   ctx.fillStyle = '#fff';
                   ctx.strokeStyle = '#000';
                   ctx.lineWidth = 1;

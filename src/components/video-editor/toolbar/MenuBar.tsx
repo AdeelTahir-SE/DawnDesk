@@ -1,13 +1,5 @@
 import { useState } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
-import {
-  FileIcon, Pencil, Eye, Clapperboard, Sparkles, Wrench, Download,
-  FolderOpen, Save, FilePlus, Import, Settings2, X,
-  Undo2, Redo2, Scissors, Copy, ClipboardPaste, CheckSquare, XSquare, Trash2,
-  PanelLeftOpen, PanelRightOpen, Waves, Image, KeySquare, ScanLine,
-  ZoomIn, ZoomOut, Maximize,
-  SplitSquareHorizontal, Gauge, RotateCcw, MapPin,
-} from 'lucide-react';
 
 interface MenuItem {
   label: string;

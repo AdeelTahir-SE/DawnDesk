@@ -10,7 +10,7 @@ interface Props {
   headerOnly?: boolean;
 }
 
-export default function TimelineTrack({ track, index, headerOnly }: Props) {
+export default function TimelineTrack({ track, index: _index, headerOnly }: Props) {
   const { state, dispatch } = useVideoEditor();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(track.name);

@@ -1,5 +1,5 @@
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
-import { EXPORT_PRESETS, RESOLUTION_PRESETS, FRAME_RATE_PRESETS } from '../../../engine/video-editor/constants';
+import { RESOLUTION_PRESETS, FRAME_RATE_PRESETS } from '../../../engine/video-editor/constants';
 import { X, Download } from 'lucide-react';
 import ExportPresets from './ExportPresets';
 
