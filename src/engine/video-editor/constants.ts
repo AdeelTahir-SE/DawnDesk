@@ -182,6 +182,12 @@ export const DEFAULT_COLOR_GRADING: ColorGradingState = {
   },
   lutPath: null,
   lutIntensity: 1,
+  vignette: {
+    amount: 0,
+    midpoint: 50,
+    roundness: 50,
+    feather: 50,
+  },
 };
 
 /* ── Default Export Settings ───────────────────────────────────────────── */

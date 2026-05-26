@@ -246,6 +246,13 @@ export interface ColorGradingState {
   // LUT
   lutPath: string | null;
   lutIntensity: number;   // 0 to 1
+  // Vignette
+  vignette: {
+    amount: number;
+    midpoint: number;
+    roundness: number;
+    feather: number;
+  };
 }
 
 export interface CurvesState {
