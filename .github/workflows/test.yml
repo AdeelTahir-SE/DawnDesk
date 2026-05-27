@@ -39,7 +39,7 @@ jobs:
             librsvg2-dev
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm i
 
       - name: Build frontend
         run: npm run build
