@@ -38,3 +38,16 @@ fn sanitize_file_name(file_name: &str) -> String {
         sanitized
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_file_name() {
+        assert_eq!(sanitize_file_name("valid_name.png"), "valid_name.png");
+        assert_eq!(sanitize_file_name("invalid<name>.png"), "invalid_name_.png");
+        assert_eq!(sanitize_file_name("path/to/file.png"), "path_to_file.png");
+        assert_eq!(sanitize_file_name("   "), "dawndesk-export.png");
+    }
+}

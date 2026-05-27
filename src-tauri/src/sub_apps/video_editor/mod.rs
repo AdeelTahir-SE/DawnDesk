@@ -144,7 +144,7 @@ pub async fn ve_generate_thumbnail(app: AppHandle, path: String, time: f64) -> R
 }
 
 #[tauri::command]
-pub async fn ve_generate_waveform(app: AppHandle, path: String) -> Result<Vec<f32>, String> {
+pub async fn ve_generate_waveform(path: String) -> Result<Vec<f32>, String> {
     // A simplified waveform extraction: get audio data as raw PCM and sample it.
     // For a real app, this might be too heavy or complex, so we'll simulate returning a simple array
     // based on file size/hash just for the UI, or actually do a basic ffmpeg volume filter output parsing.
@@ -223,4 +223,20 @@ pub async fn ve_save_project(path: String, project_data: String) -> Result<(), S
 #[tauri::command]
 pub async fn ve_load_project(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_ve_generate_waveform() {
+        // It's a simulated function but let's test if it returns exactly 100 length vector
+        let path = "dummy_path.mp4".to_string();
+        
+        let waveform_result = ve_generate_waveform(path).await;
+        assert!(waveform_result.is_ok());
+        let peaks = waveform_result.unwrap();
+        assert_eq!(peaks.len(), 100);
+    }
 }
