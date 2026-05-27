@@ -50,7 +50,26 @@ export default function PreviewCanvas() {
 
           const mediaId = clip.mediaId;
           const src = convertFileSrc(clip.path);
-          const clipTime = (time - clip.startTime) * clip.speed + clip.inPoint;
+          const sourceDuration = Math.max(0.1, clip.outPoint - clip.inPoint);
+          const localTime = (time - clip.startTime) * clip.speed;
+          const clipTime = clip.reversed
+            ? clip.outPoint - Math.min(sourceDuration, localTime)
+            : clip.inPoint + Math.min(sourceDuration, localTime);
+          const drawScale = clip.scale ?? 1;
+          const drawW = w * drawScale;
+          const drawH = h * drawScale;
+          const drawX = (clip.positionX ?? 0) * (w / 2);
+          const drawY = (clip.positionY ?? 0) * (h / 2);
+          const rotation = ((clip.rotation ?? 0) * Math.PI) / 180;
+
+          const drawWithTransform = (draw: () => void) => {
+            ctx.save();
+            ctx.globalAlpha = clip.opacity;
+            ctx.translate(w / 2 + drawX, h / 2 + drawY);
+            ctx.rotate(rotation);
+            draw();
+            ctx.restore();
+          };
 
           if (clip.mediaType === 'image') {
             let img = mediaCache.current[mediaId] as HTMLImageElement;
@@ -60,9 +79,7 @@ export default function PreviewCanvas() {
               mediaCache.current[mediaId] = img;
             }
             if (img.complete) {
-              ctx.globalAlpha = clip.opacity;
-              ctx.drawImage(img, 0, 0, w, h);
-              ctx.globalAlpha = 1.0;
+              drawWithTransform(() => ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH));
             }
           } else if (clip.mediaType === 'video') {
             let vid = mediaCache.current[mediaId] as HTMLVideoElement;
@@ -80,9 +97,7 @@ export default function PreviewCanvas() {
             }
 
             if (vid.readyState >= 2) { // HAVE_CURRENT_DATA
-              ctx.globalAlpha = clip.opacity;
-              ctx.drawImage(vid, 0, 0, w, h);
-              ctx.globalAlpha = 1.0;
+              drawWithTransform(() => ctx.drawImage(vid, -drawW / 2, -drawH / 2, drawW, drawH));
             }
           }
         }
@@ -104,7 +119,11 @@ export default function PreviewCanvas() {
   return (
     <div className="ve-canvas-area">
       <div className="ve-preview">
-        <div className="ve-preview-viewport" style={{ width: '80%', maxWidth: 720, aspectRatio: `${aspect}` }}>
+        <div className="ve-preview-viewport" style={{
+          width: state.previewZoom === 1 ? '80%' : `${Math.min(95, 80 * state.previewZoom)}%`,
+          maxWidth: state.previewZoom === 1 ? 720 : 720 * state.previewZoom,
+          aspectRatio: `${aspect}`,
+        }}>
           <div style={{
             width: '100%', height: '100%',
             background: '#000',

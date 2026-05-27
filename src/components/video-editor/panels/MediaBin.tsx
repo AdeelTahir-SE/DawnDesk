@@ -61,6 +61,7 @@ export default function MediaBin() {
           trackId: targetTrack.id, mediaId: item.id, mediaName: item.name, mediaType: item.type,
           startTime: lastEnd, duration: item.duration || 5, inPoint: item.inPoint, outPoint: item.outPoint,
           speed: 1, reversed: false, volume: 1, opacity: 1,
+          positionX: 0, positionY: 0, scale: 1, rotation: 0,
           effects: [], transition: null, color: '', locked: false, label: '', path: item.path,
         },
       },
@@ -95,7 +96,11 @@ export default function MediaBin() {
                 onDoubleClick={() => handleAddToTimeline(item)}
                 draggable onDragStart={e => handleDragStart(e, item)}>
                 <div className="ve-media-thumb">
-                  <Icon size={20} />
+                  {item.thumbnail ? (
+                    <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <Icon size={20} />
+                  )}
                   {item.duration > 0 && <span className="ve-media-duration">{formatDuration(item.duration)}</span>}
                   {item.flag !== 'none' && (
                     <span style={{ position: 'absolute', top: 3, left: 3, width: 6, height: 6, borderRadius: '50%', background: flagColors[item.flag] || 'transparent' }} />

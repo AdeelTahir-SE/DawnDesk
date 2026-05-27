@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useVideoEditor } from '../../engine/video-editor/VideoEditorContext';
-import { X } from 'lucide-react';
-import { ProjectSettings } from '../../engine/video-editor/types';
+import { Film, Monitor, Music2, Timer, X } from 'lucide-react';
+import type { ProjectSettings } from '../../engine/video-editor/types';
 
 const RESOLUTIONS = [
   { label: 'HD (1280x720)', width: 1280, height: 720 },
@@ -40,16 +40,22 @@ export default function NewProjectModal() {
 
   return (
     <div className="dd-modal-overlay">
-      <div className="dd-modal" style={{ maxWidth: 450 }}>
-        <div className="dd-modal-header">
-          <h3 style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 700 }}>Create New Project</h3>
+      <div className="dd-modal ve-new-project-modal">
+        <div className="dd-modal-header ve-new-project-header">
+          <div className="ve-new-project-title-row">
+            <div className="ve-new-project-badge"><Film size={18} /></div>
+            <div>
+              <p className="ve-new-project-kicker">DawnDesk Video Editor</p>
+              <h3>Create Project</h3>
+            </div>
+          </div>
           <button className="dd-icon-btn" onClick={() => dispatch({ type: 'TOGGLE_NEW_PROJECT_MODAL' })}>
             <X size={16} />
           </button>
         </div>
         
-        <div className="dd-modal-body" style={{ paddingTop: 10, paddingBottom: 10 }}>
-          <div style={{ marginBottom: 20 }}>
+        <div className="dd-modal-body ve-new-project-body">
+          <div className="ve-new-project-field ve-new-project-field-wide">
             <label className="dd-form-label">Project Name</label>
             <input 
               type="text" 
@@ -60,8 +66,8 @@ export default function NewProjectModal() {
             />
           </div>
 
-          <div style={{ marginBottom: 20 }}>
-            <label className="dd-form-label">Resolution</label>
+          <div className="ve-new-project-field ve-new-project-field-wide">
+            <label className="dd-form-label"><Monitor size={13} /> Resolution</label>
             <select 
               value={resolutionIdx} 
               onChange={e => setResolutionIdx(Number(e.target.value))}
@@ -73,8 +79,8 @@ export default function NewProjectModal() {
             </select>
           </div>
 
-          <div style={{ marginBottom: 20 }}>
-            <label className="dd-form-label">Frame Rate (FPS)</label>
+          <div className="ve-new-project-field">
+            <label className="dd-form-label"><Timer size={13} /> Frame Rate</label>
             <select 
               value={frameRate} 
               onChange={e => setFrameRate(Number(e.target.value))}
@@ -86,8 +92,8 @@ export default function NewProjectModal() {
             </select>
           </div>
 
-          <div style={{ marginBottom: 10 }}>
-            <label className="dd-form-label">Audio Sample Rate</label>
+          <div className="ve-new-project-field">
+            <label className="dd-form-label"><Music2 size={13} /> Audio</label>
             <select 
               value={sampleRate} 
               onChange={e => setSampleRate(Number(e.target.value))}
@@ -100,7 +106,7 @@ export default function NewProjectModal() {
           </div>
         </div>
 
-        <div className="dd-modal-footer">
+        <div className="dd-modal-footer ve-new-project-footer">
           <button 
             className="dd-btn-secondary" 
             onClick={() => dispatch({ type: 'TOGGLE_NEW_PROJECT_MODAL' })}

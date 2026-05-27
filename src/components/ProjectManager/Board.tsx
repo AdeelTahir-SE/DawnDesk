@@ -64,9 +64,11 @@ function formatDate(dateStr: string): string {
 
 function StatusDropdown({
   currentStatus,
+  statuses,
   onChangeStatus,
 }: {
   currentStatus: string;
+  statuses: string[];
   onChangeStatus: (status: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -96,7 +98,7 @@ function StatusDropdown({
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-30 w-36 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden animate-fadeIn">
-          {COLUMNS.filter((s) => s !== currentStatus).map((status) => (
+          {statuses.filter((s) => s !== currentStatus).map((status) => (
             <button
               key={status}
               onClick={(e) => {
@@ -117,10 +119,12 @@ function StatusDropdown({
 
 function SortableIssueCard({
   issue,
+  statuses,
   onOpen,
   onQuickStatus,
 }: {
   issue: LocalIssue;
+  statuses: string[];
   onOpen: () => void;
   onQuickStatus: (s: string) => void;
 }) {
@@ -153,6 +157,7 @@ function SortableIssueCard({
         <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <StatusDropdown
             currentStatus={issue.status}
+            statuses={statuses}
             onChangeStatus={onQuickStatus}
           />
         </div>
@@ -202,6 +207,7 @@ function SortableIssueCard({
 function Column({
   status,
   issues,
+  statuses,
   wipLimit,
   onOpenModal,
   onQuickStatus,
@@ -209,6 +215,7 @@ function Column({
 }: {
   status: string;
   issues: LocalIssue[];
+  statuses: string[];
   wipLimit: number | null;
   onOpenModal: (i: LocalIssue) => void;
   onQuickStatus: (i: LocalIssue, s: string) => void;
@@ -244,6 +251,7 @@ function Column({
             <SortableIssueCard
               key={issue.id}
               issue={issue}
+              statuses={statuses}
               onOpen={() => onOpenModal(issue)}
               onQuickStatus={(s) => onQuickStatus(issue, s)}
             />
@@ -270,11 +278,17 @@ export default function Board({ projectId }: { projectId: number | null }) {
 
   const [selectedIssue, setSelectedIssue] = useState<LocalIssue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [createStatus, setCreateStatus] = useState<string>("To Do");
 
   const activeSprint = useMemo(
     () => sprints.find((s) => s.status === "active") ?? null,
     [sprints]
   );
+
+  const boardStatuses = useMemo(() => {
+    const names = workflowStatuses.map((status) => status.name);
+    return names.length > 0 ? names : [...COLUMNS];
+  }, [workflowStatuses]);
 
   const sprintIssues = useMemo(() => {
     if (!activeSprint) return [];
@@ -282,9 +296,12 @@ export default function Board({ projectId }: { projectId: number | null }) {
   }, [issues, activeSprint]);
 
   const filteredIssues = useMemo(() => {
-    if (!searchQuery.trim()) return sprintIssues;
+    const ordered = [...sprintIssues].sort(
+      (a, b) => Number(b.pinned) - Number(a.pinned) || (a.rank || 0) - (b.rank || 0)
+    );
+    if (!searchQuery.trim()) return ordered;
     const q = searchQuery.toLowerCase();
-    return sprintIssues.filter(
+    return ordered.filter(
       (i) =>
         i.title.toLowerCase().includes(q) || i.key.toLowerCase().includes(q)
     );
@@ -324,12 +341,15 @@ export default function Board({ projectId }: { projectId: number | null }) {
       for (const rule of statusRules) {
         try {
           const conditions = JSON.parse(rule.conditions_json);
-          const actions = JSON.parse(rule.actions_json);
+          const parsedActions = JSON.parse(rule.actions_json);
+          const actions = Array.isArray(parsedActions) ? parsedActions : [parsedActions];
           
           if (conditions.status === newStatus) {
-            if (actions.type === "Set Priority" && actions.value) {
-              currentIssue.priority = actions.value;
-              updated = true;
+            for (const action of actions) {
+              if (action.type === "Set Priority" && action.value) {
+                currentIssue.priority = action.value;
+                updated = true;
+              }
             }
           }
         } catch (e) {
@@ -381,8 +401,9 @@ export default function Board({ projectId }: { projectId: number | null }) {
     }
   };
 
-  const openCreateModal = () => {
+  const openCreateModal = (status = "To Do") => {
     setSelectedIssue(null);
+    setCreateStatus(status);
     setIsModalOpen(true);
   };
 
@@ -411,7 +432,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
     if (!activeIssue) return;
 
     let newStatus = activeIssue.status;
-    if (COLUMNS.includes(overId as any)) {
+    if (boardStatuses.includes(String(overId))) {
       newStatus = overId as string;
     } else {
       const overIssue = issues.find((i) => i.id === overId);
@@ -522,7 +543,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
         onDragEnd={handleDragEnd}
       >
         <div className="flex flex-1 gap-4 overflow-x-auto pb-4 custom-scrollbar">
-          {COLUMNS.map((status) => {
+          {boardStatuses.map((status) => {
             const columnIssues = filteredIssues.filter(
               (i) => i.status === status
             );
@@ -534,10 +555,11 @@ export default function Board({ projectId }: { projectId: number | null }) {
                 key={status}
                 status={status}
                 issues={columnIssues}
+                statuses={boardStatuses}
                 wipLimit={wipLimit}
                 onOpenModal={openIssueModal}
                 onQuickStatus={handleQuickStatusChange}
-                onOpenCreateModal={openCreateModal}
+                onOpenCreateModal={() => openCreateModal(status)}
               />
             );
           })}
@@ -548,6 +570,8 @@ export default function Board({ projectId }: { projectId: number | null }) {
         <IssueDetailModal
           issue={selectedIssue}
           projectId={projectId}
+          initialSprintId={selectedIssue ? selectedIssue.sprint_id : activeSprint.id}
+          initialStatus={selectedIssue ? selectedIssue.status : createStatus}
           onClose={() => {
             setIsModalOpen(false);
           }}

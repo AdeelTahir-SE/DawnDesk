@@ -186,21 +186,61 @@ export default function Reports({ projectId }: { projectId: number | null }) {
     }));
   }, [issues]);
 
-  // --- Chart 5: Burndown Chart (Dummy Data for active sprint) ---
+  // --- Chart 5: Burndown Chart (current sprint, live issue data) ---
   const burndownData = useMemo(() => {
     const activeSprint = sprints.find((s) => s.status === "active") || sprints[0];
     if (!activeSprint || issues.length === 0) return [];
-    
-    // Using dummy data as requested to represent a standard burndown curve
-    return [
-      { day: "Day 1", remaining: 50, ideal: 50 },
-      { day: "Day 2", remaining: 45, ideal: 40 },
-      { day: "Day 3", remaining: 40, ideal: 30 },
-      { day: "Day 4", remaining: 20, ideal: 20 },
-      { day: "Day 5", remaining: 15, ideal: 10 },
-      { day: "Day 6", remaining: 5, ideal: 0 },
-    ];
+
+    const sprintIssues = issues.filter((issue) => issue.sprint_id === activeSprint.id);
+    const totalPoints = sprintIssues.reduce((sum, issue) => sum + (issue.story_points ?? 1), 0);
+    if (totalPoints === 0) return [];
+
+    const start = activeSprint.start_date ? new Date(activeSprint.start_date) : new Date();
+    const end = activeSprint.end_date ? new Date(activeSprint.end_date) : new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)));
+
+    return Array.from({ length: totalDays + 1 }, (_, index) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + index);
+      const completed = sprintIssues
+        .filter((issue) => issue.status === "Done" && new Date(issue.updated_at) <= day)
+        .reduce((sum, issue) => sum + (issue.story_points ?? 1), 0);
+      return {
+        day: `Day ${index + 1}`,
+        remaining: Math.max(0, totalPoints - completed),
+        ideal: Math.max(0, Math.round(totalPoints - (totalPoints / totalDays) * index)),
+      };
+    });
   }, [sprints, issues]);
+
+  const summaryData = useMemo(() => {
+    const completed = issues.filter((issue) => issue.status === "Done");
+    const avgLeadDays =
+      completed.length === 0
+        ? 0
+        : Math.round(
+            (completed.reduce(
+              (sum, issue) => sum + (new Date(issue.updated_at).getTime() - new Date(issue.created_at).getTime()),
+              0
+            ) /
+              completed.length /
+              (24 * 60 * 60 * 1000)) *
+              10
+          ) / 10;
+    const openEstimate = issues.reduce((sum, issue) => {
+      if (issue.status === "Done") return sum;
+      return sum + Math.max(0, (issue.original_estimate_minutes ?? 0) - issue.time_spent_minutes);
+    }, 0);
+    return {
+      avgLeadDays,
+      openEstimateHours: Math.round((openEstimate / 60) * 10) / 10,
+      doneCount: completed.length,
+      retrospective:
+        completed.length === 0
+          ? "No completed issues yet."
+          : `${completed.length} issue${completed.length === 1 ? "" : "s"} completed with average lead time of ${avgLeadDays} day${avgLeadDays === 1 ? "" : "s"}.`,
+    };
+  }, [issues]);
 
   // --- Chart 6: Velocity Chart ---
   const velocityData = useMemo(() => {
@@ -308,6 +348,21 @@ export default function Reports({ projectId }: { projectId: number | null }) {
           <p className="text-xs text-white/50">
             Total Issues: <span className="font-bold text-white">{issues.length}</span>
           </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 mb-5 md:grid-cols-3">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Avg Lead / Cycle Time</p>
+          <p className="mt-2 text-2xl font-bold text-white">{summaryData.avgLeadDays}d</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Remaining Estimate</p>
+          <p className="mt-2 text-2xl font-bold text-white">{summaryData.openEstimateHours}h</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Retrospective Summary</p>
+          <p className="mt-2 text-sm font-semibold text-white/70">{summaryData.retrospective}</p>
         </div>
       </div>
 

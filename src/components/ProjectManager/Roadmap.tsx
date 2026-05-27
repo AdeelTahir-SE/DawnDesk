@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, Map, Milestone } from "lucide-react";
+import { Loader2, Map, Milestone, Plus, Trash2 } from "lucide-react";
 import type { LocalIssue, LocalVersion } from "./types";
 
 const STATUS_BAR_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -50,6 +50,8 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [versions, setVersions] = useState<LocalVersion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [versionName, setVersionName] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
 
   useEffect(() => {
     if (projectId === null) return;
@@ -69,6 +71,24 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
     };
     fetchData();
   }, [projectId]);
+
+  const refreshVersions = async () => {
+    if (projectId === null) return;
+    const versionsData = await invoke<LocalVersion[]>("get_versions", { projectId });
+    setVersions(versionsData);
+  };
+
+  const createVersion = async () => {
+    if (projectId === null || !versionName.trim()) return;
+    await invoke("create_version", {
+      projectId,
+      name: versionName.trim(),
+      releaseDate: releaseDate || null,
+    });
+    setVersionName("");
+    setReleaseDate("");
+    await refreshVersions();
+  };
 
   const epics: EpicBar[] = useMemo(() => {
     return issues
@@ -152,6 +172,26 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
           <h2 className="text-2xl font-bold text-white flex items-center gap-3">Roadmap</h2>
           <p className="text-sm text-white/50 mt-1">Timeline view of your Epics and major milestones.</p>
         </div>
+        <div className="flex items-center gap-2">
+          <input
+            value={versionName}
+            onChange={(e) => setVersionName(e.target.value)}
+            placeholder="Version name"
+            className="w-36 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-yellow-400/60"
+          />
+          <input
+            type="date"
+            value={releaseDate}
+            onChange={(e) => setReleaseDate(e.target.value)}
+            className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-yellow-400/60"
+          />
+          <button
+            onClick={createVersion}
+            className="rounded-lg bg-yellow-400 px-3 py-2 text-xs font-bold text-black hover:bg-yellow-300"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
         {epics.length > 0 && (
           <div className="flex items-center gap-4">
             {Object.entries(STATUS_BAR_COLORS).map(([status, style]) => (
@@ -176,6 +216,26 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
         </div>
       ) : (
         <div className="flex-1 rounded-2xl border border-neutral-800 bg-neutral-900/40 overflow-hidden flex flex-col min-h-0">
+          {versions.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-b border-neutral-800 px-4 py-3">
+              {versions.map((version) => (
+                <div key={version.id} className="flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-300">
+                  <Milestone className="h-3.5 w-3.5" />
+                  <span>{version.name}</span>
+                  <span className="text-blue-200/50">{version.release_date ?? "No date"}</span>
+                  <button
+                    onClick={async () => {
+                      await invoke("delete_version", { id: version.id });
+                      await refreshVersions();
+                    }}
+                    className="text-blue-200/45 hover:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Scrollable container */}
           <div className="overflow-auto custom-scrollbar flex-1">
             <div className="min-w-[800px]">

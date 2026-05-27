@@ -11,7 +11,6 @@
 [![GitHub Stars](https://img.shields.io/github/stars/yourusername/DawnDesk?style=flat-square&color=DAA520)](https://github.com)
 [![GitHub Watchers](https://img.shields.io/github/watchers/yourusername/DawnDesk?style=flat-square)](https://github.com)
 [![GitHub Forks](https://img.shields.io/github/forks/yourusername/DawnDesk?style=flat-square)](https://github.com)
-<!-- [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE) -->
 [![Status](https://img.shields.io/badge/Status-Early%20Access-orange?style=flat-square)](#)
 
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](http://discord.gg)
@@ -23,78 +22,44 @@
 
 ## ⚡ Overview
 
-**DawnDesk** is an all-in-one productivity platform built for professionals and teams tired of context-switching. Stop juggling between a dozen apps — bring everything together in one unified workspace.
+**DawnDesk** is an all-in-one productivity platform built for professionals and teams tired of context-switching. Stop juggling between a dozen apps — bring everything together in one unified workspace. 
 
-Whether you're managing complex projects, collaborating with teammates across time zones, tracking your time, or analyzing your productivity patterns, DawnDesk puts it all at your fingertips. Built around the philosophy of **"one tab, full stack,"** we've engineered a seamless experience where task management, calendar scheduling, messaging, notes, files, and analytics work together intelligently.
+Our philosophy is **"one tab, full stack."** We've engineered a seamless experience where task management, calendar scheduling, messaging, notes, files, and high-performance sub-apps work together intelligently.
 
 > **Stop switching apps. Start shipping faster.**
 
 ---
 
-##  Core Features
+## 🚀 Core Features
 
-### Already Available
+### 🛠️ Built-in Tools
+- **Task & Project Management**: Organize work with lists, boards, and timelines. Track progress in real-time.
+- **Notes & Docs**: Rich text editor with formatting, code blocks, and embedded media.
+- **Calendar & Scheduling**: Unified calendar view. Never miss a deadline or meeting again.
+- **Analytics & Productivity Insights**: Visualize your output. See where your time goes and optimize your workflow.
 
-✅ **Task & Project Management**  
-Organize work with lists, boards, and timelines. Track progress in real-time.
+### 🧩 Dynamic Sub-App Architecture (New!)
+To ensure a lightning-fast experience and keep the initial application bundle size minimal, DawnDesk utilizes an **On-Demand Dynamic Sub-App Loading System**.
+- **Download What You Need**: Sub-apps are not bundled by default. Users can download and install individual sub-apps only when required.
+- **Persistent Storage**: Once downloaded, sub-apps are stored locally for immediate offline access in the future.
 
-📅 **Calendar & Scheduling**  
-Unified calendar view. Never miss a deadline or meeting again.
-
-💬 **Team Messaging** *(Coming Soon)*  
-Chat, threads, and channels built right in. Real-time team communication.
-
-📝 **Notes & Docs**  
-Rich text editor with formatting, code blocks, and embedded media.
-
-📁 **File Storage** *(Coming Soon)*  
-Centralized file management. Upload, organize, and share files seamlessly.
-
-⏱️ **Time Tracker** *(Coming Soon)*  
-Auto-track time on tasks. Generate billable reports and catch time-wasters.
-
-🎯 **Goal Tracking** *(Coming Soon)*  
-Set OKRs and track progress toward your most important goals.
-
-📊 **Analytics & Productivity Insights**  
-Visualize your output. See where your time goes and optimize your workflow.
+### 🎬 Featured Sub-Apps
+- **Video Editor** *(Active Development)*: A high-performance timeline editor featuring media import, trim, split, transitions, and local rendering utilizing FFmpeg. 
+- **Photo Editor** *(Planned)*: Layer-based image editing with crop, resize, filters, and export presets.
+- **AI Assistant** *(Planned)*: Task suggestions, content drafting, and productivity insights right inside your workspace.
+- **Workflow Automation** *(Planned)*: Visual workflow builder for recurring automations and rule-based actions.
 
 ---
 
-## 🚀 Upcoming Features
+## 🛠️ Tech Stack
 
-### Rust Sub-Apps Roadmap
+- **Frontend**: React 19, TypeScript, Tailwind CSS, Lucide React, Framer Motion
+- **Backend / Desktop**: Tauri 2.0, Rust
+- **Build Tool**: Vite
+- **Media Processing**: FFmpeg & FFprobe (dynamically managed)
+- **Database**: Supabase / Local Storage
+- **Drag & Drop**: @dnd-kit
 
-> Sub-apps are currently in planning/early development.  
-> **Important:** Rust sub-app modules are not working yet in production.
-
-| Sub-App | Link | Status | Planned Version | Description |
-|---------|------|--------|-----------------|-------------|
-| Photo Editor | [dawndesk-photo](./src-tauri/src/sub-apps/photo-editor) | Planned | v0.1.0-alpha | Layer-based image editing: crop, resize, filters, export presets. |
-| Video Editor | [dawndesk-video](./src-tauri/src/sub-apps/video-editor) | Planned | v0.1.0-alpha | Timeline editing with trim, split, transitions, and local rendering. |
-| AI Assistant | [dawndesk-ai](./src-tauri/src/sub-apps/ai-assistant) | Planned | v0.1.0-alpha | Task suggestions, content drafting, and productivity insights inside DawnDesk. |
-| Workflow Automation | [dawndesk-automations](./src-tauri/src/sub-apps/workflow-automation) | Planned | v0.1.0-alpha | Visual workflow builder for recurring automations and rule-based actions. |
-
-### Release Notes for Sub-Apps
-
-- `Core host app`: active development.
-- `Rust sub-app runtime`: unstable and disabled by default.
-- `Versioning policy`: each sub-app follows independent semver, starting at `v0.1.0-alpha`.
-- `Compatibility target`: sub-app alpha releases will target the same minor version of DawnDesk host.
-
-
----
-
-## 🌟 Why DawnDesk?
-
-| Feature | DawnDesk | Traditional Apps |
-|---------|----------|------------------|
-| **All-in-One** | ✅ Every tool you need | ❌ Scattered across platforms |
-| **Context Preservation** | ✅ Everything in one place | ❌ Constant context-switching |
-| **Real-Time Collab** | ✅ Built-in team tools | ❌ Limited integration |
-| **Setup Time** | ✅ Minutes | ❌ Hours of configuration |
-| **Learning Curve** | ✅ Intuitive | ❌ Complex per-app training |
-<!-- 
 ---
 
 ## 🚀 Quick Start
@@ -104,7 +69,6 @@ Visualize your output. See where your time goes and optimize your workflow.
 - **Node.js** 18.0 or higher
 - **npm** or **yarn**
 - **Rust** (for Tauri desktop builds)
-- **Python 3.12** (optional, for icon generation script)
 
 ### Installation
 
@@ -119,22 +83,29 @@ Visualize your output. See where your time goes and optimize your workflow.
    npm install
    ```
 
-3. **Start the development server**
+3. **Start the development server (Web)**
    ```bash
    npm run dev
    ```
 
-4. **Build for production**
-   ```bash
-   npm run build
-   ```
-
 ### Build Desktop App (Tauri)
 
+To run the full desktop experience with native permissions and sub-app support:
+
 ```bash
-npm run tauri dev      # Development mode
-npm run tauri build    # Production build
+# Development mode
+npm run tauri dev
+
+# Production build
+npm run tauri build
 ```
+
+---
+
+## 🔒 Permissions & Security
+DawnDesk is built with Tauri, leveraging a secure-by-default architecture. The app requests explicit permissions for:
+- `dialog:open`: To allow media and file selection.
+- `fs:write` / `fs:read`: To save project files, export videos, and manage dynamic sub-apps.
 
 ---
 
@@ -155,93 +126,6 @@ npm run tauri build    # Production build
 
 ---
 
-## 🎨 Design Philosophy
-
-**Simplicity First**  
-Clean, minimal interface that gets out of your way.
-
-**One Tab, Full Stack**  
-Everything you need without opening another window.
-
-**Speed Matters**  
-Lightning-fast performance, even with thousands of tasks.
-
-**Dark Mode Ready**  
-Beautiful on any display, any time of day.
-
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 19, TypeScript, Tailwind CSS
-- **Backend**: Tauri, Rust
-- **Animations**: Motion/Framer Motion
-- **Build Tool**: Vite
-- **Database**: SQLite (local), PostgreSQL ready for cloud
-- **Icons**: Generated with Python/Pillow
-
----
-
-## 📝 Project Structure
-
-```
-DawnDesk/
-├── src/                    # React frontend
-│   ├── App.tsx
-│   ├── components/
-│   ├── pages/
-│   └── assets/
-├── src-tauri/              # Tauri backend
-│   ├── src/
-│   ├── build.rs
-│   └── Cargo.toml
-├── public/                 # Static assets & images
-├── tailwind.config.js      # Tailwind configuration
-├── vite.config.ts          # Vite configuration
-└── package.json
-```
-
----
-
-## 🛠️ Development Scripts
-
-```bash
-# Frontend development
-npm run dev
-
-# Tauri app development
-npm run tauri dev
-
-# Build for web
-npm run build
-
-# Build desktop app
-npm run tauri build
-
-# Type checking
-npm run tsc
-
-# Generate icons from source image
-python generate_icons.py
-```
-
----
-
-## 🖼️ Icon Generation
-
-Use the included Python script to generate all icon sizes from a source image:
-
-```bash
-python generate_icons.py
-```
-
-This generates icons for:
-- Web (32x32, 128x128, 512x512)
-- Tauri (32x32, 128x128@2x)
-- Windows (Square sizes from 30x30 to 310x310)
-
----
-
 ## 🤝 Contributing
 
 We're just getting started and love community contributions!
@@ -252,48 +136,11 @@ We're just getting started and love community contributions!
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-### Areas We Need Help With
-
-- 🎨 UI/UX improvements
-- 🐛 Bug fixes
-- 📚 Documentation
-- 🌍 Translations
-- 🧪 Testing
-- 🚀 Performance optimization
-
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🎯 Roadmap
-
-### Phase 1 (Current - Q2 2026)
-- ✅ Core task management
-- ✅ Basic calendar
-- ✅ Notes
-- 🔄 UI polish & responsive design
-
-### Phase 2 (Q3 2026)
-- 🚀 Team messaging
-- 🚀 File storage
-- 🚀 Time tracking
-- 🚀 Analytics dashboard
-
-### Phase 3 (Q4 2026)
-- 🚀 Local Photoshop editor
-- 🚀 Video editor
-- 🚀 Goal tracking with OKRs
-- 🚀 Workflow automation
-
-### Phase 4 (2027)
-- 🚀 AI assistant
-- 🚀 Mobile apps (iOS, Android)
-- 🚀 Cloud sync & offline mode
-- 🚀 Zapier & IFTTT integrations
 
 ---
 
@@ -308,16 +155,6 @@ Found a bug? Have a feature request?
 
 ---
 
-## 👥 Team
-
-**DawnDesk** is built with ❤️ by a team passionate about productivity and simplicity.
-
----
-
 <div align="center">
-
-**[⬆ Back to Top](#)**
-
 Made with ❤️ for productivity enthusiasts
-
-</div> -->
+</div>

@@ -62,6 +62,37 @@ export default function PropertiesPanel() {
         </div>
       )}
 
+      {/* Transform */}
+      {clip.mediaType !== 'audio' && (
+        <div className="ve-panel-section">
+          <div className="ve-panel-section-header">
+            <span className="ve-panel-section-title">Transform</span>
+          </div>
+          <div className="ve-slider-row">
+            <span className="ve-slider-label">Position X</span>
+            <input type="number" className="ve-number-input" value={clip.positionX ?? 0} step={0.01} min={-1} max={1}
+              onChange={e => dispatch({ type: 'SET_CLIP_TRANSFORM', payload: { clipId, positionX: Number(e.target.value) } })} />
+          </div>
+          <div className="ve-slider-row">
+            <span className="ve-slider-label">Position Y</span>
+            <input type="number" className="ve-number-input" value={clip.positionY ?? 0} step={0.01} min={-1} max={1}
+              onChange={e => dispatch({ type: 'SET_CLIP_TRANSFORM', payload: { clipId, positionY: Number(e.target.value) } })} />
+          </div>
+          <div className="ve-slider-row">
+            <span className="ve-slider-label">Scale</span>
+            <input type="range" className="ve-slider" min={0.1} max={4} step={0.01} value={clip.scale ?? 1}
+              onChange={e => dispatch({ type: 'SET_CLIP_TRANSFORM', payload: { clipId, scale: Number(e.target.value) } })} />
+            <span className="ve-slider-value">{Math.round((clip.scale ?? 1) * 100)}%</span>
+          </div>
+          <div className="ve-slider-row">
+            <span className="ve-slider-label">Rotation</span>
+            <input type="range" className="ve-slider" min={-180} max={180} step={1} value={clip.rotation ?? 0}
+              onChange={e => dispatch({ type: 'SET_CLIP_TRANSFORM', payload: { clipId, rotation: Number(e.target.value) } })} />
+            <span className="ve-slider-value">{Math.round(clip.rotation ?? 0)} deg</span>
+          </div>
+        </div>
+      )}
+
       {/* Volume */}
       <div className="ve-panel-section">
         <div className="ve-panel-section-header">

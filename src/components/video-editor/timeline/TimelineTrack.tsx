@@ -68,7 +68,8 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
       const mediaItem = JSON.parse(data);
 
       if ((track.type === 'video' && mediaItem.type === 'audio') ||
-          (track.type === 'audio' && mediaItem.type !== 'audio')) {
+          (track.type === 'audio' && mediaItem.type !== 'audio') ||
+          track.locked) {
         return;
       }
 
@@ -94,6 +95,10 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
             reversed: false,
             volume: 1,
             opacity: 1,
+            positionX: 0,
+            positionY: 0,
+            scale: 1,
+            rotation: 0,
             effects: [],
             transition: null,
             color: '',

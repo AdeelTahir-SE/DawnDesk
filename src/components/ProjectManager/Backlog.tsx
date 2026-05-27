@@ -215,7 +215,7 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
         if (filterStatus !== "All" && i.status !== filterStatus) return false;
         return true;
       })
-      .sort((a, b) => (a.rank || 0) - (b.rank || 0));
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (a.rank || 0) - (b.rank || 0));
   }, [issues, filterType, filterPriority, filterStatus]);
 
   // Group: sprints first (sorted: active, planned, closed), then backlog
@@ -338,14 +338,6 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     setFilterStatus("All");
   };
 
-  if (loading && issues.length === 0) {
-    return (
-      <div className="flex justify-center mt-20">
-        <Loader2 className="w-8 h-8 animate-spin text-white/40" />
-      </div>
-    );
-  }
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -354,6 +346,14 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     }),
     useSensor(KeyboardSensor)
   );
+
+  if (loading && issues.length === 0) {
+    return (
+      <div className="flex justify-center mt-20">
+        <Loader2 className="w-8 h-8 animate-spin text-white/40" />
+      </div>
+    );
+  }
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;

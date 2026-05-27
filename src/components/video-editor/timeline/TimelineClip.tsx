@@ -97,13 +97,13 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
   }, [dispatch, clip, zoom]);
 
   const waveformBars = useMemo(() => {
-    if (clip.mediaType !== 'audio') return null;
+    if (clip.mediaType !== 'audio' || !state.showWaveforms) return null;
     const count = Math.max(Math.floor(width / 3), 4);
     return Array.from({ length: count }, (_, i) => {
       const h = 20 + Math.sin(i * 0.7 + clip.startTime * 3) * 30 + Math.random() * 20;
       return <div key={i} className="ve-clip-waveform-bar" style={{ height: `${Math.min(90, h)}%` }} />;
     });
-  }, [clip.mediaType, width, clip.startTime]);
+  }, [clip.mediaType, width, clip.startTime, state.showWaveforms]);
 
   return (
     <div ref={clipRef}

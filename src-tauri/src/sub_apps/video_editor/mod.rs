@@ -1,8 +1,7 @@
-use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf};
+use serde::Serialize;
+use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager, Emitter};
 use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
 
 #[derive(Serialize)]
 pub struct MediaProbeResult {
@@ -10,6 +9,8 @@ pub struct MediaProbeResult {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub fps: Option<f64>,
+    pub codec: Option<String>,
+    pub file_size: Option<u64>,
     pub has_audio: bool,
     pub has_video: bool,
 }
@@ -64,12 +65,16 @@ pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeRe
     let mut fps = None;
     let mut has_audio = false;
     let mut has_video = false;
+    let mut codec = None;
 
     if let Some(streams) = json.get("streams").and_then(|s| s.as_array()) {
         for stream in streams {
             if let Some(codec_type) = stream.get("codec_type").and_then(|c| c.as_str()) {
                 if codec_type == "video" {
                     has_video = true;
+                    if codec.is_none() {
+                        codec = stream.get("codec_name").and_then(|c| c.as_str()).map(|c| c.to_string());
+                    }
                     if width.is_none() {
                         width = stream.get("width").and_then(|w| w.as_u64()).map(|w| w as u32);
                         height = stream.get("height").and_then(|h| h.as_u64()).map(|h| h as u32);
@@ -88,16 +93,23 @@ pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeRe
                     }
                 } else if codec_type == "audio" {
                     has_audio = true;
+                    if codec.is_none() {
+                        codec = stream.get("codec_name").and_then(|c| c.as_str()).map(|c| c.to_string());
+                    }
                 }
             }
         }
     }
+
+    let file_size = fs::metadata(&path).ok().map(|m| m.len());
 
     Ok(MediaProbeResult {
         duration,
         width,
         height,
         fps,
+        codec,
+        file_size,
         has_audio,
         has_video,
     })

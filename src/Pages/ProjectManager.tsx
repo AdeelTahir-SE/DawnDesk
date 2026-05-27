@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import ProjectListScreen from "../components/ProjectManager/ProjectListScreen";
+import ProjectDashboard from "../components/ProjectManager/ProjectDashboard";
 import Board from "../components/ProjectManager/Board";
 import Backlog from "../components/ProjectManager/Backlog";
 import Roadmap from "../components/ProjectManager/Roadmap";
 import Reports from "../components/ProjectManager/Reports";
 import ProjectSettings from "../components/ProjectManager/ProjectSettings";
+import SearchAndFilters from "../components/ProjectManager/SearchAndFilters";
 import { LayoutDashboard, Settings, ArrowLeft, Loader2, ListTodo, Map, LineChart, Search } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
 import { LocalProject } from "../components/ProjectManager/types";
@@ -13,7 +15,7 @@ import { LocalProject } from "../components/ProjectManager/types";
 export default function ProjectManager() {
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [activeProject, setActiveProject] = useState<LocalProject | null>(null);
-  const [activeTab, setActiveTab] = useState<"backlog" | "board" | "roadmap" | "reports" | "settings">("board");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "backlog" | "board" | "roadmap" | "search" | "reports" | "settings">("dashboard");
   const [loadingProject, setLoadingProject] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -40,7 +42,7 @@ export default function ProjectManager() {
     <WelcomeScreen appKey="project-manager" title="Project Manager" description="Manage your projects and tasks locally.">
       {activeProjectId === null ? (
         <ProjectListScreen
-          onProjectSelect={(id) => { setActiveProjectId(id); setActiveTab("board"); }}
+          onProjectSelect={(id) => { setActiveProjectId(id); setActiveTab("dashboard"); }}
         />
       ) : (
         <div className="dd-page">
@@ -85,9 +87,11 @@ export default function ProjectManager() {
               <p className="dd-label-muted mb-2 px-2">Planning</p>
               <div className="space-y-1 mb-6">
                 {[
+                  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
                   { id: "roadmap", label: "Roadmap", icon: Map },
                   { id: "backlog", label: "Backlog", icon: ListTodo },
                   { id: "board", label: "Active Sprint", icon: LayoutDashboard },
+                  { id: "search", label: "Search & Filters", icon: Search },
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -125,9 +129,11 @@ export default function ProjectManager() {
 
           <main className="custom-scrollbar flex-1 overflow-y-auto p-8 bg-neutral-950">
             <div className="mx-auto max-w-[1400px] h-full">
+              {activeTab === "dashboard" && <ProjectDashboard projectId={activeProjectId} />}
               {activeTab === "backlog" && <Backlog projectId={activeProjectId} />}
               {activeTab === "board" && <Board projectId={activeProjectId} />}
               {activeTab === "roadmap" && <Roadmap projectId={activeProjectId} />}
+              {activeTab === "search" && <SearchAndFilters projectId={activeProjectId} />}
               {activeTab === "reports" && <Reports projectId={activeProjectId} />}
               {activeTab === "settings" && <ProjectSettings project={activeProject} onProjectDeleted={() => setActiveProjectId(null)} onProjectUpdated={(proj) => setActiveProject(proj)} />}
             </div>

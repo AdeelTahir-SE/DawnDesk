@@ -60,8 +60,8 @@ export function useFFmpeg() {
             width: probe.width || 0,
             height: probe.height || 0,
             fps: probe.fps || 0,
-            codec: '',
-            fileSize: 0,
+            codec: probe.codec || '',
+            fileSize: probe.file_size || 0,
             thumbnail,
             waveformData: [],
             dateAdded: Date.now(),
@@ -89,7 +89,22 @@ export function useFFmpeg() {
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   const exportProject = async (settings: ExportSettings) => {
+    const jobId = `render-${Date.now()}`;
     try {
+      dispatch({
+        type: 'ADD_RENDER_JOB',
+        payload: {
+          id: jobId,
+          name: settings.name || 'Export',
+          settings,
+          status: 'rendering',
+          progress: 0,
+          startTime: Date.now(),
+          endTime: null,
+          error: null,
+          outputPath: settings.outputPath,
+        },
+      });
       dispatch({ type: 'EXPORT_START' });
 
       if (unlistenRef.current) {
@@ -98,10 +113,15 @@ export function useFFmpeg() {
 
       const unlistenProgress = await listen<number>('export-progress', (event) => {
         dispatch({ type: 'EXPORT_PROGRESS', payload: event.payload });
+        dispatch({ type: 'UPDATE_RENDER_JOB', payload: { jobId, updates: { progress: event.payload / 100 } } });
       });
       
       const unlistenComplete = await listen<string>('export-complete', (event) => {
         dispatch({ type: 'EXPORT_COMPLETE' });
+        dispatch({
+          type: 'UPDATE_RENDER_JOB',
+          payload: { jobId, updates: { status: 'complete', progress: 1, endTime: Date.now(), outputPath: event.payload } },
+        });
         // Clean up listeners
         unlistenProgress();
         unlistenComplete();
@@ -118,6 +138,10 @@ export function useFFmpeg() {
     } catch (e) {
       console.error('Export failed', e);
       dispatch({ type: 'EXPORT_ERROR', payload: String(e) });
+      dispatch({
+        type: 'UPDATE_RENDER_JOB',
+        payload: { jobId, updates: { status: 'error', error: String(e), endTime: Date.now() } },
+      });
       if (unlistenRef.current) {
         unlistenRef.current();
         unlistenRef.current = null;

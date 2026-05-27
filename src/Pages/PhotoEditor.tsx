@@ -447,7 +447,7 @@ function PhotoEditorInner() {
   return (
     <div
       ref={containerRef}
-      className="pe-layout"
+      className="pe-layout animate-fadeIn duration-500"
       style={{
         height: 'calc(100vh - 64px)',
         '--pe-toolbar-width': `${panelWidths.left}px`,

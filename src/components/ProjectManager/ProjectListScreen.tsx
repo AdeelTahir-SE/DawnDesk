@@ -16,6 +16,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjName, setNewProjName] = useState("");
   const [newProjDesc, setNewProjDesc] = useState("");
+  const [newProjType, setNewProjType] = useState<"Scrum" | "Kanban">("Scrum");
   const [creating, setCreating] = useState(false);
 
   const loadData = async () => {
@@ -44,12 +45,14 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
           key: newProjName.trim().substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || "PROJ",
           description: newProjDesc.trim() || null,
           color_tag: "#facc15",
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          project_type: newProjType
         }
       });
       setIsModalOpen(false);
       setNewProjName("");
       setNewProjDesc("");
+      setNewProjType("Scrum");
       await loadData();
       
       // Select the newest project
@@ -213,6 +216,18 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-300">Project Type</label>
+                <select
+                  value={newProjType}
+                  onChange={(e) => setNewProjType(e.target.value as "Scrum" | "Kanban")}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all"
+                >
+                  <option value="Scrum">Scrum</option>
+                  <option value="Kanban">Kanban</option>
+                </select>
+              </div>
+
               <div className="pt-2 flex gap-3">
                 <button 
                   type="button" 
@@ -237,4 +252,3 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     </div>
   );
 }
-

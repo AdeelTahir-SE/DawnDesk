@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use tauri::AppHandle;
 use super::db_connection;
 use super::Issue; // Use the Issue struct from mod.rs
@@ -24,7 +24,7 @@ pub fn jql_search(app: AppHandle, project_id: i64, jql: String) -> Result<Vec<Is
     }
 
     let query = format!(
-        "SELECT id, project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at, original_estimate_minutes, rank, pinned FROM issues WHERE project_id = ?1 AND ({}) ORDER BY created_at DESC",
+        "SELECT id, project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at, original_estimate_minutes, rank, pinned, COALESCE(archived, 0) FROM issues WHERE project_id = ?1 AND COALESCE(archived, 0) = 0 AND ({}) ORDER BY pinned DESC, created_at DESC",
         sql_condition
     );
 
@@ -53,6 +53,7 @@ pub fn jql_search(app: AppHandle, project_id: i64, jql: String) -> Result<Vec<Is
             original_estimate_minutes: row.get(15)?,
             rank: row.get(16)?,
             pinned: row.get(17)?,
+            archived: row.get(18)?,
         })
     }).map_err(|e| e.to_string())?;
 

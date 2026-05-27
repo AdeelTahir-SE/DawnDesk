@@ -1,7 +1,7 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
-use super::db_connection;
+use super::{db_connection, ensure_default_workflow_statuses};
 
 // =============================================================================
 // VERSIONS
@@ -123,6 +123,7 @@ pub struct WorkflowStatus {
 #[tauri::command]
 pub fn get_workflow_statuses(app: AppHandle, project_id: i64) -> Result<Vec<WorkflowStatus>, String> {
     let conn = db_connection(&app)?;
+    ensure_default_workflow_statuses(&conn, project_id)?;
     let mut stmt = conn.prepare("SELECT id, project_id, name, category, position, wip_limit FROM workflow_statuses WHERE project_id = ?1 ORDER BY position ASC").map_err(|e| e.to_string())?;
     let rows = stmt.query_map(params![project_id], |row| {
         Ok(WorkflowStatus {
@@ -314,6 +315,14 @@ pub fn get_custom_fields(app: AppHandle, project_id: i64) -> Result<Vec<CustomFi
     let mut res = Vec::new();
     for row in rows { res.push(row.map_err(|e| e.to_string())?); }
     Ok(res)
+}
+
+#[tauri::command]
+pub fn delete_custom_field(app: AppHandle, id: i64) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute("DELETE FROM custom_fields WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok("Custom field deleted".to_string())
 }
 
 #[derive(Serialize, Deserialize)]

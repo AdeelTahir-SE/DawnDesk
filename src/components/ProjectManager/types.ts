@@ -33,6 +33,7 @@ export interface LocalIssue {
   original_estimate_minutes: number | null;
   rank: number;
   pinned: boolean;
+  archived?: boolean;
   due_date: string | null;
   created_at: string;
   updated_at: string;

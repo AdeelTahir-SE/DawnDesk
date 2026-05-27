@@ -47,7 +47,19 @@ const LABEL_COLORS = [
   "#f472b6", "#94a3b8", "#2dd4bf", "#e879f9",
 ];
 
-export default function ProjectSettings({ project, onProjectDeleted, onProjectUpdated }: ProjectSettingsProps) {
+export default function ProjectSettings(props: ProjectSettingsProps) {
+  if (!props.project) return null;
+
+  return (
+    <ProjectSettingsInner
+      project={props.project}
+      onProjectDeleted={props.onProjectDeleted}
+      onProjectUpdated={props.onProjectUpdated}
+    />
+  );
+}
+
+function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: ProjectSettingsProps & { project: LocalProject }) {
   if (!project) return null;
 
   const [activeTab, setActiveTab] = useState<"general" | "workflows" | "automations" | "customFields">("general");
@@ -55,6 +67,7 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
   const [name, setName] = useState(project.name);
   const [projKey, setProjKey] = useState(project.key);
   const [desc, setDesc] = useState(project.description || "");
+  const [projectType, setProjectType] = useState<"Scrum" | "Kanban">((project.project_type as "Scrum" | "Kanban") || "Scrum");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -129,7 +142,8 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
           name: name.trim(),
           key: projKey.trim().toUpperCase() || project.key,
           description: desc.trim() || null,
-          color_tag: project.color_tag
+          color_tag: project.color_tag,
+          project_type: projectType
         }
       });
       onProjectUpdated({
@@ -137,6 +151,7 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
         name: name.trim(),
         key: projKey.trim().toUpperCase() || project.key,
         description: desc.trim() || null,
+        project_type: projectType,
       });
     } catch (error) {
       console.error(error);
@@ -331,6 +346,18 @@ export default function ProjectSettings({ project, onProjectDeleted, onProjectUp
                   onChange={e => setDesc(e.target.value)}
                   className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors resize-none h-32 custom-scrollbar"
                 />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Project Type</label>
+                <select
+                  value={projectType}
+                  onChange={(e) => setProjectType(e.target.value as "Scrum" | "Kanban")}
+                  className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/60 transition-colors"
+                >
+                  <option value="Scrum">Scrum</option>
+                  <option value="Kanban">Kanban</option>
+                </select>
               </div>
 
               <div className="flex justify-end mt-2 pt-6 border-t border-neutral-800">

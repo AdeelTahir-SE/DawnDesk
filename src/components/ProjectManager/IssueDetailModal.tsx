@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { createPortal } from "react-dom";
 import { LocalIssue, LocalComment, LocalCustomField, LocalCustomFieldValue, LocalAttachment, LocalIssueLink, LocalIssueHistory, LocalWorklog } from "./types";
 import {
   X, Save, Clock, AlignLeft, Tag, Trash2, Plus,
@@ -445,15 +446,15 @@ export default function IssueDetailModal({
 
   // ---- render ----
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 backdrop-blur-md p-4 sm:p-8 animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-neutral-950/80 backdrop-blur-md p-4 sm:p-8 animate-fadeIn overflow-y-auto custom-scrollbar"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex w-full max-w-6xl h-full max-h-[92vh] bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden animate-scaleUp">
+      <div className="flex flex-col md:flex-row w-full max-w-6xl max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden animate-scaleUp">
 
         {/* =================== LEFT PANEL =================== */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
           {/* Header bar */}
           <div className="px-6 sm:px-8 py-4 flex items-center gap-3 border-b border-neutral-800 shrink-0">
             {issueTypeIcon(issueType, "w-5 h-5")}
@@ -744,7 +745,7 @@ export default function IssueDetailModal({
         </div>
 
         {/* =================== RIGHT SIDEBAR =================== */}
-        <aside className="w-[320px] shrink-0 flex flex-col bg-neutral-900/40 border-l border-neutral-800 overflow-hidden">
+        <aside className="w-full md:w-[320px] shrink-0 flex flex-col bg-neutral-900/40 border-t md:border-t-0 md:border-l border-neutral-800 overflow-hidden min-h-0 min-w-0">
           {/* close button */}
           <div className="flex justify-end px-4 pt-4 shrink-0">
             <button onClick={onClose} className="p-2 rounded-lg text-white/50 hover:bg-neutral-800 hover:text-white transition-colors">
@@ -1088,6 +1089,7 @@ export default function IssueDetailModal({
           </div>
         </aside>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

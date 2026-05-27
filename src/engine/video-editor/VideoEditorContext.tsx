@@ -8,7 +8,6 @@ import type {
   VideoEditorAction,
   Track,
   Clip,
-  HistoryEntry,
   HistorySnapshot,
 } from './types';
 import {
@@ -85,6 +84,42 @@ function calculateProjectDuration(tracks: Track[]): number {
     }
   }
   return max;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function hasOverlap(track: Track, clip: Clip, startTime: number): boolean {
+  const endTime = startTime + clip.duration;
+  return track.clips.some(other =>
+    other.id !== clip.id &&
+    startTime < other.startTime + other.duration &&
+    endTime > other.startTime
+  );
+}
+
+function snapTime(state: VideoEditorState, time: number, ignoreClipId?: string): number {
+  if (!state.snapEnabled && !state.magneticTimeline) return Math.max(0, time);
+  const snapDistance = 0.15;
+  const candidates: number[] = [state.playheadTime];
+
+  if (state.project) {
+    for (const marker of state.project.markers) candidates.push(marker.time);
+    for (const track of state.project.tracks) {
+      for (const clip of track.clips) {
+        if (clip.id === ignoreClipId) continue;
+        candidates.push(clip.startTime, clip.startTime + clip.duration);
+      }
+    }
+  }
+
+  const nearest = candidates.reduce(
+    (best, candidate) => Math.abs(candidate - time) < Math.abs(best - time) ? candidate : best,
+    time
+  );
+
+  return Math.abs(nearest - time) <= snapDistance ? Math.max(0, nearest) : Math.max(0, time);
 }
 
 /* ── Initial State ─────────────────────────────────────────────────────── */
@@ -247,7 +282,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     // ── Playback ────────────────────────────────────────────────────────
     case 'SET_PLAYHEAD':
-      return { ...state, playheadTime: Math.max(0, action.payload) };
+      return { ...state, playheadTime: Math.max(0, Math.min(action.payload, state.project?.duration ?? action.payload)) };
 
     case 'TOGGLE_PLAY':
       return { ...state, isPlaying: !state.isPlaying };
@@ -408,6 +443,8 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     case 'ADD_CLIP': {
       if (!state.project) return state;
       const s = pushHistory(state, 'Add clip');
+      const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
+      if (!targetTrack || targetTrack.locked || hasOverlap(targetTrack, action.payload.clip, action.payload.clip.startTime)) return s;
       const tracks = s.project!.tracks.map(t => {
         if (t.id !== action.payload.trackId) return t;
         return { ...t, clips: [...t.clips, action.payload.clip] };
@@ -437,7 +474,11 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       const s = pushHistory(state, 'Move clip');
       const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
       if (!found) return s;
-      const movedClip = { ...found.clip, trackId: action.payload.trackId, startTime: Math.max(0, action.payload.startTime) };
+      const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
+      if (!targetTrack || found.clip.locked || found.track.locked || targetTrack.locked || targetTrack.type !== found.clip.mediaType && !(targetTrack.type === 'video' && found.clip.mediaType === 'image')) return s;
+      const snappedStart = snapTime(s, action.payload.startTime, action.payload.clipId);
+      const movedClip = { ...found.clip, trackId: action.payload.trackId, startTime: snappedStart };
+      if (hasOverlap(targetTrack, movedClip, snappedStart)) return s;
       let tracks = s.project!.tracks.map(t => ({
         ...t,
         clips: t.clips.filter(c => c.id !== action.payload.clipId),
@@ -453,13 +494,18 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     case 'TRIM_CLIP_START': {
       if (!state.project) return state;
       const s = pushHistory(state, 'Trim clip start');
+      const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
+      if (!found || found.clip.locked || found.track.locked) return s;
       const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => {
-        const delta = action.payload.newStartTime - clip.startTime;
+        const maxStart = clip.startTime + clip.duration - 0.1;
+        const newStartTime = clamp(action.payload.newStartTime, 0, maxStart);
+        const delta = newStartTime - clip.startTime;
+        const newInPoint = clamp(action.payload.newInPoint, 0, clip.outPoint - 0.1);
         return {
           ...clip,
-          startTime: action.payload.newStartTime,
-          duration: clip.duration - delta,
-          inPoint: action.payload.newInPoint,
+          startTime: newStartTime,
+          duration: Math.max(0.1, clip.duration - delta),
+          inPoint: newInPoint,
         };
       });
       return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
@@ -468,10 +514,12 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     case 'TRIM_CLIP_END': {
       if (!state.project) return state;
       const s = pushHistory(state, 'Trim clip end');
+      const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
+      if (!found || found.clip.locked || found.track.locked) return s;
       const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
-        duration: action.payload.newDuration,
-        outPoint: action.payload.newOutPoint,
+        duration: Math.max(0.1, action.payload.newDuration),
+        outPoint: Math.max(clip.inPoint + 0.1, action.payload.newOutPoint),
       }));
       return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
     }
@@ -482,6 +530,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
       if (!found) return s;
       const { clip } = found;
+      if (clip.locked || found.track.locked) return s;
       const splitOffset = action.payload.time - clip.startTime;
       if (splitOffset <= 0 || splitOffset >= clip.duration) return s;
 
@@ -505,7 +554,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
         ...clip,
-        speed: action.payload.speed,
+        speed: clamp(action.payload.speed, 0.1, 8),
       }));
       return { ...state, project: { ...state.project, tracks }, isDirty: true };
     }
@@ -523,7 +572,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
         ...clip,
-        volume: action.payload.volume,
+        volume: clamp(action.payload.volume, 0, 2),
       }));
       return { ...state, project: { ...state.project, tracks }, isDirty: true };
     }
@@ -532,7 +581,19 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
         ...clip,
-        opacity: action.payload.opacity,
+        opacity: clamp(action.payload.opacity, 0, 1),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'SET_CLIP_TRANSFORM': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+        ...clip,
+        positionX: action.payload.positionX ?? clip.positionX ?? 0,
+        positionY: action.payload.positionY ?? clip.positionY ?? 0,
+        scale: action.payload.scale != null ? clamp(action.payload.scale, 0.1, 4) : (clip.scale ?? 1),
+        rotation: action.payload.rotation ?? clip.rotation ?? 0,
       }));
       return { ...state, project: { ...state.project, tracks }, isDirty: true };
     }
@@ -565,6 +626,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         id: generateId(),
         startTime: found.clip.startTime + found.clip.duration,
       };
+      if (hasOverlap(found.track, duped, duped.startTime)) return s;
       const tracks = s.project!.tracks.map(t => {
         if (t.id !== found.track.id) return t;
         return { ...t, clips: [...t.clips, duped] };

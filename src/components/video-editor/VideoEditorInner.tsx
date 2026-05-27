@@ -1,7 +1,6 @@
 import './video-editor.css';
 import { useEffect } from 'react';
 import { useVideoEditor } from '../../engine/video-editor/VideoEditorContext';
-import { DEFAULT_PROJECT_SETTINGS } from '../../engine/video-editor/constants';
 import MenuBar from './toolbar/MenuBar';
 import EditorToolbar from './toolbar/EditorToolbar';
 import LeftPanel from './panels/LeftPanel';
@@ -18,7 +17,7 @@ import { useFFmpeg } from '../../engine/video-editor/useFFmpeg';
 
 export default function VideoEditorInner() {
   const { state, dispatch } = useVideoEditor();
-  const { checkFFmpeg, loadProject } = useFFmpeg();
+  const { checkFFmpeg, loadProject, saveProject, saveProjectAs, importMedia } = useFFmpeg();
 
   // Auto-check FFmpeg and show modal if no project
   useEffect(() => {
@@ -38,6 +37,15 @@ export default function VideoEditorInner() {
       const shift = e.shiftKey;
 
       if (key === 'Space') { e.preventDefault(); dispatch({ type: 'TOGGLE_PLAY' }); }
+      else if (ctrl && !shift && key === 'KeyN') { e.preventDefault(); dispatch({ type: 'TOGGLE_NEW_PROJECT_MODAL' }); }
+      else if (ctrl && !shift && key === 'KeyO') { e.preventDefault(); loadProject(); }
+      else if (ctrl && !shift && key === 'KeyS') { e.preventDefault(); saveProject(); }
+      else if (ctrl && shift && key === 'KeyS') { e.preventDefault(); saveProjectAs(); }
+      else if (ctrl && !shift && key === 'KeyI') { e.preventDefault(); importMedia(); }
+      else if (ctrl && !shift && key === 'KeyC') { e.preventDefault(); dispatch({ type: 'COPY' }); }
+      else if (ctrl && !shift && key === 'KeyV') { e.preventDefault(); dispatch({ type: 'PASTE' }); }
+      else if (ctrl && !shift && key === 'KeyX') { e.preventDefault(); dispatch({ type: 'COPY' }); dispatch({ type: 'REMOVE_CLIPS', payload: state.selectedClipIds }); }
+      else if (ctrl && !shift && key === 'KeyA') { e.preventDefault(); dispatch({ type: 'SELECT_CLIPS', payload: state.project?.tracks.flatMap(t => t.clips.map(c => c.id)) || [] }); }
       else if (key === 'KeyV' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'select' });
       else if (key === 'KeyC' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'razor' });
       else if (key === 'KeyB' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'ripple' });
@@ -58,6 +66,7 @@ export default function VideoEditorInner() {
       else if (key === 'Minus' && !ctrl) dispatch({ type: 'SET_TIMELINE_ZOOM', payload: state.timelineZoom / 1.2 });
       else if (key === 'KeyI' && !ctrl) dispatch({ type: 'SET_IN_POINT', payload: state.playheadTime });
       else if (key === 'KeyO' && !ctrl) dispatch({ type: 'SET_OUT_POINT', payload: state.playheadTime });
+      else if (key === 'KeyM' && !ctrl) dispatch({ type: 'ADD_MARKER', payload: { id: `m-${Date.now()}`, time: state.playheadTime, label: 'Marker', color: 'yellow', duration: 0, comment: '' } });
       else if (key === 'KeyJ' && !ctrl) dispatch({ type: 'STEP_BACKWARD' });
       else if (key === 'KeyL' && !ctrl) dispatch({ type: 'STEP_FORWARD' });
       else if (ctrl && shift && key === 'KeyE') { e.preventDefault(); dispatch({ type: 'TOGGLE_EXPORT_DIALOG' }); }
@@ -65,10 +74,10 @@ export default function VideoEditorInner() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, state.selectedClipIds, state.timelineZoom, state.playheadTime]);
+  }, [dispatch, importMedia, loadProject, saveProject, saveProjectAs, state.project, state.selectedClipIds, state.timelineZoom, state.playheadTime]);
 
   return (
-    <div className="ve-layout">
+    <div className="ve-layout animate-fadeIn duration-500">
       {state.project ? (
         <>
           <PlaybackEngine />
@@ -101,27 +110,26 @@ export default function VideoEditorInner() {
           )}
         </>
       ) : (
-        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: 'radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%)' }}>
+        <div className="ve-welcome-shell">
           <MenuBar />
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '50px 80px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
-              <div style={{ width: 80, height: 80, borderRadius: '20px', background: 'linear-gradient(135deg, #FACC15 0%, #EAB308 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(250, 204, 21, 0.3)' }}>
+          <div className="ve-welcome-stage">
+            <div className="ve-welcome-card">
+              <div className="ve-welcome-icon">
                 <Film size={40} color="#000" />
               </div>
-              <h1 style={{ fontFamily: 'Sora', fontSize: '2.5rem', fontWeight: 700, marginBottom: '8px', textAlign: 'center' }}>DawnDesk Video Editor</h1>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '1.1rem', marginBottom: '40px', textAlign: 'center' }}>Create, edit, and master your next great video.</p>
+              <p className="ve-welcome-kicker">Welcome to DawnDesk</p>
+              <h1 className="ve-welcome-title">Video Editor</h1>
+              <p className="ve-welcome-copy">Start a timeline with project settings that match your footage, or reopen an existing DawnDesk edit.</p>
               
-              <div style={{ display: 'flex', gap: '16px', width: '100%', justifyContent: 'center' }}>
+              <div className="ve-welcome-actions">
                 <button 
-                  className="dd-btn-primary" 
-                  style={{ padding: '12px 24px', fontSize: '1rem', height: 'auto', display: 'flex', gap: '8px' }} 
+                  className="dd-btn-primary ve-welcome-action" 
                   onClick={() => dispatch({ type: 'TOGGLE_NEW_PROJECT_MODAL' })}
                 >
-                  <Plus size={20} /> Create New Project
+                  <Plus size={20} /> Create Project
                 </button>
                 <button 
-                  className="dd-btn-secondary" 
-                  style={{ padding: '12px 24px', fontSize: '1rem', height: 'auto', display: 'flex', gap: '8px' }} 
+                  className="dd-btn-secondary ve-welcome-action" 
                   onClick={loadProject}
                 >
                   <FolderOpen size={20} /> Open Project

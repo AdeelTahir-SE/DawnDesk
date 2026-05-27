@@ -177,10 +177,93 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
     let _ = conn.execute("ALTER TABLE issues ADD COLUMN original_estimate_minutes INTEGER", []);
     let _ = conn.execute("ALTER TABLE issues ADD COLUMN rank REAL DEFAULT 0.0", []);
     let _ = conn.execute("ALTER TABLE issues ADD COLUMN pinned BOOLEAN DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE issues ADD COLUMN archived BOOLEAN DEFAULT 0", []);
     let _ = conn.execute("ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'Scrum'", []);
     let _ = conn.execute("ALTER TABLE workflow_statuses ADD COLUMN wip_limit INTEGER", []);
 
     Ok(conn)
+}
+
+pub(super) fn ensure_default_workflow_statuses(
+    conn: &Connection,
+    project_id: i64,
+) -> Result<(), String> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM workflow_statuses WHERE project_id = ?1",
+            params![project_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if count > 0 {
+        return Ok(());
+    }
+
+    for (position, (name, category)) in [
+        ("To Do", "To Do"),
+        ("In Progress", "In Progress"),
+        ("In Review", "In Review"),
+        ("Done", "Done"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        conn.execute(
+            "INSERT INTO workflow_statuses (project_id, name, category, position, wip_limit) VALUES (?1, ?2, ?3, ?4, NULL)",
+            params![project_id, name, category, position as i64],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn ensure_active_sprint(conn: &Connection, project_id: i64) -> Result<(), String> {
+    let total_sprints: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sprints WHERE project_id = ?1",
+            params![project_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if total_sprints == 0 {
+        conn.execute(
+            "INSERT INTO sprints (project_id, name, status, start_date, end_date) VALUES (?1, 'Sprint 1', 'active', NULL, NULL)",
+            params![project_id],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let active_sprints: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sprints WHERE project_id = ?1 AND status = 'active'",
+            params![project_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if active_sprints == 0 {
+        let next_sprint_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM sprints WHERE project_id = ?1 AND status = 'planned' ORDER BY id ASC LIMIT 1",
+                params![project_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(id) = next_sprint_id {
+            conn.execute(
+                "UPDATE sprints SET status = 'active' WHERE id = ?1",
+                params![id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -227,6 +310,9 @@ pub fn create_project(app: AppHandle, input: CreateProjectInput) -> Result<Strin
         params![input.name, input.key, input.description, input.color_tag, input.created_at, p_type],
     )
     .map_err(|e| e.to_string())?;
+    let project_id = conn.last_insert_rowid();
+    ensure_default_workflow_statuses(&conn, project_id)?;
+    ensure_active_sprint(&conn, project_id)?;
     Ok("Project created".to_string())
 }
 
@@ -300,6 +386,13 @@ pub struct CreateSprintInput {
 #[tauri::command]
 pub fn create_sprint(app: AppHandle, input: CreateSprintInput) -> Result<String, String> {
     let conn = db_connection(&app)?;
+    if input.status == "active" {
+        conn.execute(
+            "UPDATE sprints SET status = 'planned' WHERE project_id = ?1 AND status = 'active'",
+            params![input.project_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     conn.execute(
         "INSERT INTO sprints (project_id, name, status, start_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![input.project_id, input.name, input.status, input.start_date, input.end_date],
@@ -311,6 +404,7 @@ pub fn create_sprint(app: AppHandle, input: CreateSprintInput) -> Result<String,
 #[tauri::command]
 pub fn get_sprints(app: AppHandle, project_id: i64) -> Result<Vec<Sprint>, String> {
     let conn = db_connection(&app)?;
+    ensure_active_sprint(&conn, project_id)?;
     let mut stmt = conn.prepare("SELECT id, project_id, name, status, start_date, end_date FROM sprints WHERE project_id = ?1 ORDER BY id DESC").map_err(|e| e.to_string())?;
     let rows = stmt.query_map(params![project_id], |row| {
         Ok(Sprint {
@@ -333,6 +427,20 @@ pub fn get_sprints(app: AppHandle, project_id: i64) -> Result<Vec<Sprint>, Strin
 #[tauri::command]
 pub fn update_sprint(app: AppHandle, id: i64, name: String, status: String, start_date: Option<String>, end_date: Option<String>) -> Result<String, String> {
     let conn = db_connection(&app)?;
+    if status == "active" {
+        let project_id: i64 = conn
+            .query_row(
+                "SELECT project_id FROM sprints WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE sprints SET status = 'planned' WHERE project_id = ?1 AND status = 'active' AND id != ?2",
+            params![project_id, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     conn.execute(
         "UPDATE sprints SET name = ?1, status = ?2, start_date = ?3, end_date = ?4 WHERE id = ?5",
         params![name, status, start_date, end_date, id],
@@ -371,6 +479,7 @@ pub struct Issue {
     pub original_estimate_minutes: Option<i64>,
     pub rank: f64,
     pub pinned: bool,
+    pub archived: bool,
     pub due_date: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -423,7 +532,7 @@ pub fn create_issue(app: AppHandle, input: CreateIssueInput) -> Result<String, S
 #[tauri::command]
 pub fn get_issues(app: AppHandle, project_id: i64) -> Result<Vec<Issue>, String> {
     let conn = db_connection(&app)?;
-    let mut stmt = conn.prepare("SELECT id, project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at, original_estimate_minutes, rank, pinned FROM issues WHERE project_id = ?1 ORDER BY created_at DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, due_date, created_at, updated_at, original_estimate_minutes, rank, pinned, COALESCE(archived, 0) FROM issues WHERE project_id = ?1 AND COALESCE(archived, 0) = 0 ORDER BY pinned DESC, created_at DESC").map_err(|e| e.to_string())?;
 
     let rows = stmt.query_map(params![project_id], |row| {
         Ok(Issue {
@@ -445,6 +554,7 @@ pub fn get_issues(app: AppHandle, project_id: i64) -> Result<Vec<Issue>, String>
             original_estimate_minutes: row.get(15)?,
             rank: row.get(16)?,
             pinned: row.get(17)?,
+            archived: row.get(18)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -469,6 +579,7 @@ pub struct UpdateIssueInput {
     pub original_estimate_minutes: Option<i64>,
     pub rank: f64,
     pub pinned: bool,
+    pub archived: Option<bool>,
     pub due_date: Option<String>,
     pub updated_at: String,
 }
@@ -476,12 +587,104 @@ pub struct UpdateIssueInput {
 #[tauri::command]
 pub fn update_issue(app: AppHandle, input: UpdateIssueInput) -> Result<String, String> {
     let conn = db_connection(&app)?;
+    let previous = conn
+        .query_row(
+            "SELECT title, description, status, priority, issue_type, story_points, due_date, original_estimate_minutes, pinned, COALESCE(archived, 0) FROM issues WHERE id = ?1",
+            params![input.id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<i64>>(7)?,
+                    row.get::<_, bool>(8)?,
+                    row.get::<_, bool>(9)?,
+                ))
+            },
+        )
+        .ok();
+    let archived = input.archived.unwrap_or_else(|| previous.as_ref().map(|p| p.9).unwrap_or(false));
     conn.execute(
-        "UPDATE issues SET sprint_id = ?1, issue_type = ?2, title = ?3, description = ?4, status = ?5, priority = ?6, story_points = ?7, time_spent_minutes = ?8, due_date = ?9, updated_at = ?10, original_estimate_minutes = ?11, rank = ?12, pinned = ?13 WHERE id = ?14",
-        params![input.sprint_id, input.issue_type, input.title, input.description, input.status, input.priority, input.story_points, input.time_spent_minutes, input.due_date, input.updated_at, input.original_estimate_minutes, input.rank, input.pinned, input.id],
+        "UPDATE issues SET sprint_id = ?1, issue_type = ?2, title = ?3, description = ?4, status = ?5, priority = ?6, story_points = ?7, time_spent_minutes = ?8, due_date = ?9, updated_at = ?10, original_estimate_minutes = ?11, rank = ?12, pinned = ?13, archived = ?14 WHERE id = ?15",
+        params![input.sprint_id, input.issue_type, input.title, input.description, input.status, input.priority, input.story_points, input.time_spent_minutes, input.due_date, input.updated_at, input.original_estimate_minutes, input.rank, input.pinned, archived, input.id],
     )
     .map_err(|e| e.to_string())?;
+
+    if let Some(prev) = previous {
+        let changes = [
+            ("title", Some(prev.0), Some(input.title.clone())),
+            ("description", prev.1, input.description.clone()),
+            ("status", Some(prev.2), Some(input.status.clone())),
+            ("priority", Some(prev.3), Some(input.priority.clone())),
+            ("issue_type", Some(prev.4), Some(input.issue_type.clone())),
+            ("story_points", prev.5.map(|v| v.to_string()), input.story_points.map(|v| v.to_string())),
+            ("due_date", prev.6, input.due_date.clone()),
+            ("estimate", prev.7.map(|v| v.to_string()), input.original_estimate_minutes.map(|v| v.to_string())),
+            ("pinned", Some(prev.8.to_string()), Some(input.pinned.to_string())),
+            ("archived", Some(prev.9.to_string()), Some(archived.to_string())),
+        ];
+
+        for (field, old_value, new_value) in changes {
+            if old_value != new_value {
+                conn.execute(
+                    "INSERT INTO issue_history (issue_id, field_name, old_value, new_value, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![input.id, field, old_value, new_value, input.updated_at],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+    }
     Ok("Issue updated".to_string())
+}
+
+#[tauri::command]
+pub fn clone_issue(app: AppHandle, id: i64, created_at: String) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    let source = conn
+        .query_row(
+            "SELECT project_id, sprint_id, parent_id, issue_type, title, description, status, priority, story_points, original_estimate_minutes, rank, due_date FROM issues WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, Option<i64>>(8)?,
+                    row.get::<_, Option<i64>>(9)?,
+                    row.get::<_, f64>(10)?,
+                    row.get::<_, Option<String>>(11)?,
+                ))
+            },
+        )
+        .map_err(|e| e.to_string())?;
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM issues WHERE project_id = ?1",
+            params![source.0],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let proj_key: String = conn
+        .query_row("SELECT key FROM projects WHERE id = ?1", params![source.0], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    let new_key = format!("{}-{}", proj_key, count + 1);
+
+    conn.execute(
+        "INSERT INTO issues (project_id, sprint_id, parent_id, issue_type, key, title, description, status, priority, story_points, time_spent_minutes, original_estimate_minutes, rank, pinned, due_date, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, 0, ?13, ?14, ?15)",
+        params![source.0, source.1, source.2, source.3, new_key, format!("{} (Copy)", source.4), source.5, source.6, source.7, source.8, source.9, source.10 + 1.0, source.11, created_at, created_at],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok("Issue cloned".to_string())
 }
 
 #[tauri::command]

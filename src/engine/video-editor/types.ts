@@ -485,6 +485,8 @@ export interface MediaProbeResult {
   width?: number;
   height?: number;
   fps?: number;
+  codec?: string;
+  file_size?: number;
   has_audio: boolean;
   has_video: boolean;
 }
