@@ -12,7 +12,7 @@ interface MenuItem {
 
 export default function MenuBar() {
   const { state, dispatch } = useVideoEditor();
-  const { importMedia, saveProject, loadProject } = useFFmpeg();
+  const { importMedia, saveProject, saveProjectAs, loadProject } = useFFmpeg();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleMenuClick = (menu: string) => {
@@ -27,26 +27,26 @@ export default function MenuBar() {
 
   const menus: Record<string, MenuItem[]> = {
     File: [
-      { label: 'New Project', shortcut: 'Ctrl+N', action: () => dispatch({ type: 'NEW_PROJECT', payload: { name: 'Untitled Project', width: 1920, height: 1080, frameRate: 30, sampleRate: 48000, backgroundColor: '#000000' } }) },
+      { label: 'New Project', shortcut: 'Ctrl+N', action: () => dispatch({ type: 'TOGGLE_NEW_PROJECT_MODAL' }) },
       { label: 'Open Project', shortcut: 'Ctrl+O', action: loadProject },
       { label: 'Save', shortcut: 'Ctrl+S', action: saveProject },
-      { label: 'Save As...', shortcut: 'Ctrl+Shift+S', action: saveProject },
+      { label: 'Save As...', shortcut: 'Ctrl+Shift+S', action: saveProjectAs },
       { label: '', separator: true },
       { label: 'Import Media', shortcut: 'Ctrl+I', action: importMedia },
       { label: '', separator: true },
-      { label: 'Project Settings' },
+      { label: 'Project Settings', action: () => dispatch({ type: 'TOGGLE_PROJECT_SETTINGS' }) },
       { label: '', separator: true },
-      { label: 'Close Project' },
+      { label: 'Close Project', action: () => dispatch({ type: 'CLOSE_PROJECT' }) },
     ],
     Edit: [
       { label: 'Undo', shortcut: 'Ctrl+Z', action: () => dispatch({ type: 'UNDO' }), disabled: state.historyIndex <= 0 },
       { label: 'Redo', shortcut: 'Ctrl+Shift+Z', action: () => dispatch({ type: 'REDO' }), disabled: state.historyIndex >= state.history.length - 1 },
       { label: '', separator: true },
-      { label: 'Cut', shortcut: 'Ctrl+X', disabled: state.selectedClipIds.length === 0 },
-      { label: 'Copy', shortcut: 'Ctrl+C', disabled: state.selectedClipIds.length === 0 },
-      { label: 'Paste', shortcut: 'Ctrl+V' },
+      { label: 'Cut', shortcut: 'Ctrl+X', disabled: state.selectedClipIds.length === 0, action: () => { dispatch({ type: 'COPY' }); dispatch({ type: 'REMOVE_CLIPS', payload: state.selectedClipIds }); } },
+      { label: 'Copy', shortcut: 'Ctrl+C', disabled: state.selectedClipIds.length === 0, action: () => dispatch({ type: 'COPY' }) },
+      { label: 'Paste', shortcut: 'Ctrl+V', disabled: state.clipboard.length === 0, action: () => dispatch({ type: 'PASTE' }) },
       { label: '', separator: true },
-      { label: 'Select All', shortcut: 'Ctrl+A' },
+      { label: 'Select All', shortcut: 'Ctrl+A', action: () => dispatch({ type: 'SELECT_CLIPS', payload: state.project?.tracks.flatMap(t => t.clips.map(c => c.id)) || [] }) },
       { label: 'Deselect All', shortcut: 'Ctrl+D', action: () => dispatch({ type: 'DESELECT_ALL' }) },
       { label: '', separator: true },
       { label: 'Delete Selected', shortcut: 'Del', action: () => dispatch({ type: 'REMOVE_CLIPS', payload: state.selectedClipIds }), disabled: state.selectedClipIds.length === 0 },
@@ -63,14 +63,14 @@ export default function MenuBar() {
       { label: '', separator: true },
       { label: 'Zoom In', shortcut: '+', action: () => dispatch({ type: 'SET_TIMELINE_ZOOM', payload: state.timelineZoom * 1.3 }) },
       { label: 'Zoom Out', shortcut: '-', action: () => dispatch({ type: 'SET_TIMELINE_ZOOM', payload: state.timelineZoom / 1.3 }) },
-      { label: 'Zoom to Fit', shortcut: 'Ctrl+=' },
+      { label: 'Zoom to Fit', shortcut: 'Ctrl+=', action: () => dispatch({ type: 'ZOOM_TO_FIT' }) },
     ],
     Clip: [
       { label: 'Split at Playhead', shortcut: 'Ctrl+K', disabled: state.selectedClipIds.length === 0, action: () => {
         state.selectedClipIds.forEach(id => dispatch({ type: 'SPLIT_CLIP', payload: { clipId: id, time: state.playheadTime } }));
       }},
       { label: '', separator: true },
-      { label: 'Speed / Duration', disabled: state.selectedClipIds.length === 0 },
+      { label: 'Speed / Duration', disabled: state.selectedClipIds.length === 0, action: () => dispatch({ type: 'SET_RIGHT_PANEL', payload: 'properties' }) },
       { label: 'Reverse', disabled: state.selectedClipIds.length === 0, action: () => {
         state.selectedClipIds.forEach(id => dispatch({ type: 'TOGGLE_CLIP_REVERSE', payload: id }));
       }},
@@ -83,7 +83,7 @@ export default function MenuBar() {
     Export: [
       { label: 'Export Settings', shortcut: 'Ctrl+Shift+E', action: () => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' }) },
       { label: '', separator: true },
-      { label: 'Render Queue' },
+      { label: 'Render Queue', action: () => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' }) },
     ],
   };
 

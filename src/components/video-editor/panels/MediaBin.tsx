@@ -1,19 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
-import { Search, Plus, Grid3X3, List, Film, Music, Image, X } from 'lucide-react';
+import { Search, Plus, Grid3X3, List, Film, Music, Image, X, Loader2 } from 'lucide-react';
 import type { MediaItem } from '../../../engine/video-editor/types';
 
-const DEMO_MEDIA: MediaItem[] = [
-  { id: 'demo-1', name: 'Intro_Sequence.mp4', path: '', type: 'video', duration: 12.5, width: 1920, height: 1080, fps: 30, codec: 'H.264', fileSize: 45000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 4, flag: 'none', tags: [], inPoint: 0, outPoint: 12.5, folderId: null },
-  { id: 'demo-2', name: 'Interview_B-Roll.mp4', path: '', type: 'video', duration: 45.2, width: 3840, height: 2160, fps: 24, codec: 'H.265', fileSize: 120000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 3, flag: 'green', tags: [], inPoint: 0, outPoint: 45.2, folderId: null },
-  { id: 'demo-3', name: 'Background_Music.mp3', path: '', type: 'audio', duration: 180, width: 0, height: 0, fps: 0, codec: 'MP3', fileSize: 5000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 5, flag: 'none', tags: [], inPoint: 0, outPoint: 180, folderId: null },
-  { id: 'demo-4', name: 'Logo_Reveal.mp4', path: '', type: 'video', duration: 5.0, width: 1920, height: 1080, fps: 60, codec: 'ProRes', fileSize: 80000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 0, flag: 'blue', tags: [], inPoint: 0, outPoint: 5.0, folderId: null },
-  { id: 'demo-5', name: 'SFX_Whoosh.wav', path: '', type: 'audio', duration: 1.2, width: 0, height: 0, fps: 0, codec: 'WAV', fileSize: 200000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 0, flag: 'none', tags: [], inPoint: 0, outPoint: 1.2, folderId: null },
-  { id: 'demo-6', name: 'Sunset_Timelapse.mp4', path: '', type: 'video', duration: 30.0, width: 3840, height: 2160, fps: 30, codec: 'H.264', fileSize: 95000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 5, flag: 'yellow', tags: [], inPoint: 0, outPoint: 30.0, folderId: null },
-  { id: 'demo-7', name: 'Title_Card.png', path: '', type: 'image', duration: 0, width: 1920, height: 1080, fps: 0, codec: 'PNG', fileSize: 2000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 0, flag: 'none', tags: [], inPoint: 0, outPoint: 5, folderId: null },
-  { id: 'demo-8', name: 'Voiceover_Take3.wav', path: '', type: 'audio', duration: 62.5, width: 0, height: 0, fps: 0, codec: 'WAV', fileSize: 12000000, thumbnail: '', waveformData: [], dateAdded: Date.now(), rating: 4, flag: 'purple', tags: [], inPoint: 0, outPoint: 62.5, folderId: null },
-];
+
 
 const typeIcons: Record<string, React.ElementType> = { video: Film, audio: Music, image: Image };
 
@@ -41,7 +32,7 @@ export default function MediaBin() {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const media = state.project?.mediaPool.length ? state.project.mediaPool : DEMO_MEDIA;
+  const media = state.project?.mediaPool || [];
 
   const filtered = useMemo(() => {
     if (!search) return media;
@@ -70,7 +61,7 @@ export default function MediaBin() {
           trackId: targetTrack.id, mediaId: item.id, mediaName: item.name, mediaType: item.type,
           startTime: lastEnd, duration: item.duration || 5, inPoint: item.inPoint, outPoint: item.outPoint,
           speed: 1, reversed: false, volume: 1, opacity: 1,
-          effects: [], transition: null, color: '', locked: false, label: '',
+          effects: [], transition: null, color: '', locked: false, label: '', path: item.path,
         },
       },
     });
@@ -89,8 +80,9 @@ export default function MediaBin() {
         <button className={`ve-tool-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><List size={13} /></button>
       </div>
 
-      <button onClick={importMedia} className="ve-tool-btn" style={{ width: '100%', height: 32, borderRadius: 6, border: '1px dashed rgba(255,255,255,0.15)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-        <Plus size={14} /> Import Media
+      <button onClick={importMedia} disabled={state.isImporting} className="ve-tool-btn" style={{ width: '100%', height: 32, borderRadius: 6, border: '1px dashed rgba(255,255,255,0.15)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)', opacity: state.isImporting ? 0.5 : 1, pointerEvents: state.isImporting ? 'none' : 'auto' }}>
+        {state.isImporting ? <Loader2 size={14} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
+        {state.isImporting ? 'Importing...' : 'Import Media'}
       </button>
 
       {viewMode === 'grid' ? (

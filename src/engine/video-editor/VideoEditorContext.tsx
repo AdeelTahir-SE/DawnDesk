@@ -40,24 +40,7 @@ function createSnapshot(state: VideoEditorState): HistorySnapshot {
 }
 
 function pushHistory(state: VideoEditorState, label: string): VideoEditorState {
-  const snapshot = createSnapshot(state);
-  const entry: HistoryEntry = {
-    id: generateId(),
-    label,
-    timestamp: Date.now(),
-    snapshot,
-  };
-
-  const newHistory = state.history.slice(0, state.historyIndex + 1);
-  newHistory.push(entry);
-  if (newHistory.length > MAX_HISTORY) newHistory.shift();
-
-  return {
-    ...state,
-    history: newHistory,
-    historyIndex: newHistory.length - 1,
-    isDirty: true,
-  };
+  return { ...state, _historyLabel: label };
 }
 
 function applySnapshot(state: VideoEditorState, snapshot: HistorySnapshot): VideoEditorState {
@@ -176,12 +159,16 @@ export const initialState: VideoEditorState = {
   showKeyframes: false,
   showWaveforms: true,
   showThumbnails: true,
+  isImporting: false,
   contextMenu: null,
+  clipboard: [],
+  showProjectSettings: false,
+  showNewProjectModal: false,
 };
 
 /* ── Reducer ───────────────────────────────────────────────────────────── */
 
-function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction): VideoEditorState {
+function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoEditorState {
   switch (action.type) {
 
     // ── Project ─────────────────────────────────────────────────────────
@@ -223,25 +210,37 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
       };
       return {
         ...initialState,
+        ffmpegStatus: state.ffmpegStatus,
         project: newProject,
         isDirty: false,
         history: [],
         historyIndex: -1,
+        showNewProjectModal: false,
       };
     }
 
     case 'LOAD_PROJECT':
       return {
         ...initialState,
+        ffmpegStatus: state.ffmpegStatus,
         project: action.payload,
         isDirty: false,
         history: [],
         historyIndex: -1,
       };
 
+    case 'CLOSE_PROJECT':
+      return {
+        ...initialState,
+        ffmpegStatus: state.ffmpegStatus,
+      };
+
     case 'SET_PROJECT_NAME':
       if (!state.project) return state;
       return { ...state, project: { ...state.project, name: action.payload }, isDirty: true };
+
+    case 'SET_PROJECT_PATH':
+      return { ...state, projectPath: action.payload };
 
     case 'SET_DIRTY':
       return { ...state, isDirty: action.payload };
@@ -573,6 +572,49 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
       return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
     }
 
+    case 'COPY': {
+      if (!state.project || state.selectedClipIds.length === 0) return state;
+      const copiedClips: Clip[] = [];
+      for (const track of state.project.tracks) {
+        for (const clip of track.clips) {
+          if (state.selectedClipIds.includes(clip.id)) {
+            copiedClips.push({ ...clip });
+          }
+        }
+      }
+      return { ...state, clipboard: copiedClips };
+    }
+
+    case 'PASTE': {
+      if (!state.project || state.clipboard.length === 0) return state;
+      const s = pushHistory(state, 'Paste clips');
+      
+      const minStartTime = Math.min(...state.clipboard.map(c => c.startTime));
+      const offset = s.playheadTime - minStartTime;
+      
+      const newClips = state.clipboard.map(c => ({
+        ...c,
+        id: generateId(),
+        startTime: c.startTime + offset,
+      }));
+      
+      const newSelectedIds = newClips.map(c => c.id);
+      
+      const tracks = s.project!.tracks.map(t => {
+        const clipsForTrack = newClips.filter(c => c.trackId === t.id);
+        if (clipsForTrack.length > 0) {
+          return { ...t, clips: [...t.clips, ...clipsForTrack] };
+        }
+        return t;
+      });
+      
+      return { 
+        ...s, 
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
+        selectedClipIds: newSelectedIds
+      };
+    }
+
     // ── Effects ──────────────────────────────────────────────────────────
     case 'ADD_EFFECT': {
       if (!state.project) return state;
@@ -747,6 +789,13 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
     case 'SET_TIMELINE_ZOOM':
       return { ...state, timelineZoom: Math.max(10, Math.min(500, action.payload)) };
 
+    case 'ZOOM_TO_FIT': {
+      if (!state.project) return state;
+      const duration = Math.max(state.project.duration, 10);
+      const newZoom = Math.max(10, Math.min(500, 800 / duration));
+      return { ...state, timelineZoom: newZoom };
+    }
+
     case 'SET_TIMELINE_SCROLL':
       return {
         ...state,
@@ -881,12 +930,6 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
       return applySnapshot({ ...state, historyIndex: state.historyIndex - 1 }, prevEntry.snapshot);
     }
 
-    case 'REDO': {
-      if (state.historyIndex >= state.history.length - 1) return state;
-      const nextEntry = state.history[state.historyIndex + 1];
-      return applySnapshot({ ...state, historyIndex: state.historyIndex + 1 }, nextEntry.snapshot);
-    }
-
     case 'PUSH_HISTORY':
       return pushHistory(state, action.payload.label);
 
@@ -900,6 +943,15 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
     case 'TOGGLE_THUMBNAILS':
       return { ...state, showThumbnails: !state.showThumbnails };
 
+    case 'SET_IMPORTING':
+      return { ...state, isImporting: action.payload };
+
+    case 'TOGGLE_PROJECT_SETTINGS':
+      return { ...state, showProjectSettings: !state.showProjectSettings };
+
+    case 'TOGGLE_NEW_PROJECT_MODAL':
+      return { ...state, showNewProjectModal: !state.showNewProjectModal };
+
     case 'SET_CONTEXT_MENU':
       return { ...state, contextMenu: action.payload };
 
@@ -909,6 +961,53 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
     default:
       return state;
   }
+}
+
+function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction): VideoEditorState {
+  if (action.type === 'UNDO') {
+    if (state.historyIndex <= 0) return state;
+    const prevEntry = state.history[state.historyIndex - 1];
+    return applySnapshot({ ...state, historyIndex: state.historyIndex - 1 }, prevEntry.snapshot);
+  }
+  
+  if (action.type === 'REDO') {
+    if (state.historyIndex >= state.history.length - 1) return state;
+    const nextEntry = state.history[state.historyIndex + 1];
+    return applySnapshot({ ...state, historyIndex: state.historyIndex + 1 }, nextEntry.snapshot);
+  }
+
+  let nextState = baseReducer(state, action);
+
+  if (action.type === 'NEW_PROJECT' || action.type === 'LOAD_PROJECT') {
+    const label = action.type === 'NEW_PROJECT' ? 'New Project' : 'Load Project';
+    nextState.history = [{
+      id: generateId(),
+      label,
+      timestamp: Date.now(),
+      snapshot: createSnapshot(nextState),
+    }];
+    nextState.historyIndex = 0;
+  } else if (nextState._historyLabel) {
+    const label = nextState._historyLabel;
+    delete nextState._historyLabel;
+    
+    const snapshot = createSnapshot(nextState);
+    const newHistory = nextState.history.slice(0, nextState.historyIndex + 1);
+    newHistory.push({
+      id: generateId(),
+      label,
+      timestamp: Date.now(),
+      snapshot,
+    });
+    
+    if (newHistory.length > MAX_HISTORY) newHistory.shift();
+    
+    nextState.history = newHistory;
+    nextState.historyIndex = newHistory.length - 1;
+    nextState.isDirty = true;
+  }
+
+  return nextState;
 }
 
 /* ── Context ───────────────────────────────────────────────────────────── */

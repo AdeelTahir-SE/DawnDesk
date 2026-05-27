@@ -28,11 +28,11 @@ export function useFFmpeg() {
           extensions: ['mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'png', 'jpg', 'jpeg']
         }]
       });
-
       if (!files) return;
 
+      dispatch({ type: 'SET_IMPORTING', payload: true });
       const filePaths = Array.isArray(files) ? files : [files];
-      
+    
       const newItems: MediaItem[] = [];
       
       for (const path of filePaths) {
@@ -76,12 +76,13 @@ export function useFFmpeg() {
           console.error('Failed to probe media:', path, e);
         }
       }
-
       if (newItems.length > 0) {
         dispatch({ type: 'ADD_MEDIA_BATCH', payload: newItems });
       }
     } catch (e) {
       console.error('Import failed', e);
+    } finally {
+      dispatch({ type: 'SET_IMPORTING', payload: false });
     }
   };
 
@@ -141,7 +142,7 @@ export function useFFmpeg() {
     }
   };
 
-  const saveProject = async () => {
+  const saveProjectAs = async () => {
     try {
       const path = await save({
         filters: [{ name: 'DawnDesk Project', extensions: ['ddvp'] }]
@@ -149,13 +150,28 @@ export function useFFmpeg() {
       if (path) {
         await invoke('ve_save_project', { path, projectData: JSON.stringify(state.project) });
         dispatch({ type: 'SET_DIRTY', payload: false });
+        dispatch({ type: 'SET_PROJECT_PATH', payload: path });
         alert('Project saved successfully!');
       }
+    } catch (e) {
+      console.error('Save As failed', e);
+      alert('Failed to save project');
+    }
+  };
+
+  const saveProject = async () => {
+    if (!state.projectPath) {
+      return saveProjectAs();
+    }
+    try {
+      await invoke('ve_save_project', { path: state.projectPath, projectData: JSON.stringify(state.project) });
+      dispatch({ type: 'SET_DIRTY', payload: false });
     } catch (e) {
       console.error('Save failed', e);
       alert('Failed to save project');
     }
   };
+
 
   const loadProject = async () => {
     try {
@@ -167,6 +183,7 @@ export function useFFmpeg() {
         const data = await invoke<string>('ve_load_project', { path });
         const project = JSON.parse(data);
         dispatch({ type: 'LOAD_PROJECT', payload: project });
+        dispatch({ type: 'SET_PROJECT_PATH', payload: path });
       }
     } catch (e) {
       console.error('Load failed', e);
@@ -181,6 +198,7 @@ export function useFFmpeg() {
     cancelExport,
     getWaveform,
     saveProject,
+    saveProjectAs,
     loadProject,
   };
 }

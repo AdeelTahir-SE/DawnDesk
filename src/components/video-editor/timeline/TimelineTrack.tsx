@@ -99,6 +99,7 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
             color: '',
             locked: false,
             label: '',
+            path: mediaItem.path,
           },
         },
       });

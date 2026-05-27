@@ -45,7 +45,7 @@ export default function DevToolsHub() {
             type="text"
             placeholder="Search tools by name or description..."
             value={searchQuery}
-            readOnly
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full max-w-lg rounded-xl border border-neutral-800 bg-neutral-900/60 py-3 pl-12 pr-4 text-sm text-white placeholder-white/30 outline-none"
           />
         </div>

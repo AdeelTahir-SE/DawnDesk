@@ -89,6 +89,10 @@ export interface Clip {
   reversed: boolean;
   volume: number;         // 0-2 (for audio)
   opacity: number;        // 0-1 (for video)
+  positionX: number;      // normalized -1 to 1, 0 = center
+  positionY: number;      // normalized -1 to 1, 0 = center
+  scale: number;          // 0.1-4
+  rotation: number;       // degrees
   effects: Effect[];
   transition: ClipTransition | null;
   color: string;
@@ -555,7 +559,12 @@ export interface VideoEditorState {
   showKeyframes: boolean;
   showWaveforms: boolean;
   showThumbnails: boolean;
+  isImporting: boolean;
   contextMenu: { x: number; y: number; items: ContextMenuItem[] } | null;
+  clipboard: Clip[];
+  showProjectSettings: boolean;
+  showNewProjectModal: boolean;
+  _historyLabel?: string;
 }
 
 export interface ContextMenuItem {
@@ -574,7 +583,9 @@ export type VideoEditorAction =
   // Project
   | { type: 'NEW_PROJECT'; payload: ProjectSettings }
   | { type: 'LOAD_PROJECT'; payload: Project }
+  | { type: 'CLOSE_PROJECT' }
   | { type: 'SET_PROJECT_NAME'; payload: string }
+  | { type: 'SET_PROJECT_PATH'; payload: string | null }
   | { type: 'SET_DIRTY'; payload: boolean }
 
   // Playback
@@ -616,6 +627,7 @@ export type VideoEditorAction =
   | { type: 'TOGGLE_CLIP_REVERSE'; payload: string }
   | { type: 'SET_CLIP_VOLUME'; payload: { clipId: string; volume: number } }
   | { type: 'SET_CLIP_OPACITY'; payload: { clipId: string; opacity: number } }
+  | { type: 'SET_CLIP_TRANSFORM'; payload: { clipId: string; positionX?: number; positionY?: number; scale?: number; rotation?: number } }
   | { type: 'SET_CLIP_LABEL'; payload: { clipId: string; label: string } }
   | { type: 'SET_CLIP_COLOR'; payload: { clipId: string; color: string } }
   | { type: 'DUPLICATE_CLIP'; payload: string }
@@ -651,6 +663,7 @@ export type VideoEditorAction =
 
   // View
   | { type: 'SET_TIMELINE_ZOOM'; payload: number }
+  | { type: 'ZOOM_TO_FIT' }
   | { type: 'SET_TIMELINE_SCROLL'; payload: { x?: number; y?: number } }
   | { type: 'SET_PREVIEW_ZOOM'; payload: number }
   | { type: 'TOGGLE_SAFE_ZONES' }
@@ -701,9 +714,16 @@ export type VideoEditorAction =
   | { type: 'REDO' }
   | { type: 'PUSH_HISTORY'; payload: { label: string } }
 
+  // Clipboard
+  | { type: 'COPY' }
+  | { type: 'PASTE' }
+
   // UI
   | { type: 'TOGGLE_KEYFRAMES' }
   | { type: 'TOGGLE_WAVEFORMS' }
   | { type: 'TOGGLE_THUMBNAILS' }
+  | { type: 'SET_IMPORTING'; payload: boolean }
+  | { type: 'TOGGLE_PROJECT_SETTINGS' }
+  | { type: 'TOGGLE_NEW_PROJECT_MODAL' }
   | { type: 'SET_CONTEXT_MENU'; payload: VideoEditorState['contextMenu'] }
   | { type: 'CLOSE_CONTEXT_MENU' };
