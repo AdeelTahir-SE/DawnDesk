@@ -1,6 +1,6 @@
 import { useRef, useCallback, useMemo } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
-import { CLIP_COLORS } from '../../../engine/video-editor/constants';
+import { CLIP_COLORS, EFFECT_DEFINITIONS } from '../../../engine/video-editor/constants';
 import type { Clip } from '../../../engine/video-editor/types';
 
 interface Props {
@@ -105,6 +105,52 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
     });
   }, [clip.mediaType, width, clip.startTime, state.showWaveforms]);
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const dataStr = e.dataTransfer.getData('application/json');
+      if (!dataStr) return;
+      const data = JSON.parse(dataStr);
+      if (data.type === 'effect') {
+        const effectDef = EFFECT_DEFINITIONS.find((def: any) => def.type === data.effectType);
+        if (!effectDef) return;
+        dispatch({
+          type: 'ADD_EFFECT',
+          payload: {
+            clipId: clip.id,
+            effect: {
+              id: `fx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              type: effectDef.type,
+              name: effectDef.name,
+              category: effectDef.category,
+              enabled: true,
+              params: JSON.parse(JSON.stringify(effectDef.defaultParams)),
+              keyframes: [],
+              expanded: true,
+            }
+          }
+        });
+      } else if (data.type === 'transition') {
+        dispatch({
+          type: 'ADD_TRANSITION',
+          payload: {
+            clipId: clip.id,
+            transition: {
+              id: `tr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              type: data.transitionType,
+              duration: data.duration,
+              easing: 'ease-in-out',
+              edge: 'start'
+            }
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to drop onto clip', err);
+    }
+  }, [dispatch, clip.id]);
+
   return (
     <div ref={clipRef}
       className={`ve-clip ${isSelected ? 'selected' : ''}`}
@@ -114,7 +160,9 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
         cursor: state.activeTool === 'razor' ? 'crosshair' : 'pointer',
       }}
       onClick={handleClick}
-      onMouseDown={handleMouseDown}>
+      onMouseDown={handleMouseDown}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDrop={handleDrop}>
       <div className="ve-clip-bg" style={{ background: bgColor }} />
       {clip.mediaType === 'audio' && (
         <div className="ve-clip-waveform">{waveformBars}</div>

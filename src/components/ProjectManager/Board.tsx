@@ -570,8 +570,6 @@ export default function Board({ projectId }: { projectId: number | null }) {
         <IssueDetailModal
           issue={selectedIssue}
           projectId={projectId}
-          initialSprintId={selectedIssue ? selectedIssue.sprint_id : activeSprint.id}
-          initialStatus={selectedIssue ? selectedIssue.status : createStatus}
           onClose={() => {
             setIsModalOpen(false);
           }}

@@ -17,8 +17,10 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
   const currentBg = bgImages[step % bgImages.length];
 
   useEffect(() => {
-    // FORCE ONBOARDING FOR TESTING
-    setShowOnboarding(true);
+    const hasOnboarded = localStorage.getItem('onboarded_video-editor');
+    if (!hasOnboarded) {
+      setShowOnboarding(true);
+    }
     setLoading(false);
   }, []);
 

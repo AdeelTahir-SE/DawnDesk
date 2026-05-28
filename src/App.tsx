@@ -13,11 +13,27 @@ import ProjectManager from "./Pages/ProjectManager";
 import DevTools from "./Pages/DevTools";
 import FinanceManager from "./Pages/FinanceManager";
 import NotesApp from "./Pages/NotesApp";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { useAppLogger } from "./utils/LoggerContext";
+
+function NavigationLogger() {
+  const location = useLocation();
+  const { logInfo } = useAppLogger();
+
+  useEffect(() => {
+    logInfo("Navigation", `Navigated to ${location.pathname}`);
+  }, [location.pathname, logInfo]);
+
+  return null;
+}
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
+    <>
+      <NavigationLogger />
+      <Routes>
+        <Route path="/" element={<Home />} />
 
       <Route path="/*" element={<AppShell />}>
         <Route path="dashboard" element={<Dashboard />} />
@@ -32,7 +48,8 @@ function App() {
         <Route path="notes" element={<NotesApp />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

@@ -110,37 +110,44 @@ export default function AudioPanel() {
       </div>
 
       <CollapsibleSection title="Equalizer" defaultOpen={false}>
-        {[
-          { label: '60 Hz', freq: 60 },
-          { label: '250 Hz', freq: 250 },
-          { label: '1 kHz', freq: 1000 },
-          { label: '4 kHz', freq: 4000 },
-          { label: '16 kHz', freq: 16000 },
-        ].map(band => (
-          <Slider key={band.freq} label={band.label} value={0} min={-12} max={12} step={0.5}
-            onChange={() => {}} suffix="dB" />
+        {state.audioEffects.eq.bands.map(band => (
+          <Slider key={band.frequency} label={band.frequency >= 1000 ? `${band.frequency / 1000} kHz` : `${band.frequency} Hz`} 
+            value={band.gain} min={-12} max={12} step={0.5}
+            onChange={(v) => {
+              const newBands = state.audioEffects.eq.bands.map(b => b.frequency === band.frequency ? { ...b, gain: v } : b);
+              dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { eq: { ...state.audioEffects.eq, bands: newBands } } });
+            }} suffix="dB" />
         ))}
       </CollapsibleSection>
 
       <CollapsibleSection title="Compressor">
-        <Slider label="Threshold" value={-20} min={-60} max={0} onChange={() => {}} suffix="dB" />
-        <Slider label="Ratio" value={4} min={1} max={20} onChange={() => {}} suffix=":1" />
-        <Slider label="Attack" value={10} min={0.1} max={100} step={0.1} onChange={() => {}} suffix="ms" />
-        <Slider label="Release" value={100} min={10} max={1000} onChange={() => {}} suffix="ms" />
+        <Slider label="Threshold" value={state.audioEffects.compressor.threshold} min={-60} max={0} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { compressor: { ...state.audioEffects.compressor, threshold: v } } })} suffix="dB" />
+        <Slider label="Ratio" value={state.audioEffects.compressor.ratio} min={1} max={20} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { compressor: { ...state.audioEffects.compressor, ratio: v } } })} suffix=":1" />
+        <Slider label="Attack" value={state.audioEffects.compressor.attack} min={0.1} max={100} step={0.1} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { compressor: { ...state.audioEffects.compressor, attack: v } } })} suffix="ms" />
+        <Slider label="Release" value={state.audioEffects.compressor.release} min={10} max={1000} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { compressor: { ...state.audioEffects.compressor, release: v } } })} suffix="ms" />
       </CollapsibleSection>
 
       <CollapsibleSection title="Reverb">
-        <Slider label="Mix" value={0} min={0} max={100} onChange={() => {}} suffix="%" />
-        <Slider label="Decay" value={1.5} min={0.1} max={10} step={0.1} onChange={() => {}} suffix="s" />
-        <Slider label="Pre-delay" value={20} min={0} max={100} onChange={() => {}} suffix="ms" />
+        <Slider label="Mix" value={state.audioEffects.reverb.mix} min={0} max={100} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { reverb: { ...state.audioEffects.reverb, mix: v } } })} suffix="%" />
+        <Slider label="Decay" value={state.audioEffects.reverb.decay} min={0.1} max={10} step={0.1} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { reverb: { ...state.audioEffects.reverb, decay: v } } })} suffix="s" />
+        <Slider label="Pre-delay" value={state.audioEffects.reverb.preDelay} min={0} max={100} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { reverb: { ...state.audioEffects.reverb, preDelay: v } } })} suffix="ms" />
       </CollapsibleSection>
 
       <CollapsibleSection title="Noise Reduction">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <button className="ve-toggle" />
+          <button className={`ve-toggle ${state.audioEffects.noise.enabled ? 'active' : ''}`} 
+             onClick={() => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { noise: { ...state.audioEffects.noise, enabled: !state.audioEffects.noise.enabled } } })} />
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Enable</span>
         </div>
-        <Slider label="Threshold" value={-40} min={-60} max={0} onChange={() => {}} suffix="dB" />
+        <Slider label="Threshold" value={state.audioEffects.noise.threshold} min={-60} max={0} 
+          onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { noise: { ...state.audioEffects.noise, threshold: v } } })} suffix="dB" />
       </CollapsibleSection>
     </div>
   );

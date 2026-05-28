@@ -15,7 +15,10 @@ const CATEGORIES: { id: EffectCategory | 'all'; label: string }[] = [
   { id: 'stylize', label: 'Stylize' },
 ];
 
+import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
+
 export default function EffectsBrowser() {
+  const { state, dispatch } = useVideoEditor();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<EffectCategory | 'all'>('all');
 
@@ -51,6 +54,32 @@ export default function EffectsBrowser() {
           const Icon = ICON_MAP[effect.icon] || Sparkles;
           return (
             <div key={effect.type} className="ve-effect-card" draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'effect', effectType: effect.type }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              onDoubleClick={() => {
+                if (state.selectedClipIds.length > 0) {
+                  state.selectedClipIds.forEach(clipId => {
+                    dispatch({
+                      type: 'ADD_EFFECT',
+                      payload: {
+                        clipId,
+                        effect: {
+                          id: `fx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          type: effect.type,
+                          name: effect.name,
+                          category: effect.category,
+                          enabled: true,
+                          params: JSON.parse(JSON.stringify(effect.defaultParams)),
+                          keyframes: [],
+                          expanded: true,
+                        }
+                      }
+                    });
+                  });
+                }
+              }}
               title={effect.description}>
               <div className="ve-effect-card-icon"><Icon size={16} /></div>
               <div className="ve-effect-card-name">{effect.name}</div>

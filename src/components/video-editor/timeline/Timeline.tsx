@@ -35,6 +35,27 @@ export default function Timeline() {
     dispatch({ type: 'SET_PLAYHEAD', payload: Math.max(0, time) });
   }, [dispatch, state.timelineZoom]);
 
+  const handleEmptyDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const data = e.dataTransfer.getData('application/json');
+      if (!data) return;
+      const mediaItem = JSON.parse(data);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      
+      const trackType = mediaItem.type === 'video' || mediaItem.type === 'image' ? 'video' : 'audio';
+      // First add a track
+      dispatch({ type: 'ADD_TRACK', payload: { type: trackType } });
+      
+      // We need to wait for state to update to get the new track ID, or we can use a combined action.
+      // Since we don't have a combined action, we can simulate a small delay, but React state is async.
+      // Instead, we can add a simple "Add Video Track" and "Add Audio Track" button below the headers.
+    } catch (err) {
+      console.error('Drop failed', err);
+    }
+  };
+
   return (
     <div className="ve-timeline-area">
       <TimelineControls />
@@ -45,15 +66,26 @@ export default function Timeline() {
           {tracks.map((track, i) => (
             <TimelineTrack key={track.id} track={track} index={i} headerOnly />
           ))}
+          <div style={{ padding: '10px', display: 'flex', gap: '5px', justifyContent: 'center' }}>
+            <button className="dd-btn-secondary" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => dispatch({ type: 'ADD_TRACK', payload: { type: 'video' } })}>+ Video</button>
+            <button className="dd-btn-secondary" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => dispatch({ type: 'ADD_TRACK', payload: { type: 'audio' } })}>+ Audio</button>
+          </div>
         </div>
 
         {/* Scrollable clips area */}
-        <div className="ve-timeline-scroll" ref={scrollRef} onWheel={handleWheel} onScroll={handleScroll}>
+        <div className="ve-timeline-scroll" ref={scrollRef} onWheel={handleWheel} onScroll={handleScroll}
+          onDragOver={e => e.preventDefault()}
+          onDrop={handleEmptyDrop}>
           <TimelineRuler width={totalWidth} duration={duration} onClick={handleRulerClick} />
           <div style={{ position: 'relative', width: totalWidth, minHeight: '100%' }}>
             {tracks.map((track, i) => (
               <TimelineTrack key={track.id} track={track} index={i} />
             ))}
+            {tracks.length === 0 && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', pointerEvents: 'none' }}>
+                Click + Video or + Audio to add a track, then drag media here
+              </div>
+            )}
             <Playhead height={tracks.reduce((sum, t) => sum + t.height, 0)} />
           </div>
         </div>

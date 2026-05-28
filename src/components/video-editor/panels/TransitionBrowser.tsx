@@ -8,9 +8,12 @@ const ICON_MAP: Record<string, React.ElementType> = {
   ArrowLeftToLine: ArrowLeft, ArrowRightToLine: ArrowRight,
 };
 
-const CATEGORIES = ['All', 'Dissolve', 'Wipe', 'Zoom', 'Motion', 'Slide', 'Push', 'Stylized'];
+const CATEGORIES = ['All', 'Dissolve', 'Wipe', 'Slide', 'Zoom', '3D'];
+
+import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 
 export default function TransitionBrowser() {
+  const { state, dispatch } = useVideoEditor();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
 
@@ -45,7 +48,30 @@ export default function TransitionBrowser() {
         {filtered.map(t => {
           const Icon = ICON_MAP[t.icon] || ArrowRightLeft;
           return (
-            <div key={t.type} className="ve-effect-card" draggable title={t.description}>
+            <div key={t.type} className="ve-effect-card" draggable title={t.description}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'transition', transitionType: t.type, duration: t.defaultDuration }));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              onDoubleClick={() => {
+                if (state.selectedClipIds.length > 0) {
+                  state.selectedClipIds.forEach(clipId => {
+                    dispatch({
+                      type: 'ADD_TRANSITION',
+                      payload: {
+                        clipId,
+                        transition: {
+                          id: `tr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          type: t.type,
+                          duration: t.defaultDuration,
+                          easing: 'ease-in-out',
+                          edge: 'start'
+                        }
+                      }
+                    });
+                  });
+                }
+              }}>
               <div className="ve-effect-card-icon"><Icon size={16} /></div>
               <div className="ve-effect-card-name">{t.name}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>

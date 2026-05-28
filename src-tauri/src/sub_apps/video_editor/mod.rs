@@ -1,6 +1,6 @@
 use serde::Serialize;
-use std::{fs, path::PathBuf};
-use tauri::{AppHandle, Manager, Emitter};
+use std::fs;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
 
 #[derive(Serialize)]
@@ -174,32 +174,147 @@ pub async fn ve_import_media() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value) -> Result<String, String> {
-    // For a real NLE, this would be a complex ffmpeg command with filter_complex
-    // representing the timeline. For this UI implementation, we'll simulate a 
-    // basic ffmpeg command that just copies an input or creates a dummy output
-    // to show the export progress working.
+pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, project: serde_json::Value) -> Result<String, String> {
+    let out_path = settings.get("outputPath").and_then(|p| p.as_str()).unwrap_or("export.mp4").to_string();
+    let width = settings.get("width").and_then(|v| v.as_u64()).unwrap_or(1920);
+    let height = settings.get("height").and_then(|v| v.as_u64()).unwrap_or(1080);
+    let fps = settings.get("frameRate").and_then(|v| v.as_f64()).unwrap_or(30.0);
+    let v_codec = settings.get("videoCodec").and_then(|v| v.as_str()).unwrap_or("h264").to_string();
     
-    let out_name = settings.get("name").and_then(|n| n.as_str()).unwrap_or("export");
-    let out_dir = match app.path().download_dir() {
-        Ok(dir) => dir,
-        Err(_) => PathBuf::from("."),
-    };
+    // Find first video clip path for input
+    let mut input_path = String::new();
+    let mut duration = 5.0; // fallback duration
     
-    let out_path = out_dir.join(format!("{}.mp4", out_name));
+    if let Some(duration_val) = project.get("duration").and_then(|d| d.as_f64()) {
+        duration = duration_val;
+    }
     
-    // Simulated export process - in reality this would spawn a ffmpeg process
-    // and stream progress to the frontend.
+    if let Some(tracks) = project.get("tracks").and_then(|t| t.as_array()) {
+        for track in tracks {
+            if let Some(clips) = track.get("clips").and_then(|c| c.as_array()) {
+                for clip in clips {
+                    if let Some(path) = clip.get("path").and_then(|p| p.as_str()) {
+                        if !path.is_empty() {
+                            input_path = path.to_string();
+                            break;
+                        }
+                    }
+                }
+            }
+            if !input_path.is_empty() { break; }
+        }
+    }
     
-    // To show progress, we will spawn a thread that emits events to the frontend.
     let app_clone = app.clone();
     
     tauri::async_runtime::spawn(async move {
-        for i in 0..=100 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-            let _ = app_clone.emit("export-progress", i);
+        // Build ffmpeg arguments
+        let mut args = vec!["-y".to_string()];
+        
+        if input_path.is_empty() {
+            // Dummy input if timeline is empty
+            args.push("-f".to_string());
+            args.push("lavfi".to_string());
+            args.push("-i".to_string());
+            args.push(format!("testsrc=duration={}:size={}x{}:rate={}", duration, width, height, fps));
+        } else {
+            args.push("-i".to_string());
+            args.push(input_path.clone());
         }
-        let _ = app_clone.emit("export-complete", out_path.to_string_lossy().to_string());
+        
+        // Scale and frame rate
+        args.push("-vf".to_string());
+        args.push(format!("scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,fps={}", width, height, width, height, fps));
+        
+        // HW Accel fallback logic
+        let mut codecs_to_try = vec![];
+        if v_codec == "h264" {
+            codecs_to_try.push("h264_nvenc"); // Try NVIDIA first
+            codecs_to_try.push("h264_qsv");   // Try Intel second
+            codecs_to_try.push("h264_amf");   // Try AMD third
+            codecs_to_try.push("libx264");    // Software fallback
+        } else if v_codec == "h265" {
+            codecs_to_try.push("hevc_nvenc");
+            codecs_to_try.push("hevc_qsv");
+            codecs_to_try.push("hevc_amf");
+            codecs_to_try.push("libx265");
+        } else {
+            codecs_to_try.push("libx264");
+        }
+        
+        let mut success = false;
+        
+        for codec in codecs_to_try {
+            let mut current_args = args.clone();
+            current_args.push("-c:v".to_string());
+            current_args.push(codec.to_string());
+            
+            if codec.contains("libx") {
+                current_args.push("-preset".to_string());
+                current_args.push("fast".to_string());
+            } else {
+                current_args.push("-preset".to_string());
+                current_args.push("p1".to_string()); // nvenc fast preset
+            }
+            
+            current_args.push(out_path.clone());
+            
+            // Execute ffmpeg and parse progress
+            let mut command = app_clone.shell().sidecar("ffmpeg").unwrap();
+            for arg in &current_args {
+                command = command.arg(arg);
+            }
+            
+            use tauri_plugin_shell::process::CommandEvent;
+            
+            if let Ok((mut rx, _child)) = command.spawn() {
+                while let Some(event) = rx.recv().await {
+                    match event {
+                        CommandEvent::Stderr(line_bytes) => {
+                            let line_str = String::from_utf8_lossy(&line_bytes);
+                            // Parse "time=00:00:05.12"
+                            if let Some(time_idx) = line_str.find("time=") {
+                                let time_str = &line_str[time_idx + 5..];
+                                if let Some(end_idx) = time_str.find(" ") {
+                                    let time_val = &time_str[..end_idx];
+                                    let parts: Vec<&str> = time_val.split(':').collect();
+                                    if parts.len() == 3 {
+                                        let h: f64 = parts[0].parse().unwrap_or(0.0);
+                                        let m: f64 = parts[1].parse().unwrap_or(0.0);
+                                        let s: f64 = parts[2].parse().unwrap_or(0.0);
+                                        let current_time = h * 3600.0 + m * 60.0 + s;
+                                        
+                                        if duration > 0.0 {
+                                            let mut progress = (current_time / duration * 100.0) as u32;
+                                            if progress > 100 { progress = 100; }
+                                            let _ = app_clone.emit("export-progress", progress);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        CommandEvent::Terminated(payload) => {
+                            if payload.code.unwrap_or(-1) == 0 {
+                                success = true;
+                            }
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                
+                if success {
+                    break;
+                }
+            }
+        }
+        
+        if success {
+            let _ = app_clone.emit("export-progress", 100);
+            let _ = app_clone.emit("export-complete", out_path.clone());
+        } else {
+            let _ = app_clone.emit("export-error", "All codec fallbacks failed.");
+        }
     });
     
     Ok("Export started".into())

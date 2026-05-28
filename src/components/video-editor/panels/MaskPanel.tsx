@@ -44,6 +44,7 @@ export default function MaskPanel() {
                   type: m.type as 'rectangle' | 'ellipse' | 'freehand' | 'pen',
                   points: [], feather: 10, opacity: 100, expansion: 0, inverted: false,
                   keyframes: [],
+                  chromaKey: { enabled: false, keyColor: '#00ff00', tolerance: 40, edgeSoft: 10, spillSuppression: 50 },
                 },
               })}>
               <m.icon size={14} style={{ color: '#FACC15' }} />
@@ -88,20 +89,25 @@ export default function MaskPanel() {
           <span className="ve-panel-section-title">Chroma Key</span>
           {chromaOpen ? <ChevronDown size={12} style={{ color: 'rgba(255,255,255,0.3)' }} /> : <ChevronRight size={12} style={{ color: 'rgba(255,255,255,0.3)' }} />}
         </div>
-        {chromaOpen && (
+        {chromaOpen && mask.chromaKey && (
           <div style={{ marginTop: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <button className="ve-toggle" />
+              <button className={`ve-toggle ${mask.chromaKey.enabled ? 'active' : ''}`} 
+                 onClick={() => dispatch({ type: 'UPDATE_MASK', payload: { chromaKey: { ...mask.chromaKey!, enabled: !mask.chromaKey!.enabled } } })} />
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Enable</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Key Color</span>
-              <input type="color" defaultValue="#00ff00"
-                style={{ width: 24, height: 24, border: '1px solid var(--ve-border)', borderRadius: 4, cursor: 'pointer' }} />
+              <input type="color" value={mask.chromaKey.keyColor}
+                onChange={e => dispatch({ type: 'UPDATE_MASK', payload: { chromaKey: { ...mask.chromaKey!, keyColor: e.target.value } } })}
+                style={{ width: 24, height: 24, border: '1px solid var(--ve-border)', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
             </div>
-            <Slider label="Tolerance" value={40} min={0} max={100} onChange={() => {}} />
-            <Slider label="Edge Soft" value={10} min={0} max={100} onChange={() => {}} />
-            <Slider label="Spill Supp." value={50} min={0} max={100} onChange={() => {}} />
+            <Slider label="Tolerance" value={mask.chromaKey.tolerance} min={0} max={100} 
+               onChange={v => dispatch({ type: 'UPDATE_MASK', payload: { chromaKey: { ...mask.chromaKey!, tolerance: v } } })} />
+            <Slider label="Edge Soft" value={mask.chromaKey.edgeSoft} min={0} max={100} 
+               onChange={v => dispatch({ type: 'UPDATE_MASK', payload: { chromaKey: { ...mask.chromaKey!, edgeSoft: v } } })} />
+            <Slider label="Spill Supp." value={mask.chromaKey.spillSuppression} min={0} max={100} 
+               onChange={v => dispatch({ type: 'UPDATE_MASK', payload: { chromaKey: { ...mask.chromaKey!, spillSuppression: v } } })} />
           </div>
         )}
       </div>

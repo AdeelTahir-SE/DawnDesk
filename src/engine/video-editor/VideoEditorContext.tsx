@@ -2,7 +2,8 @@
 // DawnDesk Video Editor — Context & Reducer
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { createContext, useContext, useReducer, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react';
+import { useAppLogger } from '../../utils/LoggerContext';
 import type {
   VideoEditorState,
   VideoEditorAction,
@@ -168,9 +169,22 @@ export const initialState: VideoEditorState = {
 
   // Text
   activeTextOverlay: null,
-
-  // Audio
-  masterVolume: 1,
+  masterVolume: 1.0,
+  audioEffects: {
+    eq: {
+      enabled: false,
+      bands: [
+        { frequency: 60, gain: 0, q: 1 },
+        { frequency: 250, gain: 0, q: 1 },
+        { frequency: 1000, gain: 0, q: 1 },
+        { frequency: 4000, gain: 0, q: 1 },
+        { frequency: 16000, gain: 0, q: 1 },
+      ]
+    },
+    compressor: { enabled: false, threshold: -20, ratio: 4, attack: 10, release: 100, makeupGain: 0 },
+    reverb: { enabled: false, mix: 0, decay: 1.5, preDelay: 20 },
+    noise: { enabled: false, reduction: -40, threshold: -40 },
+  },
 
   // Mask
   activeMask: null,
@@ -208,33 +222,11 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     // ── Project ─────────────────────────────────────────────────────────
     case 'NEW_PROJECT': {
-      const colorIdx = 0;
       const newProject = {
         id: generateId(),
         name: action.payload.name,
         settings: { ...action.payload },
-        tracks: [
-          {
-            id: generateId(), name: 'Video 1', type: 'video' as const,
-            clips: [], muted: false, solo: false, locked: false, visible: true,
-            volume: 1, height: DEFAULT_VIDEO_TRACK_HEIGHT, color: TRACK_COLORS[colorIdx],
-          },
-          {
-            id: generateId(), name: 'Video 2', type: 'video' as const,
-            clips: [], muted: false, solo: false, locked: false, visible: true,
-            volume: 1, height: DEFAULT_VIDEO_TRACK_HEIGHT, color: TRACK_COLORS[colorIdx + 1],
-          },
-          {
-            id: generateId(), name: 'Audio 1', type: 'audio' as const,
-            clips: [], muted: false, solo: false, locked: false, visible: true,
-            volume: 1, height: DEFAULT_AUDIO_TRACK_HEIGHT, color: TRACK_COLORS[colorIdx + 2],
-          },
-          {
-            id: generateId(), name: 'Audio 2', type: 'audio' as const,
-            clips: [], muted: false, solo: false, locked: false, visible: true,
-            volume: 1, height: DEFAULT_AUDIO_TRACK_HEIGHT, color: TRACK_COLORS[colorIdx + 3],
-          },
-        ],
+        tracks: [],
         mediaPool: [],
         mediaFolders: [],
         markers: [],
@@ -607,6 +599,18 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       return { ...state, project: { ...state.project, tracks } };
     }
 
+    case 'SET_CLIP_BLEND_MODE':
+      return {
+        ...state,
+        project: state.project ? {
+          ...state.project,
+          tracks: state.project.tracks.map(t => ({
+            ...t,
+            clips: t.clips.map(c => c.id === action.payload.clipId ? { ...c, blendMode: action.payload.blendMode } : c)
+          }))
+        } : null
+      };
+
     case 'SET_CLIP_COLOR': {
       if (!state.project) return state;
       const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
@@ -922,7 +926,10 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     // ── Audio ───────────────────────────────────────────────────────────
     case 'SET_MASTER_VOLUME':
-      return { ...state, masterVolume: action.payload };
+      return { ...state, masterVolume: Math.max(0, action.payload) };
+
+    case 'SET_AUDIO_EFFECTS':
+      return { ...state, audioEffects: { ...state.audioEffects, ...action.payload } };
 
     // ── Mask ────────────────────────────────────────────────────────────
     case 'SET_MASK':
@@ -986,11 +993,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       return { ...state, ffmpegStatus: action.payload };
 
     // ── History ──────────────────────────────────────────────────────────
-    case 'UNDO': {
-      if (state.historyIndex <= 0) return state;
-      const prevEntry = state.history[state.historyIndex - 1];
-      return applySnapshot({ ...state, historyIndex: state.historyIndex - 1 }, prevEntry.snapshot);
-    }
+    // UNDO and REDO are handled by the wrapper videoEditorReducer
 
     case 'PUSH_HISTORY':
       return pushHistory(state, action.payload.label);
@@ -1080,7 +1083,13 @@ const VideoEditorContext = createContext<{
 } | null>(null);
 
 export function VideoEditorProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(videoEditorReducer, initialState);
+  const [state, baseDispatch] = useReducer(videoEditorReducer, initialState);
+  const { logInfo } = useAppLogger();
+
+  const dispatch = useCallback((action: VideoEditorAction) => {
+    logInfo('Video Editor', `Performed action: ${action.type}`);
+    baseDispatch(action);
+  }, [baseDispatch, logInfo]);
 
   return (
     <VideoEditorContext.Provider value={{ state, dispatch }}>

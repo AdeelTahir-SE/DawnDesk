@@ -1,137 +1,172 @@
-# Bundle FFmpeg & Make Video Editor Functional
+# Fix DawnDesk Video Editor — All Broken Features
 
-Bundle FFmpeg as a sidecar binary with the Tauri app and create the backend Rust commands + frontend hooks to make the video editor fully operational (media import, probe, thumbnail generation, waveform extraction, and export/render).
+Complete the DawnDesk video editor by fixing all identified broken/stub features across the frontend components, preview engine, audio system, effects pipeline, export backend, and UI interactions.
+
+## User Review Required
 
 > [!IMPORTANT]
-> The existing UI will NOT be modified. All changes are backend Rust commands, frontend engine hooks, and configuration files.
+> **Scope**: This plan covers ~20 bugs/stubs across 15+ files. The changes are all frontend TypeScript/React + Rust backend. No new dependencies are needed.
+
+> [!WARNING]
+> **Export**: The Rust backend `ve_export_project` is currently a simulated fake (just emits 0-100 progress, writes no file). Making this a **real** FFmpeg export requires building the full `filter_complex` command chain from the timeline state. This is the most complex single change and I will implement a working version that handles single-track multi-clip concatenation with trim, speed, effects, and transitions.
+
+> [!CAUTION]
+> **Waveform**: Real waveform extraction from FFmpeg is computationally expensive. I will implement a real FFmpeg-based waveform extractor that runs asynchronously so it doesn't block the UI.
 
 ## Open Questions
 
 > [!IMPORTANT]
-> **FFmpeg Binary Source**: FFmpeg needs to be downloaded manually and placed in `src-tauri/binaries/`. I will create a PowerShell script to automate this download. The binary must be named `ffmpeg-x86_64-pc-windows-msvc.exe` for Windows. Should I also include `ffprobe` for media probing? (Recommended: **Yes**, include both `ffmpeg` and `ffprobe`)
+> **Audio Processing (EQ, Compressor, Reverb, Noise Reduction)**: These audio effects in `AudioPanel.tsx` currently have `onChange={() => {}}` stubs. Full Web Audio API integration for real-time audio processing during preview is extremely complex. **I plan to wire up the UI controls to state so values are stored and can be used during FFmpeg export, but not add real-time audio processing in the preview.** Is that acceptable, or do you want real-time Web Audio preview too?
+
+> [!IMPORTANT]
+> **Masks & Chroma Key**: The MaskPanel has stub controls. I will wire the chroma key controls to state so they're stored for export, but canvas-based mask rendering (freehand drawing, pen tool paths) is a very large feature. **I plan to wire up all controls to state but not build a full interactive mask drawing system on the canvas.** Is that acceptable?
+
+---
 
 ## Proposed Changes
 
-### 1. FFmpeg Sidecar Setup
+### Phase 1: Critical Bugs & Quick Fixes
 
-#### [NEW] `src-tauri/binaries/` directory
-- Will contain `ffmpeg-x86_64-pc-windows-msvc.exe` and `ffprobe-x86_64-pc-windows-msvc.exe`
-- Binaries are downloaded via a setup script (not committed to git)
+#### [MODIFY] [VideoEditorOnboarding.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/VideoEditorOnboarding.tsx)
+- **Fix forced onboarding**: Replace the `FORCE ONBOARDING FOR TESTING` code with proper `localStorage` check so the onboarding only shows for first-time users.
 
-#### [NEW] [download-ffmpeg.ps1](file:///E:/codingfolder/tauri/DawnDesk/scripts/download-ffmpeg.ps1)
-- PowerShell script to download FFmpeg/FFprobe from gyan.dev (trusted Windows builds)
-- Extracts and renames binaries to match Tauri's sidecar naming convention
-- Places them in `src-tauri/binaries/`
-
-#### [MODIFY] [tauri.conf.json](file:///E:/codingfolder/tauri/DawnDesk/src-tauri/tauri.conf.json)
-- Add `"externalBin": ["binaries/ffmpeg", "binaries/ffprobe"]` to `bundle` section
-
-#### [MODIFY] [default.json](file:///E:/codingfolder/tauri/DawnDesk/src-tauri/capabilities/default.json)
-- Add `shell:allow-execute` permission for ffmpeg and ffprobe sidecars
-
-#### [MODIFY] [Cargo.toml](file:///E:/codingfolder/tauri/DawnDesk/src-tauri/Cargo.toml)
-- Add `tauri-plugin-shell` dependency
-- Add `tauri-plugin-dialog` dependency (for file picker)
-- Add `tauri-plugin-fs` dependency (for file system access)
-- Add `base64` crate for thumbnail encoding
-
-#### [MODIFY] [lib.rs](file:///E:/codingfolder/tauri/DawnDesk/src-tauri/src/lib.rs)
-- Register `tauri_plugin_shell`, `tauri_plugin_dialog`, `tauri_plugin_fs` plugins
-- Register new video_editor Tauri commands
-
-#### [MODIFY] [package.json](file:///E:/codingfolder/tauri/DawnDesk/package.json)
-- Add `@tauri-apps/plugin-shell` dependency
-- Add `@tauri-apps/plugin-dialog` dependency
-- Add `@tauri-apps/plugin-fs` dependency
+#### [MODIFY] [VideoEditorContext.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/engine/video-editor/VideoEditorContext.tsx)
+- **Remove duplicate UNDO handler**: Delete the dead `UNDO` case from `baseReducer` (lines 989-993) since `videoEditorReducer` already handles it.
+- **Add REDO to baseReducer comment**: (Already handled by wrapper, just clean up)
 
 ---
 
-### 2. Rust Backend — Video Editor Commands
+### Phase 2: Preview Canvas — Video Compositing & Effects
 
-#### [MODIFY] [mod.rs](file:///E:/codingfolder/tauri/DawnDesk/src-tauri/src/sub_apps/video_editor/mod.rs)
+#### [MODIFY] [PreviewCanvas.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/preview/PreviewCanvas.tsx)
+The preview canvas currently ignores effects, transitions, text overlays, opacity blending, color grading, and track mute/visibility. Major changes:
 
-Implement the following Tauri commands:
-
-1. **`ve_probe_media`** — Use ffprobe sidecar to get media metadata (duration, resolution, codec, fps, audio channels)
-2. **`ve_generate_thumbnail`** — Use ffmpeg sidecar to extract a frame at a given timestamp and return base64 PNG
-3. **`ve_generate_waveform`** — Use ffmpeg sidecar to extract audio peaks for waveform visualization
-4. **`ve_import_media`** — Open file dialog, probe selected files, return MediaItem data
-5. **`ve_export_project`** — Build and run ffmpeg command to render the final video with all settings
-6. **`ve_get_export_progress`** — Parse ffmpeg stderr progress output for render progress
-7. **`ve_cancel_export`** — Kill running ffmpeg process
-8. **`ve_save_project`** — Serialize project state to JSON file
-9. **`ve_load_project`** — Deserialize project state from JSON file
-10. **`ve_check_ffmpeg`** — Verify ffmpeg/ffprobe sidecars are available and return version info
+- **Apply CSS-style effects to canvas**: After drawing each clip frame, apply `clip.effects` using Canvas 2D filters (brightness, contrast, saturate, hue-rotate, blur, grayscale, sepia, invert) and manual pixel manipulation for more complex effects.
+- **Apply color grading**: After compositing all clips, apply global color grading (exposure, contrast, saturation, temperature, tint, vignette) using canvas filter strings and/or pixel-level manipulation.
+- **Render text overlays**: If `state.activeTextOverlay` is set, draw it on the canvas using `ctx.fillText()` with proper font, size, color, alignment, shadow, outline, and position.
+- **Apply clip opacity**: Already partially done via `ctx.globalAlpha`, ensure it's working for all clip types including images.
+- **Respect track mute/visibility**: Skip rendering clips from invisible tracks (already done), but also handle `muted` for audio tracks.
+- **Handle blend modes**: Apply `ctx.globalCompositeOperation` based on clip's blend mode if set.
+- **Add transition rendering between clips**: For adjacent clips with transitions, render a cross-fade/dissolve effect using canvas alpha blending. For simple transitions (fade, dissolve), this is achievable with canvas.
+- **Media cache cleanup**: Clear cache entries when media is removed from the project.
 
 ---
 
-### 3. Frontend Engine — Hooks & Integration
+### Phase 3: Audio Playback System
 
-#### [NEW] [useFFmpeg.ts](file:///E:/codingfolder/tauri/DawnDesk/src/engine/video-editor/useFFmpeg.ts)
+#### [MODIFY] [PreviewCanvas.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/preview/PreviewCanvas.tsx)
+- **Unmute video elements**: Remove `vid.muted = true` and instead set `vid.volume` based on `clip.volume * trackVolume * masterVolume`.
+- **Only play audio from the active/visible clip** to avoid cacophony.
+- **Play/pause video elements in sync with playback state**.
 
-Custom hook wrapping all Tauri invoke calls:
-- `checkFFmpeg()` — Verify FFmpeg is available
-- `probeMedia(path)` — Get media info
-- `generateThumbnail(path, time)` — Extract frame thumbnail
-- `generateWaveform(path)` — Get waveform data
-- `importMedia()` — Open file picker + probe
-- `exportProject(settings, tracks)` — Start render
-- `cancelExport()` — Cancel render
-- `saveProject(project)` — Save to file
-- `loadProject()` — Load from file
+#### [MODIFY] [AudioPanel.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/AudioPanel.tsx)
+- **Wire up all audio controls to state**: Replace all `onChange={() => {}}` stubs with actual state dispatches.
+- **Add audio state to types**: Add EQ, Compressor, Reverb, Noise Reduction state to the clip or global state.
+- **Connect AudioMeter to actual playback levels**: Use Web Audio API `AnalyserNode` to get real audio levels when playing.
 
-#### [MODIFY] [VideoEditorContext.tsx](file:///E:/codingfolder/tauri/DawnDesk/src/engine/video-editor/VideoEditorContext.tsx)
+#### [MODIFY] [types.ts](file:///e:/codingfolder/tauri/DawnDesk/src/engine/video-editor/types.ts)
+- **Add audio effects state**: `AudioEffects` type already exists but needs to be connected to the state tree. Add `audioEffects` to `VideoEditorState`.
 
-Add new actions to the reducer:
-- `IMPORT_MEDIA_START` / `IMPORT_MEDIA_SUCCESS` / `IMPORT_MEDIA_ERROR`
-- `EXPORT_START` / `EXPORT_PROGRESS` / `EXPORT_COMPLETE` / `EXPORT_ERROR`
-- `SET_FFMPEG_STATUS`
-
-Add new state fields:
-- `ffmpegAvailable: boolean`
-- `isImporting: boolean`
-- `isExporting: boolean`
-- `exportProgress: number`
-
-#### [MODIFY] [types.ts](file:///E:/codingfolder/tauri/DawnDesk/src/engine/video-editor/types.ts)
-
-Add new types for FFmpeg integration:
-- `FFmpegStatus`
-- `MediaProbeResult`
-- New action types for import/export
+#### [MODIFY] [VideoEditorContext.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/engine/video-editor/VideoEditorContext.tsx)
+- **Add audio effects reducer actions**: `SET_AUDIO_EFFECTS` for EQ, compressor, reverb, noise reduction.
 
 ---
 
-### 4. Frontend Components — Wire Up Backends (No UI Changes)
+### Phase 4: Effects & Transitions — UI Wiring
 
-These are **logic-only changes** to connect existing UI buttons to backend commands. No visual changes.
+#### [MODIFY] [EffectsBrowser.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/EffectsBrowser.tsx)
+- **Add `onDragStart` handler**: Set drag data with effect type so effects can be dragged onto timeline clips.
+- **Add double-click to apply**: Double-clicking an effect applies it to the currently selected clip.
 
-#### [MODIFY] [MediaBin.tsx](file:///E:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/MediaBin.tsx)
-- Wire "Import Media" button to `useFFmpeg().importMedia()`
-- On import success, dispatch `ADD_MEDIA_BATCH`
+#### [MODIFY] [TransitionBrowser.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/TransitionBrowser.tsx)
+- **Add `onDragStart` handler**: Set drag data with transition type.
+- **Add double-click to apply**: Double-clicking a transition applies it to the currently selected clip's incoming edge.
 
-#### [MODIFY] [ExportDialog.tsx](file:///E:/codingfolder/tauri/DawnDesk/src/components/video-editor/export/ExportDialog.tsx)
-- Wire "Export" button to `useFFmpeg().exportProject()`
-- Show progress bar during export
+#### [MODIFY] [TimelineClip.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/timeline/TimelineClip.tsx)
+- **Add drop handler for effects and transitions**: Accept drops from EffectsBrowser and TransitionBrowser, dispatch `ADD_EFFECT` or `ADD_TRANSITION`.
 
-#### [MODIFY] [MenuBar.tsx](file:///E:/codingfolder/tauri/DawnDesk/src/components/video-editor/toolbar/MenuBar.tsx)
-- Wire File > Save/Open/Import to backend commands
+#### [MODIFY] [PropertiesPanel.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/PropertiesPanel.tsx)
+- **Wire Blend Mode select**: Add `value` binding to `clip.blendMode` state and `onChange` handler that dispatches update.
 
-#### [MODIFY] [StatusBar.tsx](file:///E:/codingfolder/tauri/DawnDesk/src/components/video-editor/StatusBar.tsx)
-- Show FFmpeg status indicator (available/missing)
+#### [MODIFY] [ColorGradingPanel.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/ColorGradingPanel.tsx)
+- **Add color wheel mouse interaction**: Add `onMouseDown` handler to color wheel canvases that calculates the clicked position relative to center, converts to r/g values, and dispatches `SET_COLOR_WHEEL`.
+- **Wire LUT load button**: Add `onClick` handler that opens a file dialog to select a .cube/.3dl LUT file, reads it, and stores the path in state.
+
+#### [MODIFY] [MaskPanel.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/panels/MaskPanel.tsx)
+- **Wire Chroma Key controls**: Add state for chroma key (enabled, keyColor, tolerance, edgeSoft, spillSuppression) and dispatch on change.
+- **Wire toggle button**: Add `onClick` and active state binding.
+- **Wire color picker**: Add `onChange` handler.
+
+---
+
+### Phase 5: Export Pipeline — Real FFmpeg Export
+
+#### [MODIFY] [mod.rs](file:///e:/codingfolder/tauri/DawnDesk/src-tauri/src/sub_apps/video_editor/mod.rs)
+Replace the simulated `ve_export_project` with a **real FFmpeg export** that:
+1. Accepts the full project state (tracks, clips, effects, transitions) as serialized JSON.
+2. Builds a proper FFmpeg command with:
+   - `-i` inputs for each unique media file
+   - `-filter_complex` with trim, setpts, speed changes, effect filters, transition (xfade) filters, and concat
+   - Output codec/format/bitrate settings from export settings
+3. Spawns FFmpeg as a sidecar process.
+4. Parses stderr for `time=` progress patterns and emits `export-progress` events.
+5. Emits `export-complete` with the output path when done.
+6. Supports cancellation by killing the child process.
+
+Also fix:
+- **`ve_generate_waveform`**: Replace simulated data with actual FFmpeg waveform extraction using `ffmpeg -i input -filter:a "aformat=channel_layouts=mono,showwavespic=s=800x100:colors=white" -frames:v 1 -f image2pipe pipe:1` or by parsing audio peaks with `astats`.
+- **`ve_cancel_export`**: Store the child process handle and kill it on cancel.
+
+#### [MODIFY] [ExportDialog.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/export/ExportDialog.tsx)
+- **Add output path selection**: Add a "Choose Output Location" button that uses Tauri's `save` dialog to let the user pick where to save the exported file, and store the path in export settings.
+
+#### [MODIFY] [useFFmpeg.ts](file:///e:/codingfolder/tauri/DawnDesk/src/engine/video-editor/useFFmpeg.ts)
+- **Pass full project state to export**: Send the complete project state (tracks, clips, media paths) to the backend export command so it can build the FFmpeg filter chain.
+- **Replace `alert()` calls with toast notifications**: Use the existing `sonner` dependency for proper toast notifications instead of blocking `alert()`.
+
+---
+
+### Phase 6: UI Polish & Missing Interactions
+
+#### [MODIFY] [TimelineClip.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/components/video-editor/timeline/TimelineClip.tsx)
+- **Use real waveform data**: When `clip.mediaType === 'audio'`, use the media item's `waveformData` (fetched from backend) instead of `Math.sin() + Math.random()`.
+- **Respect snap setting**: When dragging clips, use `snapTime()` from context for magnetic snapping (already handled by `MOVE_CLIP` reducer action).
+
+#### [MODIFY] [VideoEditorContext.tsx](file:///e:/codingfolder/tauri/DawnDesk/src/engine/video-editor/VideoEditorContext.tsx)
+- **Add `blendMode` to Clip type**: Ensure the Clip type includes an optional `blendMode` field.
+- **Add chroma key state**: Add chroma key fields to state or the Mask type.
+- **Add audio effects state and actions**: Wire up audio processing parameters.
+
+#### [MODIFY] [types.ts](file:///e:/codingfolder/tauri/DawnDesk/src/engine/video-editor/types.ts)
+- **Add `blendMode` to Clip** type if not already present.
+- **Add `chromaKey` to Mask** type with enable, color, tolerance, edgeSoft, spillSuppression fields.
+- **Add `audioEffects` to VideoEditorState**.
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-1. `cargo build` — Rust backend compiles
-2. `npx tsc --noEmit` — TypeScript passes
-3. FFmpeg sidecar responds to `--version` flag
+```bash
+# Build the Tauri app to check for compilation errors
+cd e:\codingfolder\tauri\DawnDesk
+npm run build
+
+# Run Rust tests
+cd src-tauri
+cargo test
+```
 
 ### Manual Verification
-- Import a video file → appears in MediaBin with thumbnail and metadata
-- Import an audio file → appears with waveform data
-- Export project → FFmpeg renders video to Downloads folder
-- Save/Load project works correctly
-- FFmpeg status indicator shows green when available
+- **Open the video editor** — should skip onboarding if previously completed
+- **Import media files** — should probe duration, generate thumbnails
+- **Add clips to timeline** — should render in preview canvas
+- **Apply effects** — drag or double-click effects onto clips
+- **Adjust color grading** — preview should update in real-time
+- **Add text overlay** — should render on preview canvas
+- **Play/pause** — video and audio should play in sync
+- **Audio controls** — master volume, clip volume should affect playback
+- **Export** — should produce a real video file with all effects applied
+- **Undo/Redo** — should work for all timeline operations
+- **Keyboard shortcuts** — all defined shortcuts should function
+- **Save/Load project** — project state should persist correctly

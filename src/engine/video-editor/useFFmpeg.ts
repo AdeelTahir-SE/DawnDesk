@@ -4,9 +4,11 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import type { MediaItem, MediaProbeResult, ExportSettings } from './types';
 import { useVideoEditor } from './VideoEditorContext';
 import { useRef } from 'react';
+import { useAppLogger } from '../../utils/LoggerContext';
 
 export function useFFmpeg() {
   const { state, dispatch } = useVideoEditor();
+  const { logSuccess, logError, logInfo } = useAppLogger();
 
   const checkFFmpeg = async (): Promise<boolean> => {
     try {
@@ -19,6 +21,59 @@ export function useFFmpeg() {
     }
   };
 
+  const importMediaPaths = async (filePaths: string[]) => {
+    if (!filePaths || filePaths.length === 0) return;
+    dispatch({ type: 'SET_IMPORTING', payload: true });
+  
+    const newItems: MediaItem[] = [];
+    
+    for (const path of filePaths) {
+      try {
+        const probe = await invoke<MediaProbeResult>('ve_probe_media', { path });
+        
+        let thumbnail = '';
+        if (probe.has_video) {
+          try {
+            thumbnail = await invoke<string>('ve_generate_thumbnail', { path, time: 0.0 });
+          } catch (e) {
+            console.error('Thumbnail generation failed', e);
+          }
+        }
+
+        const name = path.split(/[/\\]/).pop() || 'Unknown';
+        const type = probe.has_video ? 'video' : (probe.has_audio ? 'audio' : 'image');
+        
+        newItems.push({
+          id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          name,
+          type,
+          path,
+          duration: probe.duration,
+          width: probe.width || 0,
+          height: probe.height || 0,
+          fps: probe.fps || 0,
+          codec: probe.codec || '',
+          fileSize: probe.file_size || 0,
+          thumbnail,
+          waveformData: [],
+          dateAdded: Date.now(),
+          rating: 0,
+          flag: 'none',
+          tags: [],
+          inPoint: 0,
+          outPoint: probe.duration,
+          folderId: null,
+        });
+      } catch (e) {
+        logError('Import Media', `Failed to probe media: ${path}`);
+      }
+    }
+    if (newItems.length > 0) {
+      dispatch({ type: 'ADD_MEDIA_BATCH', payload: newItems });
+    }
+    dispatch({ type: 'SET_IMPORTING', payload: false });
+  };
+
   const importMedia = async () => {
     try {
       const files = await open({
@@ -29,59 +84,12 @@ export function useFFmpeg() {
         }]
       });
       if (!files) return;
-
-      dispatch({ type: 'SET_IMPORTING', payload: true });
-      const filePaths = Array.isArray(files) ? files : [files];
-    
-      const newItems: MediaItem[] = [];
       
-      for (const path of filePaths) {
-        try {
-          const probe = await invoke<MediaProbeResult>('ve_probe_media', { path });
-          
-          let thumbnail = '';
-          if (probe.has_video) {
-            try {
-              thumbnail = await invoke<string>('ve_generate_thumbnail', { path, time: 0.0 });
-            } catch (e) {
-              console.error('Thumbnail generation failed', e);
-            }
-          }
-
-          const name = path.split(/[/\\]/).pop() || 'Unknown';
-          const type = probe.has_video ? 'video' : (probe.has_audio ? 'audio' : 'image');
-          
-          newItems.push({
-            id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-            name,
-            type,
-            path,
-            duration: probe.duration,
-            width: probe.width || 0,
-            height: probe.height || 0,
-            fps: probe.fps || 0,
-            codec: probe.codec || '',
-            fileSize: probe.file_size || 0,
-            thumbnail,
-            waveformData: [],
-            dateAdded: Date.now(),
-            rating: 0,
-            flag: 'none',
-            tags: [],
-            inPoint: 0,
-            outPoint: probe.duration,
-            folderId: null,
-          });
-        } catch (e) {
-          console.error('Failed to probe media:', path, e);
-        }
-      }
-      if (newItems.length > 0) {
-        dispatch({ type: 'ADD_MEDIA_BATCH', payload: newItems });
-      }
+      const filePaths = Array.isArray(files) ? files : [files];
+      await importMediaPaths(filePaths);
+      logSuccess('Import Media', 'Media files imported successfully');
     } catch (e) {
-      console.error('Import failed', e);
-    } finally {
+      logError('Import Media', `Import failed: ${String(e)}`);
       dispatch({ type: 'SET_IMPORTING', payload: false });
     }
   };
@@ -89,20 +97,30 @@ export function useFFmpeg() {
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   const exportProject = async (settings: ExportSettings) => {
-    const jobId = `render-${Date.now()}`;
     try {
+      let finalOutputPath = settings.outputPath;
+      if (!finalOutputPath) {
+        const path = await save({
+          defaultPath: settings.name || 'export',
+          filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'webm'] }]
+        });
+        if (!path) return; // User cancelled
+        finalOutputPath = path;
+      }
+
+      const jobId = `render-${Date.now()}`;
       dispatch({
         type: 'ADD_RENDER_JOB',
         payload: {
           id: jobId,
           name: settings.name || 'Export',
-          settings,
+          settings: { ...settings, outputPath: finalOutputPath },
           status: 'rendering',
           progress: 0,
           startTime: Date.now(),
           endTime: null,
           error: null,
-          outputPath: settings.outputPath,
+          outputPath: finalOutputPath,
         },
       });
       dispatch({ type: 'EXPORT_START' });
@@ -126,7 +144,8 @@ export function useFFmpeg() {
         unlistenProgress();
         unlistenComplete();
         unlistenRef.current = null;
-        alert(`Export complete: ${event.payload}`);
+        dispatch({ type: 'SET_EXPORT_SETTINGS', payload: { ...state.exportSettings, outputPath: undefined } }); // reset
+        logSuccess('Export', `Export complete: ${event.payload}`);
       });
 
       unlistenRef.current = () => {
@@ -134,10 +153,11 @@ export function useFFmpeg() {
         unlistenComplete();
       };
 
-      await invoke('ve_export_project', { settings });
+      await invoke('ve_export_project', { settings: { ...settings, outputPath: finalOutputPath }, project: state.project });
     } catch (e) {
-      console.error('Export failed', e);
+      logError('Export', `Export failed: ${String(e)}`);
       dispatch({ type: 'EXPORT_ERROR', payload: String(e) });
+      const jobId = state.renderQueue.length > 0 ? state.renderQueue[state.renderQueue.length - 1].id : `render-${Date.now()}`;
       dispatch({
         type: 'UPDATE_RENDER_JOB',
         payload: { jobId, updates: { status: 'error', error: String(e), endTime: Date.now() } },
@@ -152,8 +172,9 @@ export function useFFmpeg() {
   const cancelExport = async () => {
     try {
       await invoke('ve_cancel_export');
+      logInfo('Export', 'Export cancelled');
     } catch (e) {
-      console.error('Cancel export failed', e);
+      logError('Export', 'Cancel export failed');
     }
   };
 
@@ -161,7 +182,7 @@ export function useFFmpeg() {
     try {
       return await invoke<number[]>('ve_generate_waveform', { path });
     } catch (e) {
-      console.error('Waveform generation failed', e);
+      logError('Waveform', `Waveform generation failed: ${path}`);
       return [];
     }
   };
@@ -175,11 +196,10 @@ export function useFFmpeg() {
         await invoke('ve_save_project', { path, projectData: JSON.stringify(state.project) });
         dispatch({ type: 'SET_DIRTY', payload: false });
         dispatch({ type: 'SET_PROJECT_PATH', payload: path });
-        alert('Project saved successfully!');
+        logSuccess('Project', 'Project saved successfully!');
       }
     } catch (e) {
-      console.error('Save As failed', e);
-      alert('Failed to save project');
+      logError('Project', 'Failed to save project');
     }
   };
 
@@ -190,9 +210,9 @@ export function useFFmpeg() {
     try {
       await invoke('ve_save_project', { path: state.projectPath, projectData: JSON.stringify(state.project) });
       dispatch({ type: 'SET_DIRTY', payload: false });
+      logSuccess('Project', 'Project saved');
     } catch (e) {
-      console.error('Save failed', e);
-      alert('Failed to save project');
+      logError('Project', 'Failed to save project');
     }
   };
 
@@ -208,16 +228,17 @@ export function useFFmpeg() {
         const project = JSON.parse(data);
         dispatch({ type: 'LOAD_PROJECT', payload: project });
         dispatch({ type: 'SET_PROJECT_PATH', payload: path });
+        logSuccess('Project', 'Project loaded');
       }
     } catch (e) {
-      console.error('Load failed', e);
-      alert('Failed to load project');
+      logError('Project', 'Failed to load project');
     }
   };
 
   return {
     checkFFmpeg,
     importMedia,
+    importMediaPaths,
     exportProject,
     cancelExport,
     getWaveform,

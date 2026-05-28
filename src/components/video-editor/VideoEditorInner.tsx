@@ -14,10 +14,11 @@ import NewProjectModal from './NewProjectModal';
 import { Film, FolderOpen, Plus } from 'lucide-react';
 
 import { useFFmpeg } from '../../engine/video-editor/useFFmpeg';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 export default function VideoEditorInner() {
   const { state, dispatch } = useVideoEditor();
-  const { checkFFmpeg, loadProject, saveProject, saveProjectAs, importMedia } = useFFmpeg();
+  const { checkFFmpeg, loadProject, saveProject, saveProjectAs, importMedia, importMediaPaths } = useFFmpeg();
 
   // Auto-check FFmpeg and show modal if no project
   useEffect(() => {
@@ -25,6 +26,28 @@ export default function VideoEditorInner() {
     if (!state.project && !state.showNewProjectModal) {
       dispatch({ type: 'TOGGLE_NEW_PROJECT_MODAL' });
     }
+    
+    // Listen for native OS file drops
+    const setupDragDrop = async () => {
+      try {
+        const unlisten = await getCurrentWebviewWindow().onDragDropEvent((event) => {
+          if (event.payload.type === 'drop') {
+            importMediaPaths(event.payload.paths);
+          }
+        });
+        return unlisten;
+      } catch (e) {
+        console.error('Failed to setup native drag and drop', e);
+        return () => {};
+      }
+    };
+    
+    let unlistenFn: (() => void) | undefined;
+    setupDragDrop().then(fn => { unlistenFn = fn; });
+    
+    return () => {
+      if (unlistenFn) unlistenFn();
+    };
   }, []);
 
   // Global keyboard shortcuts

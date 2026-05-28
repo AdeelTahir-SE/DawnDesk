@@ -1,9 +1,10 @@
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { TOOL_DEFINITIONS } from '../../../engine/video-editor/constants';
+import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 import {
   MousePointer2, Scissors, MoveHorizontal, Columns2, ArrowLeftRight,
   Hand, ZoomIn, Type, Square, PenTool, Crop,
-  Magnet, Undo2, Redo2,
+  Magnet, Undo2, Redo2, Save
 } from 'lucide-react';
 import type { VideoToolType } from '../../../engine/video-editor/types';
 
@@ -16,6 +17,7 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
 
 export default function EditorToolbar() {
   const { state, dispatch } = useVideoEditor();
+  const { saveProject } = useFFmpeg();
 
   return (
     <div className="ve-toolbar-area">
@@ -62,6 +64,9 @@ export default function EditorToolbar() {
       <div className="ve-toolbar-spacer" />
 
       <div className="ve-toolbar-group" style={{ gap: 8 }}>
+        <button className="ve-tool-btn" onClick={saveProject} title="Save Project (Ctrl+S)">
+          <Save size={16} color={state.isDirty ? '#FACC15' : 'currentColor'} />
+        </button>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: 'JetBrains Mono' }}>
           {state.project?.name || 'Untitled'}
         </span>

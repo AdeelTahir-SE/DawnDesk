@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { RotateCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
 
 function Slider({ label, value, min, max, step, onChange }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void;
@@ -94,10 +95,31 @@ export default function ColorGradingPanel() {
                   ctx.fillStyle = '#fff';
                   ctx.strokeStyle = '#000';
                   ctx.lineWidth = 1;
-                  ctx.fill();
-                  ctx.stroke();
-                }} />
-              <span className="ve-color-wheel-label">{wheel}</span>
+                    ctx.fill();
+                    ctx.stroke();
+                  }} 
+                  onMouseDown={(e) => {
+                    const canvas = e.currentTarget;
+                    const rect = canvas.getBoundingClientRect();
+                    const cx = 40, cy = 40, r = 38;
+                    const updateWheel = (me: MouseEvent) => {
+                      const x = me.clientX - rect.left;
+                      const y = me.clientY - rect.top;
+                      const dx = x - cx;
+                      const dy = y - cy;
+                      const dist = Math.sqrt(dx * dx + dy * dy);
+                      const clampedDist = Math.min(dist, r);
+                      const angle = Math.atan2(dy, dx);
+                      const vr = (Math.cos(angle) * clampedDist) / (r * 2) + 0.5;
+                      const vg = (Math.sin(angle) * clampedDist) / (r * 2) + 0.5;
+                      dispatch({ type: 'SET_COLOR_WHEEL', payload: { wheel, values: { r: vr, g: vg } } });
+                    };
+                    updateWheel(e as unknown as MouseEvent);
+                    const handleUp = () => window.removeEventListener('mousemove', updateWheel);
+                    window.addEventListener('mousemove', updateWheel);
+                    window.addEventListener('mouseup', handleUp, { once: true });
+                  }} />
+                <span className="ve-color-wheel-label">{wheel}</span>
               <Slider label="Master" value={cg[wheel].master} min={-100} max={100}
                 onChange={v => dispatch({ type: 'SET_COLOR_WHEEL', payload: { wheel, values: { master: v } } })} />
             </div>
@@ -121,12 +143,21 @@ export default function ColorGradingPanel() {
       </CollapsibleSection>
 
       <CollapsibleSection title="LUT" defaultOpen={false}>
-        <button style={{
-          width: '100%', padding: '8px 12px', borderRadius: 6,
-          border: '1px dashed rgba(255,255,255,0.15)', background: 'none',
-          color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer',
-        }}>
-          Load LUT File...
+        <button 
+          onClick={async () => {
+            try {
+              const path = await open({ filters: [{ name: 'LUT Files', extensions: ['cube', '3dl'] }] });
+              if (path && typeof path === 'string') {
+                dispatch({ type: 'SET_COLOR_GRADING', payload: { lutPath: path } });
+              }
+            } catch (e) { console.error('Failed to open LUT', e); }
+          }}
+          style={{
+            width: '100%', padding: '8px 12px', borderRadius: 6,
+            border: '1px dashed rgba(255,255,255,0.15)', background: 'none',
+            color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer',
+          }}>
+          {cg.lutPath ? cg.lutPath.split(/[/\\]/).pop() : 'Load LUT File...'}
         </button>
         <div style={{ marginTop: 8 }}>
           <Slider label="Intensity" value={cg.lutIntensity} min={0} max={100} onChange={v => update('lutIntensity', v)} />

@@ -132,7 +132,9 @@ export default function PropertiesPanel() {
           <div className="ve-panel-section-header">
             <span className="ve-panel-section-title">Blend Mode</span>
           </div>
-          <select className="ve-speed-select" style={{ width: '100%' }}>
+          <select className="ve-speed-select" style={{ width: '100%' }}
+            value={clip.blendMode || 'normal'}
+            onChange={e => dispatch({ type: 'SET_CLIP_BLEND_MODE', payload: { clipId, blendMode: e.target.value as any } })}>
             {BLEND_MODE_GROUPS.map(group => (
               <optgroup key={group.label} label={group.label}>
                 {group.modes.map(mode => (

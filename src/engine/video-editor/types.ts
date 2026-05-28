@@ -98,6 +98,7 @@ export interface Clip {
   color: string;
   locked: boolean;
   label: string;
+  blendMode?: BlendMode;
   path?: string;
 }
 
@@ -382,6 +383,13 @@ export interface Mask {
   inverted: boolean;
   expansion: number;
   keyframes: Keyframe[];
+  chromaKey?: {
+    enabled: boolean;
+    keyColor: string;
+    tolerance: number;
+    edgeSoft: number;
+    spillSuppression: number;
+  };
 }
 
 /* ── Export Types ───────────────────────────────────────────────────────── */
@@ -538,6 +546,7 @@ export interface VideoEditorState {
 
   // Audio
   masterVolume: number;
+  audioEffects: AudioEffects;
 
   // Mask
   activeMask: Mask | null;
@@ -632,6 +641,7 @@ export type VideoEditorAction =
   | { type: 'SET_CLIP_TRANSFORM'; payload: { clipId: string; positionX?: number; positionY?: number; scale?: number; rotation?: number } }
   | { type: 'SET_CLIP_LABEL'; payload: { clipId: string; label: string } }
   | { type: 'SET_CLIP_COLOR'; payload: { clipId: string; color: string } }
+  | { type: 'SET_CLIP_BLEND_MODE'; payload: { clipId: string; blendMode: BlendMode } }
   | { type: 'DUPLICATE_CLIP'; payload: string }
 
   // Effects
@@ -689,6 +699,7 @@ export type VideoEditorAction =
 
   // Audio
   | { type: 'SET_MASTER_VOLUME'; payload: number }
+  | { type: 'SET_AUDIO_EFFECTS'; payload: Partial<AudioEffects> }
 
   // Mask
   | { type: 'SET_MASK'; payload: Mask | null }
