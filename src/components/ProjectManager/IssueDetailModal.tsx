@@ -9,6 +9,7 @@ import {
   ArrowUp, ArrowDown, Minus, ChevronsUp, ChevronsDown,
   Paperclip, Link2, History
 } from "lucide-react";
+import { useAppLogger } from "../../utils/LoggerContext";
 
 // ---------- local types ----------
 
@@ -112,6 +113,7 @@ export default function IssueDetailModal({
   onClose,
   onSaved,
 }: IssueDetailModalProps) {
+  const { logSuccess, logError, logWarning } = useAppLogger();
   const isNew = !issue;
 
   // ---- form state ----
@@ -275,9 +277,11 @@ export default function IssueDetailModal({
           },
         });
       }
+      logSuccess(isNew ? "Issue created" : "Issue updated", title.trim(), { source: "project-manager" });
       onSaved();
     } catch (err) {
       console.error("Failed to save issue:", err);
+      logError("Issue save failed", String(err), { source: "project-manager" });
     }
     setSaving(false);
   };
@@ -287,9 +291,11 @@ export default function IssueDetailModal({
     setDeleting(true);
     try {
       await invoke("delete_issue", { id: issue.id });
+      logWarning("Issue deleted", issue.key, { source: "project-manager" });
       onSaved();
     } catch (err) {
       console.error("Failed to delete issue:", err);
+      logError("Issue delete failed", String(err), { source: "project-manager" });
     }
     setDeleting(false);
   };
@@ -318,8 +324,10 @@ export default function IssueDetailModal({
       setShowSubtaskForm(false);
       const updated = await invoke<LocalIssue[]>("get_issues", { projectId });
       setAllIssues(updated);
+      logSuccess("Subtask created", subtaskTitle.trim(), { source: "project-manager" });
     } catch (err) {
       console.error("Failed to create subtask:", err);
+      logError("Subtask create failed", String(err), { source: "project-manager" });
     }
     setCreatingSubtask(false);
   };
@@ -336,8 +344,10 @@ export default function IssueDetailModal({
       setCommentText("");
       const updated = await invoke<LocalComment[]>("get_comments", { issueId: issue.id });
       setComments(updated);
+      logSuccess("Comment added", issue.key, { source: "project-manager" });
     } catch (err) {
       console.error("Failed to add comment:", err);
+      logError("Comment add failed", String(err), { source: "project-manager" });
     }
     setPostingComment(false);
   };
@@ -346,8 +356,10 @@ export default function IssueDetailModal({
     try {
       await invoke("delete_comment", { id: commentId });
       setComments((prev) => prev.filter((c) => c.id !== commentId));
+      logWarning("Comment deleted", issue?.key ?? "Project issue", { source: "project-manager" });
     } catch (err) {
       console.error("Failed to delete comment:", err);
+      logError("Comment delete failed", String(err), { source: "project-manager" });
     }
   };
 
@@ -368,8 +380,10 @@ export default function IssueDetailModal({
       setShowLogWork(false);
       const updated = await invoke<LocalWorklog[]>("get_worklogs", { issueId: issue.id });
       setWorklogs(updated);
+      logSuccess("Work logged", `${formatMinutes(totalMins)} on ${issue.key}`, { source: "project-manager" });
     } catch (err) {
       console.error("Failed to log work:", err);
+      logError("Work log failed", String(err), { source: "project-manager" });
     }
     setLoggingWork(false);
   };
@@ -381,8 +395,10 @@ export default function IssueDetailModal({
       await invoke("toggle_issue_label", { issueId: issue.id, labelId });
       const updated = await invoke<Label[]>("get_issue_labels", { issueId: issue.id });
       setIssueLabels(updated);
+      logSuccess("Issue label updated", issue.key, { source: "project-manager" });
     } catch (err) {
       console.error("Failed to toggle label:", err);
+      logError("Issue label update failed", String(err), { source: "project-manager" });
     }
     setTogglingLabel(null);
   };
@@ -394,20 +410,28 @@ export default function IssueDetailModal({
     try {
       const reader = new FileReader();
       reader.onload = async (ev) => {
-        const dataUrl = ev.target?.result as string;
-        await invoke("upload_attachment", {
-          issueId: issue.id,
-          fileName: file.name,
-          base64Data: dataUrl,
-          createdAt: new Date().toISOString(),
-        });
-        const updated = await invoke<LocalAttachment[]>("get_attachments", { issueId: issue.id });
-        setAttachments(updated);
-        setUploadingAttachment(false);
+        try {
+          const dataUrl = ev.target?.result as string;
+          await invoke("upload_attachment", {
+            issueId: issue.id,
+            fileName: file.name,
+            base64Data: dataUrl,
+            createdAt: new Date().toISOString(),
+          });
+          const updated = await invoke<LocalAttachment[]>("get_attachments", { issueId: issue.id });
+          setAttachments(updated);
+          logSuccess("Attachment uploaded", file.name, { source: "project-manager" });
+        } catch (err) {
+          console.error("Failed to upload attachment", err);
+          logError("Attachment upload failed", String(err), { source: "project-manager" });
+        } finally {
+          setUploadingAttachment(false);
+        }
       };
       reader.readAsDataURL(file);
     } catch (err) {
       console.error("Failed to upload attachment", err);
+      logError("Attachment upload failed", String(err), { source: "project-manager" });
       setUploadingAttachment(false);
     }
   };
@@ -424,8 +448,10 @@ export default function IssueDetailModal({
       const updated = await invoke<LocalIssueLink[]>("get_issue_links", { issueId: issue.id });
       setLinks(updated);
       setLinkIssueId("");
+      logSuccess("Issue linked", `${issue.key} ${linkType.toLowerCase()} #${linkIssueId}`, { source: "project-manager" });
     } catch (err) {
       console.error(err);
+      logError("Issue link failed", String(err), { source: "project-manager" });
     }
     setLinking(false);
   };
@@ -439,8 +465,10 @@ export default function IssueDetailModal({
     });
     try {
       await invoke("set_custom_field_value", { issueId: issue.id, fieldId, value });
+      logSuccess("Custom field updated", issue.key, { source: "project-manager" });
     } catch (err) {
       console.error(err);
+      logError("Custom field update failed", String(err), { source: "project-manager" });
     }
   };
 

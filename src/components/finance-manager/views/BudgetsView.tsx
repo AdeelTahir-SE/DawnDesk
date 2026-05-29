@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, RefreshCw, X } from "lucide-react";
+import { useAppLogger } from "../../../utils/LoggerContext";
 
 interface Budget {
   id: number;
@@ -16,6 +17,7 @@ interface Transaction {
 }
 
 export default function BudgetsView() {
+  const { logSuccess, logError } = useAppLogger();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [expensesByCategory, setExpensesByCategory] = useState<Map<string, number>>(new Map());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -48,10 +50,12 @@ export default function BudgetsView() {
     try {
       await invoke("create_budget", { input: { ...newBudget, limit_amount: Number(newBudget.limit_amount) } });
       setShowAddModal(false);
+      logSuccess("Finance budget created", newBudget.category, { source: "finance" });
       setNewBudget({ category: "", limit_amount: 0, period: "monthly" });
       fetchData();
     } catch (e) {
       console.error(e);
+      logError("Finance budget create failed", String(e), { source: "finance" });
     }
   };
 

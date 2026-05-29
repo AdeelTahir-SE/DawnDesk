@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { EFFECT_DEFINITIONS } from '../../../engine/video-editor/constants';
 import { Search, CircleDot, Sun, MoveRight, Zap, Focus, Aperture, Circle, FlipHorizontal, Sparkles, Lightbulb, Grid3X3, Layers, ScanLine } from 'lucide-react';
 import type { EffectCategory } from '../../../engine/video-editor/types';
+import { useAppLogger } from '../../../utils/LoggerContext';
+import { setEffectDragData } from '../dragDrop';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   CircleDot, Sun, MoveRight, Zap, Focus, Aperture, Circle, FlipHorizontal, Sparkles, Lightbulb, Grid3X3, Layers, ScanLine,
@@ -19,6 +21,7 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 
 export default function EffectsBrowser() {
   const { state, dispatch } = useVideoEditor();
+  const { logInfo, logSuccess, logWarning } = useAppLogger();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<EffectCategory | 'all'>('all');
 
@@ -53,10 +56,10 @@ export default function EffectsBrowser() {
         {filtered.map(effect => {
           const Icon = ICON_MAP[effect.icon] || Sparkles;
           return (
-            <div key={effect.type} className="ve-effect-card" draggable
+            <div key={effect.type} className="ve-effect-card" draggable={true}
               onDragStart={(e) => {
-                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'effect', effectType: effect.type }));
-                e.dataTransfer.effectAllowed = 'copy';
+                setEffectDragData(e.dataTransfer, { dragKind: 'effect', effectType: effect.type });
+                logInfo('Effect ready', `Drag "${effect.name}" onto a timeline clip`);
               }}
               onDoubleClick={() => {
                 if (state.selectedClipIds.length > 0) {
@@ -78,6 +81,9 @@ export default function EffectsBrowser() {
                       }
                     });
                   });
+                  logSuccess('Effect applied', `${effect.name} added to ${state.selectedClipIds.length} clip${state.selectedClipIds.length === 1 ? '' : 's'}`);
+                } else {
+                  logWarning('Select a clip first', `Double-click applies "${effect.name}" to selected clips`);
                 }
               }}
               title={effect.description}>

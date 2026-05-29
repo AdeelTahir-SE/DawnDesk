@@ -482,6 +482,7 @@ export interface HistorySnapshot {
 export type RightPanelTab = 'properties' | 'effects' | 'color' | 'text' | 'audio' | 'mask';
 export type LeftPanelTab = 'media' | 'effects' | 'transitions';
 export type ScopeType = 'waveform' | 'vectorscope' | 'histogram' | 'parade';
+export type AutoEditPreset = 'quick-cleanup' | 'smart-trim' | 'smooth-transitions' | 'visual-polish' | 'audio-balance' | 'product-finish';
 
 export interface FFmpegStatus {
   available: boolean;
@@ -629,6 +630,7 @@ export type VideoEditorAction =
 
   // Clips
   | { type: 'ADD_CLIP'; payload: { trackId: string; clip: Clip } }
+  | { type: 'ADD_MEDIA_TO_NEW_TRACK'; payload: { media: MediaItem; startTime: number } }
   | { type: 'REMOVE_CLIPS'; payload: string[] }
   | { type: 'MOVE_CLIP'; payload: { clipId: string; trackId: string; startTime: number } }
   | { type: 'TRIM_CLIP_START'; payload: { clipId: string; newStartTime: number; newInPoint: number } }
@@ -723,6 +725,7 @@ export type VideoEditorAction =
   | { type: 'SET_FFMPEG_STATUS'; payload: FFmpegStatus }
 
   // History
+  | { type: 'APPLY_AUTO_EDIT'; payload: { preset: AutoEditPreset; clipIds?: string[] } }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'PUSH_HISTORY'; payload: { label: string } }

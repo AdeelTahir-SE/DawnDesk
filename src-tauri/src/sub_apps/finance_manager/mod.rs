@@ -301,6 +301,54 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
     ).map_err(|e| e.to_string())?;
 
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS compliance_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL,
+            permissions_json TEXT NOT NULL,
+            is_system BOOLEAN NOT NULL DEFAULT 1
+        )",
+        [],
+    ).map_err(|e| e.to_string())?;
+
+    let role_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM compliance_roles", [], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    if role_count == 0 {
+        let default_roles = [
+            (
+                "Controller",
+                "Owns the general ledger, period close, and financial reporting workflow.",
+                r#"["chart_of_accounts:manage","journal_entries:approve","period_close:manage","reports:export"]"#,
+            ),
+            (
+                "CFO",
+                "Reviews strategic finance outputs, treasury position, and board reporting.",
+                r#"["dashboard:view","cash:view","reports:export","compliance:evidence_export"]"#,
+            ),
+            (
+                "AP Clerk",
+                "Creates vendor bills, purchase orders, and payment preparation records.",
+                r#"["vendors:manage","purchase_orders:create","vendor_bills:create","vendor_bills:view"]"#,
+            ),
+            (
+                "Auditor",
+                "Read-only reviewer for audit logs, tax records, close tasks, and evidence exports.",
+                r#"["audit_logs:view","tax_codes:view","period_close:view","compliance:evidence_export"]"#,
+            ),
+        ];
+
+        for (name, description, permissions_json) in default_roles {
+            conn.execute(
+                "INSERT INTO compliance_roles (name, description, permissions_json, is_system) VALUES (?1, ?2, ?3, 1)",
+                params![name, description, permissions_json],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS period_closes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             period TEXT NOT NULL,
@@ -1072,6 +1120,33 @@ pub struct CreateAuditLogInput {
     pub description: String,
 }
 
+#[derive(serde::Serialize, Deserialize)]
+pub struct ComplianceRole {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub permissions_json: String,
+    pub is_system: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct ComplianceEvidenceSummary {
+    pub audit_log_count: usize,
+    pub role_count: usize,
+    pub tax_code_count: usize,
+    pub open_period_close_count: usize,
+}
+
+#[derive(serde::Serialize)]
+pub struct ComplianceEvidencePackage {
+    pub generated_at: String,
+    pub summary: ComplianceEvidenceSummary,
+    pub audit_logs: Vec<AuditLog>,
+    pub roles: Vec<ComplianceRole>,
+    pub tax_codes: Vec<TaxCode>,
+    pub period_closes: Vec<PeriodClose>,
+}
+
 #[tauri::command]
 pub fn create_audit_log(app: AppHandle, input: CreateAuditLogInput) -> Result<String, String> {
     let conn = db_connection(&app)?;
@@ -1098,6 +1173,62 @@ pub fn get_audit_logs(app: AppHandle) -> Result<Vec<AuditLog>, String> {
     let mut items = Vec::new();
     for row in rows { items.push(row.map_err(|e| e.to_string())?); }
     Ok(items)
+}
+
+#[tauri::command]
+pub fn get_compliance_roles(app: AppHandle) -> Result<Vec<ComplianceRole>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, description, permissions_json, is_system FROM compliance_roles ORDER BY name ASC")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ComplianceRole {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            permissions_json: row.get(3)?,
+            is_system: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    let mut roles = Vec::new();
+    for row in rows { roles.push(row.map_err(|e| e.to_string())?); }
+    Ok(roles)
+}
+
+#[tauri::command]
+pub fn get_compliance_evidence(app: AppHandle) -> Result<ComplianceEvidencePackage, String> {
+    let audit_logs = get_audit_logs(app.clone())?;
+    let roles = get_compliance_roles(app.clone())?;
+    let tax_codes = get_tax_codes(app.clone())?;
+    let period_closes = get_period_closes(app)?;
+    let open_period_close_count = period_closes
+        .iter()
+        .filter(|task| task.status.to_lowercase() != "closed" && task.status.to_lowercase() != "complete")
+        .count();
+
+    Ok(ComplianceEvidencePackage {
+        generated_at: chrono_like_timestamp(),
+        summary: ComplianceEvidenceSummary {
+            audit_log_count: audit_logs.len(),
+            role_count: roles.len(),
+            tax_code_count: tax_codes.len(),
+            open_period_close_count,
+        },
+        audit_logs,
+        roles,
+        tax_codes,
+        period_closes,
+    })
+}
+
+fn chrono_like_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default();
+    format!("unix:{seconds}")
 }
 
 #[derive(serde::Serialize, Deserialize)]

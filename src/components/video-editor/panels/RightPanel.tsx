@@ -75,7 +75,9 @@ function EffectsAppliedPanel() {
           {clip.effects.map(effect => (
             <div key={effect.id} style={{
               padding: '8px 10px', borderRadius: 6, background: 'var(--ve-bg-surface)',
-              border: '1px solid var(--ve-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              border: effect.id === state.selectedEffectId ? '1px solid var(--ve-accent)' : '1px solid var(--ve-border)',
+              boxShadow: effect.id === state.selectedEffectId ? '0 0 0 1px rgba(250,204,21,0.18)' : undefined,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button className={`ve-toggle ${effect.enabled ? 'active' : ''}`}

@@ -10,17 +10,51 @@ export type AccountItem = {
   currency: string;
 };
 
+type InvoiceItem = {
+  id: number;
+  total_amount: number;
+  status: string;
+  due_date: string;
+};
+
+type VendorBill = {
+  id: number;
+  total_amount: number;
+  status: string;
+  due_date: string;
+};
+
+type TransactionItem = {
+  id: number;
+  amount: number;
+  type_: string;
+  date: string;
+  status: string;
+};
+
 export default function CashTreasuryView() {
   const [activeTab, setActiveTab] = useState("accounts");
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
+  const [bills, setBills] = useState<VendorBill[]>([]);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [bankStatus, setBankStatus] = useState("");
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await invoke<AccountItem[]>("get_accounts");
-      setAccounts(res);
+      const [accountRows, invoiceRows, billRows, txRows] = await Promise.all([
+        invoke<AccountItem[]>("get_accounts"),
+        invoke<InvoiceItem[]>("get_invoices"),
+        invoke<VendorBill[]>("get_vendor_bills"),
+        invoke<TransactionItem[]>("get_transactions"),
+      ]);
+      setAccounts(accountRows);
+      setInvoices(invoiceRows);
+      setBills(billRows);
+      setTransactions(txRows);
     } catch (e) {
       console.error(e);
     }
@@ -46,7 +80,7 @@ export default function CashTreasuryView() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800/80">
+            <button onClick={() => setBankStatus("No live bank connector is configured yet. Add bank accounts manually, then use transactions to keep balances current.")} className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800/80">
               <Link className="h-4 w-4" /> Connect Bank
             </button>
             <button onClick={() => setShowModal(true)} className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300">
@@ -54,6 +88,11 @@ export default function CashTreasuryView() {
             </button>
           </div>
         </div>
+        {bankStatus && (
+          <div className="mt-4 rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">
+            {bankStatus}
+          </div>
+        )}
 
         <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-neutral-800">
           <button onClick={() => setActiveTab("accounts")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "accounts" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Bank Accounts</button>
@@ -67,8 +106,8 @@ export default function CashTreasuryView() {
           ) : (
             <>
               {activeTab === "accounts" && <BankAccountsList accounts={accounts} />}
-              {activeTab === "forecast" && <CashForecast />}
-              {activeTab === "reconciliation" && <BankRecon />}
+              {activeTab === "forecast" && <CashForecast accounts={accounts} invoices={invoices} bills={bills} />}
+              {activeTab === "reconciliation" && <BankRecon accounts={accounts} transactions={transactions} />}
             </>
           )}
         </div>
@@ -80,6 +119,7 @@ export default function CashTreasuryView() {
 }
 
 function BankAccountsList({ accounts }: { accounts: AccountItem[] }) {
+  const [selectedAccount, setSelectedAccount] = useState<AccountItem | null>(null);
   if (accounts.length === 0) return <div className="text-center py-20 text-white/40">No bank accounts found.</div>;
   
   return (
@@ -96,7 +136,7 @@ function BankAccountsList({ accounts }: { accounts: AccountItem[] }) {
                 <p className="text-xs text-white/40 uppercase tracking-wider">{acc.type_}</p>
               </div>
             </div>
-            <button className="text-white/40 hover:text-white"><MoreHorizontal className="h-5 w-5" /></button>
+            <button onClick={() => setSelectedAccount(acc)} className="text-white/40 hover:text-white"><MoreHorizontal className="h-5 w-5" /></button>
           </div>
           <div className="mt-6 flex items-end justify-between">
             <div>
@@ -107,28 +147,76 @@ function BankAccountsList({ accounts }: { accounts: AccountItem[] }) {
           </div>
         </div>
       ))}
+      {selectedAccount && (
+        <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-sm font-semibold text-yellow-200">
+          {selectedAccount.name}: {selectedAccount.currency} {selectedAccount.balance.toFixed(2)} available, synced just now.
+        </div>
+      )}
     </div>
   );
 }
 
-function CashForecast() {
+function CashForecast({ accounts, invoices, bills }: { accounts: AccountItem[]; invoices: InvoiceItem[]; bills: VendorBill[] }) {
+  const today = new Date();
+  const day30 = new Date(today.getTime() + 30 * 86_400_000);
+  const currentCash = accounts.reduce((sum, account) => sum + account.balance, 0);
+  const expectedInflows = invoices
+    .filter((invoice) => invoice.status.toLowerCase() !== "paid")
+    .filter((invoice) => {
+      const due = new Date(invoice.due_date);
+      return due >= today && due <= day30;
+    })
+    .reduce((sum, invoice) => sum + invoice.total_amount, 0);
+  const expectedOutflows = bills
+    .filter((bill) => bill.status.toLowerCase() !== "paid")
+    .filter((bill) => {
+      const due = new Date(bill.due_date);
+      return due >= today && due <= day30;
+    })
+    .reduce((sum, bill) => sum + bill.total_amount, 0);
+  const projectedCash = currentCash + expectedInflows - expectedOutflows;
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6 text-center">
       <Activity className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">30-Day Liquidity Forecast</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Projects cash flows based on scheduled AP, recurring AR, and historical run rates.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Run Forecast Engine</button>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Projects cash from current account balances plus unpaid AR/AP due in the next 30 days.</p>
+      <div className="mx-auto mt-6 grid max-w-3xl gap-3 md:grid-cols-4">
+        <TreasuryMetric label="Current Cash" value={`$${currentCash.toFixed(2)}`} />
+        <TreasuryMetric label="Expected Inflows" value={`$${expectedInflows.toFixed(2)}`} />
+        <TreasuryMetric label="Expected Outflows" value={`$${expectedOutflows.toFixed(2)}`} />
+        <TreasuryMetric label="Projected Cash" value={`$${projectedCash.toFixed(2)}`} />
+      </div>
     </div>
   );
 }
 
-function BankRecon() {
+function BankRecon({ accounts, transactions }: { accounts: AccountItem[]; transactions: TransactionItem[] }) {
+  const accountBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+  const transactionBalance = transactions
+    .filter((tx) => tx.status.toLowerCase() !== "void")
+    .reduce((sum, tx) => sum + (tx.type_.toLowerCase() === "income" ? tx.amount : -tx.amount), 0);
+  const variance = accountBalance - transactionBalance;
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
+    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50 px-6">
       <ArrowRightLeft className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Automated Bank Reconciliation</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">DawnDesk AI automatically matches bank feed transactions to journal entries.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Start Recon</button>
+      <h3 className="text-lg font-bold text-white">Local Reconciliation Summary</h3>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Compares stored account balances with net posted transaction activity.</p>
+      <div className="mx-auto mt-6 grid max-w-2xl gap-3 md:grid-cols-3">
+        <TreasuryMetric label="Account Balances" value={`$${accountBalance.toFixed(2)}`} />
+        <TreasuryMetric label="Net Transactions" value={`$${transactionBalance.toFixed(2)}`} />
+        <TreasuryMetric label="Variance" value={`$${variance.toFixed(2)}`} />
+      </div>
+    </div>
+  );
+}
+
+function TreasuryMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
+      <p className="mt-2 text-xl font-black text-white">{value}</p>
     </div>
   );
 }

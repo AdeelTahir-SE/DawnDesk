@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
-import { Film, Music, Volume2, VolumeX, Headphones, Lock, Unlock, Eye, EyeOff } from 'lucide-react';
+import { Film, Music, Volume2, VolumeX, Headphones, Lock, Unlock, Eye, EyeOff, Trash2 } from 'lucide-react';
 import TimelineClip from './TimelineClip';
-import type { Track } from '../../../engine/video-editor/types';
+import type { MediaItem, Track } from '../../../engine/video-editor/types';
+import { getDroppedMedia } from '../dragDrop';
 
 interface Props {
   track: Track;
@@ -10,14 +11,38 @@ interface Props {
   headerOnly?: boolean;
 }
 
+function trackAcceptsMedia(track: Track, mediaType: MediaItem['type']) {
+  return track.type === mediaType || (track.type === 'video' && mediaType === 'image');
+}
+
+function clipOverlaps(track: Track, startTime: number, duration: number) {
+  const endTime = startTime + duration;
+  return track.clips.some(clip =>
+    startTime < clip.startTime + clip.duration &&
+    endTime > clip.startTime
+  );
+}
+
 export default function TimelineTrack({ track, index: _index, headerOnly }: Props) {
   const { state, dispatch } = useVideoEditor();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(track.name);
 
+  const handleDeleteTrack = () => {
+    if (track.clips.length > 0) {
+      const confirmed = window.confirm(`Delete "${track.name}" and its ${track.clips.length} clip${track.clips.length === 1 ? '' : 's'}?`);
+      if (!confirmed) return;
+    }
+    dispatch({ type: 'REMOVE_TRACK', payload: track.id });
+  };
+
   if (headerOnly) {
     return (
-      <div className="ve-track-header" style={{ minHeight: track.height, height: track.height }}>
+      <div
+        className={`ve-track-header ${state.selectedTrackId === track.id ? 'selected' : ''}`}
+        style={{ minHeight: track.height, height: track.height }}
+        onClick={() => dispatch({ type: 'SELECT_TRACK', payload: track.id })}
+      >
         <div className="ve-track-color" style={{ background: track.color }} />
         <div className="ve-track-type-icon">
           {track.type === 'video' ? <Film size={13} /> : <Music size={13} />}
@@ -27,7 +52,12 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
             <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
               onBlur={() => { dispatch({ type: 'RENAME_TRACK', payload: { trackId: track.id, name: editName } }); setEditing(false); }}
               onKeyDown={e => { if (e.key === 'Enter') { dispatch({ type: 'RENAME_TRACK', payload: { trackId: track.id, name: editName } }); setEditing(false); } }} />
-          ) : track.name}
+          ) : (
+            <>
+              <span>{track.name}</span>
+              {state.selectedTrackId === track.id && <span className="ve-track-selected-pill">Target</span>}
+            </>
+          )}
         </div>
         <div className="ve-track-controls">
           <button className={`ve-track-control-btn ${track.muted ? 'muted' : ''}`}
@@ -52,6 +82,11 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
               {track.visible ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
           )}
+          <button className="ve-track-control-btn danger"
+            onClick={handleDeleteTrack}
+            title={track.clips.length > 0 ? 'Delete track and clips' : 'Delete track'}>
+            <Trash2 size={12} />
+          </button>
         </div>
       </div>
     );
@@ -59,23 +94,22 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.classList.remove('drop-target');
     
     try {
-      const data = e.dataTransfer.getData('application/json');
-      if (!data) return;
-      
-      const mediaItem = JSON.parse(data);
-
-      if ((track.type === 'video' && mediaItem.type === 'audio') ||
-          (track.type === 'audio' && mediaItem.type !== 'audio') ||
-          track.locked) {
-        return;
-      }
+      const mediaItem = getDroppedMedia(e.dataTransfer, state.project?.mediaPool ?? []);
+      if (!mediaItem) return;
 
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const dropTime = Math.max(0, x / state.timelineZoom);
+      const duration = mediaItem.duration || mediaItem.outPoint || 5;
+
+      if (!trackAcceptsMedia(track, mediaItem.type) || track.locked || clipOverlaps(track, dropTime, duration)) {
+        dispatch({ type: 'ADD_MEDIA_TO_NEW_TRACK', payload: { media: mediaItem, startTime: dropTime } });
+        return;
+      }
 
       dispatch({
         type: 'ADD_CLIP',
@@ -115,7 +149,10 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
 
   return (
     <div className="ve-track-clips" style={{ height: track.height }}
-      onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drop-target'); }}
+      data-track-id={track.id}
+      data-track-type={track.type}
+      onClick={() => dispatch({ type: 'SELECT_TRACK', payload: track.id })}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('drop-target'); }}
       onDragLeave={e => e.currentTarget.classList.remove('drop-target')}
       onDrop={handleDrop}>
       {track.clips.map(clip => (

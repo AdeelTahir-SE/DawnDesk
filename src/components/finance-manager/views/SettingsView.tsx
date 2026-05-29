@@ -1,7 +1,22 @@
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Save, Shield, Bell, Moon, Globe, Download, Database } from "lucide-react";
+import { exportTextFile } from "../../../utils/exportFile";
+import { useAppLogger } from "../../../utils/LoggerContext";
+
+type TransactionItem = {
+  id: number;
+  account_id: number | null;
+  amount: number;
+  type_: string;
+  category: string;
+  description: string;
+  date: string;
+  status: string;
+};
 
 export default function SettingsView() {
+  const { logSuccess, logError } = useAppLogger();
   const [settings, setSettings] = useState({
     currency: "USD",
     weekStart: "monday",
@@ -9,6 +24,7 @@ export default function SettingsView() {
     notifications: true,
     pinLock: false
   });
+  const [exportStatus, setExportStatus] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem('finance_settings');
@@ -21,7 +37,39 @@ export default function SettingsView() {
 
   const handleSave = () => {
     localStorage.setItem('finance_settings', JSON.stringify(settings));
-    // Optional: show a toast or something
+    logSuccess("Finance settings saved", "Finance Manager preferences were updated.", { source: "finance" });
+  };
+
+  const exportTransactionsCsv = async () => {
+    try {
+      const transactions = await invoke<TransactionItem[]>("get_transactions");
+      const header = ["id", "account_id", "date", "type", "category", "description", "amount", "status"];
+      const rows = transactions.map((tx) => [
+        tx.id,
+        tx.account_id ?? "",
+        tx.date,
+        tx.type_,
+        tx.category,
+        tx.description,
+        tx.amount,
+        tx.status,
+      ]);
+      const csv = [header, ...rows]
+        .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+      const path = await exportTextFile({
+        title: "Export Finance Transactions CSV",
+        defaultPath: "dawndesk-finance-transactions.csv",
+        contents: csv,
+        filters: [{ name: "CSV", extensions: ["csv"] }],
+      });
+
+      setExportStatus(path ? `Exported to ${path}` : "");
+      if (path) logSuccess("Finance export complete", path, { source: "finance" });
+    } catch (error) {
+      logError("Finance export failed", String(error), { source: "finance" });
+    }
   };
 
   return (
@@ -127,7 +175,7 @@ export default function SettingsView() {
             </h3>
 
             <div className="grid grid-cols-2 gap-4">
-              <button className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-brand-border bg-brand-elevated hover:border-brand-text-muted transition-colors shadow-sm">
+              <button onClick={exportTransactionsCsv} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-brand-border bg-brand-elevated hover:border-brand-text-muted transition-colors shadow-sm">
                 <Download className="w-5 h-5 text-brand-text-secondary" />
                 <span className="text-sm font-medium text-brand-text">Export to CSV</span>
               </button>
@@ -136,6 +184,7 @@ export default function SettingsView() {
                 <span className="text-sm font-medium text-brand-error">Reset All Data</span>
               </button>
             </div>
+            {exportStatus && <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">{exportStatus}</div>}
 
           </div>
         </div>

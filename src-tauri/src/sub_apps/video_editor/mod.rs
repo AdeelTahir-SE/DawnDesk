@@ -125,7 +125,7 @@ pub async fn ve_generate_thumbnail(app: AppHandle, path: String, time: f64) -> R
             "-i", &path,
             "-vframes", "1",
             "-q:v", "2",
-            "-vf", "scale=320:-1",
+            "-vf", "thumbnail,scale=320:-1",
             "-f", "image2",
             "-c:v", "mjpeg",
             "pipe:1"
@@ -173,6 +173,240 @@ pub async fn ve_import_media() -> Result<Vec<String>, String> {
     Err("Use frontend dialog plugin instead".into())
 }
 
+#[derive(Clone, Debug)]
+struct RenderClip {
+    path: String,
+    media_type: String,
+    track_type: String,
+    start_time: f64,
+    duration: f64,
+    in_point: f64,
+    opacity: f64,
+    volume: f64,
+    position_x: f64,
+    position_y: f64,
+    scale: f64,
+    effects: Vec<serde_json::Value>,
+}
+
+fn value_f64(value: &serde_json::Value, key: &str, fallback: f64) -> f64 {
+    value.get(key).and_then(|v| v.as_f64()).unwrap_or(fallback)
+}
+
+fn effect_param_f64(effect: &serde_json::Value, key: &str, fallback: f64) -> f64 {
+    effect
+        .get("params")
+        .and_then(|p| p.as_array())
+        .and_then(|params| {
+            params.iter().find_map(|param| {
+                let param_key = param.get("key").and_then(|k| k.as_str())?;
+                if param_key == key {
+                    param.get("value").and_then(|v| v.as_f64())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or(fallback)
+}
+
+fn effect_param_str<'a>(effect: &'a serde_json::Value, key: &str, fallback: &'a str) -> &'a str {
+    effect
+        .get("params")
+        .and_then(|p| p.as_array())
+        .and_then(|params| {
+            params.iter().find_map(|param| {
+                let param_key = param.get("key").and_then(|k| k.as_str())?;
+                if param_key == key {
+                    param.get("value").and_then(|v| v.as_str())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or(fallback)
+}
+
+fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
+    let mut filters: Vec<String> = Vec::new();
+
+    for effect in effects {
+        if !effect.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true) {
+            continue;
+        }
+
+        let effect_type = effect.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        match effect_type {
+            "gaussian-blur" => {
+                let radius = effect_param_f64(effect, "radius", 0.0).clamp(0.0, 100.0);
+                if radius > 0.0 {
+                    filters.push(format!("gblur=sigma={:.3}", radius));
+                }
+            }
+            "brightness-contrast" => {
+                let brightness = effect_param_f64(effect, "brightness", 0.0).clamp(-100.0, 100.0) / 100.0;
+                let contrast = 1.0 + effect_param_f64(effect, "contrast", 0.0).clamp(-100.0, 100.0) / 100.0;
+                filters.push(format!("eq=brightness={:.4}:contrast={:.4}", brightness, contrast.max(0.0)));
+            }
+            "grayscale" => {
+                let amount = effect_param_f64(effect, "amount", 100.0).clamp(0.0, 100.0) / 100.0;
+                if amount >= 0.99 {
+                    filters.push("format=gray,format=rgba".to_string());
+                } else if amount > 0.0 {
+                    filters.push(format!("hue=s={:.4}", 1.0 - amount));
+                }
+            }
+            "sepia" => {
+                let amount = effect_param_f64(effect, "amount", 100.0).clamp(0.0, 100.0) / 100.0;
+                if amount > 0.0 {
+                    filters.push(format!(
+                        "colorchannelmixer=rr={:.4}:rg={:.4}:rb={:.4}:gr={:.4}:gg={:.4}:gb={:.4}:br={:.4}:bg={:.4}:bb={:.4}",
+                        1.0 - 0.607 * amount,
+                        0.769 * amount,
+                        0.189 * amount,
+                        0.349 * amount,
+                        1.0 - 0.314 * amount,
+                        0.168 * amount,
+                        0.272 * amount,
+                        0.534 * amount,
+                        1.0 - 0.869 * amount
+                    ));
+                }
+            }
+            "invert" => {
+                let amount = effect_param_f64(effect, "amount", 100.0).clamp(0.0, 100.0) / 100.0;
+                if amount > 0.0 {
+                    filters.push(format!("negate=enable='lte({:.4},1)'", amount));
+                }
+            }
+            "sharpen" | "unsharp-mask" => {
+                let amount = effect_param_f64(effect, "amount", 50.0).clamp(0.0, 200.0) / 50.0;
+                if amount > 0.0 {
+                    filters.push(format!("unsharp=5:5:{:.3}:5:5:0.0", amount));
+                }
+            }
+            "glow" => {
+                let intensity = effect_param_f64(effect, "intensity", 50.0).clamp(0.0, 100.0);
+                filters.push(format!("eq=brightness={:.4}:saturation={:.4}", intensity / 300.0, 1.0 + intensity / 500.0));
+            }
+            "mirror" => {
+                let axis = effect_param_str(effect, "axis", "horizontal");
+                if axis == "horizontal" || axis == "both" {
+                    filters.push("hflip".to_string());
+                }
+                if axis == "vertical" || axis == "both" {
+                    filters.push("vflip".to_string());
+                }
+            }
+            "pixelate" => {
+                let size = effect_param_f64(effect, "size", 10.0).clamp(2.0, 100.0);
+                filters.push(format!("scale=iw/{0}:ih/{0}:flags=neighbor,scale=iw*{0}:ih*{0}:flags=neighbor", size.round()));
+            }
+            _ => {}
+        }
+    }
+
+    filters.join(",")
+}
+
+fn is_image_path(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    lower.ends_with(".png")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".webp")
+        || lower.ends_with(".bmp")
+        || lower.ends_with(".gif")
+}
+
+fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
+    let mut clips = Vec::new();
+
+    if let Some(tracks) = project.get("tracks").and_then(|t| t.as_array()) {
+        for track in tracks {
+            let track_type = track.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            let visible = track.get("visible").and_then(|v| v.as_bool()).unwrap_or(true);
+            let muted = track.get("muted").and_then(|m| m.as_bool()).unwrap_or(false);
+            let track_volume = value_f64(track, "volume", 1.0).clamp(0.0, 2.0);
+            if muted || (track_type == "video" && !visible) {
+                continue;
+            }
+
+            if let Some(track_clips) = track.get("clips").and_then(|c| c.as_array()) {
+                for clip in track_clips {
+                    let path = clip.get("path").and_then(|p| p.as_str()).unwrap_or("");
+                    let media_type = clip.get("mediaType").and_then(|m| m.as_str()).unwrap_or("");
+                    if path.is_empty() || (media_type != "video" && media_type != "image" && media_type != "audio") {
+                        continue;
+                    }
+
+                    let duration = value_f64(clip, "duration", 0.0);
+                    if duration <= 0.0 {
+                        continue;
+                    }
+
+                    clips.push(RenderClip {
+                        path: path.to_string(),
+                        media_type: media_type.to_string(),
+                        track_type: track_type.to_string(),
+                        start_time: value_f64(clip, "startTime", 0.0).max(0.0),
+                        duration,
+                        in_point: value_f64(clip, "inPoint", 0.0).max(0.0),
+                        opacity: value_f64(clip, "opacity", 1.0).clamp(0.0, 1.0),
+                        volume: (value_f64(clip, "volume", 1.0) * track_volume).clamp(0.0, 4.0),
+                        position_x: value_f64(clip, "positionX", 0.0),
+                        position_y: value_f64(clip, "positionY", 0.0),
+                        scale: value_f64(clip, "scale", 1.0).clamp(0.1, 4.0),
+                        effects: clip.get("effects").and_then(|e| e.as_array()).cloned().unwrap_or_default(),
+                    });
+                }
+            }
+        }
+    }
+
+    clips.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap_or(std::cmp::Ordering::Equal));
+    clips
+}
+
+fn codec_candidates(codec: &str) -> Vec<&'static str> {
+    match codec {
+        "h264" => vec!["h264_nvenc", "h264_qsv", "h264_amf", "libx264"],
+        "h265" => vec!["hevc_nvenc", "hevc_qsv", "hevc_amf", "libx265"],
+        "av1" => vec!["libaom-av1", "libx264"],
+        "vp9" => vec!["libvpx-vp9", "libx264"],
+        _ => vec!["libx264"],
+    }
+}
+
+async fn media_has_audio(app: &AppHandle, path: &str) -> bool {
+    let output = app.shell()
+        .sidecar("ffprobe")
+        .ok()
+        .and_then(|command| {
+            Some(command.args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                path,
+            ]))
+        });
+
+    if let Some(command) = output {
+        if let Ok(result) = command.output().await {
+            if result.status.success() {
+                return String::from_utf8_lossy(&result.stdout).contains("audio");
+            }
+        }
+    }
+
+    false
+}
+
 #[tauri::command]
 pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, project: serde_json::Value) -> Result<String, String> {
     let out_path = settings.get("outputPath").and_then(|p| p.as_str()).unwrap_or("export.mp4").to_string();
@@ -180,71 +414,164 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
     let height = settings.get("height").and_then(|v| v.as_u64()).unwrap_or(1080);
     let fps = settings.get("frameRate").and_then(|v| v.as_f64()).unwrap_or(30.0);
     let v_codec = settings.get("videoCodec").and_then(|v| v.as_str()).unwrap_or("h264").to_string();
-    
-    // Find first video clip path for input
-    let mut input_path = String::new();
+    let a_codec = settings.get("audioCodec").and_then(|v| v.as_str()).unwrap_or("aac").to_string();
+    let audio_bitrate = settings.get("audioBitrate").and_then(|v| v.as_u64()).unwrap_or(192);
+    let sample_rate = settings.get("audioSampleRate").and_then(|v| v.as_u64()).unwrap_or(48000);
     let mut duration = 5.0; // fallback duration
     
     if let Some(duration_val) = project.get("duration").and_then(|d| d.as_f64()) {
-        duration = duration_val;
+        duration = duration_val.max(0.1);
     }
-    
-    if let Some(tracks) = project.get("tracks").and_then(|t| t.as_array()) {
-        for track in tracks {
-            if let Some(clips) = track.get("clips").and_then(|c| c.as_array()) {
-                for clip in clips {
-                    if let Some(path) = clip.get("path").and_then(|p| p.as_str()) {
-                        if !path.is_empty() {
-                            input_path = path.to_string();
-                            break;
-                        }
-                    }
-                }
-            }
-            if !input_path.is_empty() { break; }
-        }
-    }
+
+    let render_clips = collect_render_clips(&project);
     
     let app_clone = app.clone();
     
     tauri::async_runtime::spawn(async move {
-        // Build ffmpeg arguments
         let mut args = vec!["-y".to_string()];
-        
-        if input_path.is_empty() {
-            // Dummy input if timeline is empty
+        let mut clips_with_audio = Vec::new();
+
+        args.push("-f".to_string());
+        args.push("lavfi".to_string());
+        args.push("-i".to_string());
+        args.push(format!("color=c=black:s={}x{}:r={}:d={}", width, height, fps, duration));
+
+        for clip in &render_clips {
+            if clip.media_type == "image" || is_image_path(&clip.path) {
+                args.push("-loop".to_string());
+                args.push("1".to_string());
+                args.push("-t".to_string());
+                args.push(format!("{:.6}", clip.duration));
+            } else {
+                clips_with_audio.push(media_has_audio(&app_clone, &clip.path).await);
+            }
+            args.push("-i".to_string());
+            args.push(clip.path.clone());
+            if clip.media_type == "image" || is_image_path(&clip.path) {
+                clips_with_audio.push(false);
+            }
+        }
+
+        let mut filter_parts = vec!["[0:v]format=rgba[base0]".to_string()];
+        let mut previous_label = "base0".to_string();
+
+        let mut audio_labels: Vec<String> = Vec::new();
+
+        for (idx, clip) in render_clips.iter().enumerate() {
+            if clip.media_type == "audio" || clip.track_type == "audio" {
+                continue;
+            }
+
+            let input_idx = idx + 1;
+            let layer_label = format!("v{}", idx);
+            let output_label = format!("base{}", idx + 1);
+            let scaled_width = ((width as f64) * clip.scale).round().max(1.0) as u64;
+            let scaled_height = ((height as f64) * clip.scale).round().max(1.0) as u64;
+            let x_expr = format!("(W-w)/2+({:.6})*W/2", clip.position_x);
+            let y_expr = format!("(H-h)/2+({:.6})*H/2", clip.position_y);
+            let effect_chain = effect_filter_chain(&clip.effects);
+            let effect_prefix = if effect_chain.is_empty() { String::new() } else { format!("{},", effect_chain) };
+
+            let source_filter = if clip.media_type == "image" || is_image_path(&clip.path) {
+                format!(
+                    "[{}:v]{}scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgba,colorchannelmixer=aa={:.6},setpts=PTS-STARTPTS+{:.6}/TB[{}]",
+                    input_idx,
+                    effect_prefix,
+                    scaled_width,
+                    scaled_height,
+                    scaled_width,
+                    scaled_height,
+                    clip.opacity,
+                    clip.start_time,
+                    layer_label
+                )
+            } else {
+                format!(
+                    "[{}:v]trim=start={:.6}:duration={:.6},setpts=PTS-STARTPTS+{:.6}/TB,{}scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgba,colorchannelmixer=aa={:.6}[{}]",
+                    input_idx,
+                    clip.in_point,
+                    clip.duration,
+                    clip.start_time,
+                    effect_prefix,
+                    scaled_width,
+                    scaled_height,
+                    scaled_width,
+                    scaled_height,
+                    clip.opacity,
+                    layer_label
+                )
+            };
+
+            filter_parts.push(source_filter);
+            filter_parts.push(format!(
+                "[{}][{}]overlay=x='{}':y='{}':enable='between(t,{:.6},{:.6})':eof_action=pass[{}]",
+                previous_label,
+                layer_label,
+                x_expr,
+                y_expr,
+                clip.start_time,
+                clip.start_time + clip.duration,
+                output_label
+            ));
+            previous_label = output_label;
+        }
+
+        for (idx, clip) in render_clips.iter().enumerate() {
+            if clip.media_type == "image" || is_image_path(&clip.path) {
+                continue;
+            }
+            if !clips_with_audio.get(idx).copied().unwrap_or(false) {
+                continue;
+            }
+
+            let input_idx = idx + 1;
+            let label = format!("a{}", idx);
+            let delay_ms = (clip.start_time * 1000.0).round().max(0.0) as u64;
+            filter_parts.push(format!(
+                "[{}:a]atrim=start={:.6}:duration={:.6},asetpts=PTS-STARTPTS,volume={:.6},adelay={}:all=1[{}]",
+                input_idx,
+                clip.in_point,
+                clip.duration,
+                clip.volume,
+                delay_ms,
+                label
+            ));
+            audio_labels.push(label);
+        }
+
+        if !audio_labels.is_empty() {
+            if audio_labels.len() == 1 {
+                filter_parts.push(format!("[{}]apad,atrim=0:{:.6},aresample={}[outa]", audio_labels[0], duration, sample_rate));
+            } else {
+                let inputs = audio_labels.iter().map(|label| format!("[{}]", label)).collect::<String>();
+                filter_parts.push(format!("{}amix=inputs={}:duration=longest:dropout_transition=0,apad,atrim=0:{:.6},aresample={}[outa]", inputs, audio_labels.len(), duration, sample_rate));
+            }
+        }
+
+        filter_parts.push(format!("[{}]fps={},format=yuv420p[outv]", previous_label, fps));
+
+        args.push("-filter_complex".to_string());
+        args.push(filter_parts.join(";"));
+        args.push("-map".to_string());
+        args.push("[outv]".to_string());
+        if !audio_labels.is_empty() {
+            args.push("-map".to_string());
+            args.push("[outa]".to_string());
+        }
+
+        if render_clips.is_empty() {
             args.push("-f".to_string());
-            args.push("lavfi".to_string());
-            args.push("-i".to_string());
-            args.push(format!("testsrc=duration={}:size={}x{}:rate={}", duration, width, height, fps));
-        } else {
-            args.push("-i".to_string());
-            args.push(input_path.clone());
+            args.push("mp4".to_string());
         }
-        
-        // Scale and frame rate
-        args.push("-vf".to_string());
-        args.push(format!("scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,fps={}", width, height, width, height, fps));
-        
-        // HW Accel fallback logic
-        let mut codecs_to_try = vec![];
-        if v_codec == "h264" {
-            codecs_to_try.push("h264_nvenc"); // Try NVIDIA first
-            codecs_to_try.push("h264_qsv");   // Try Intel second
-            codecs_to_try.push("h264_amf");   // Try AMD third
-            codecs_to_try.push("libx264");    // Software fallback
-        } else if v_codec == "h265" {
-            codecs_to_try.push("hevc_nvenc");
-            codecs_to_try.push("hevc_qsv");
-            codecs_to_try.push("hevc_amf");
-            codecs_to_try.push("libx265");
-        } else {
-            codecs_to_try.push("libx264");
-        }
-        
+
+        args.push("-t".to_string());
+        args.push(format!("{:.6}", duration));
+        args.push("-movflags".to_string());
+        args.push("+faststart".to_string());
+
         let mut success = false;
         
-        for codec in codecs_to_try {
+        for codec in codec_candidates(&v_codec) {
             let mut current_args = args.clone();
             current_args.push("-c:v".to_string());
             current_args.push(codec.to_string());
@@ -255,6 +582,15 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
             } else {
                 current_args.push("-preset".to_string());
                 current_args.push("p1".to_string()); // nvenc fast preset
+            }
+
+            if !audio_labels.is_empty() {
+                current_args.push("-c:a".to_string());
+                current_args.push(a_codec.clone());
+                current_args.push("-b:a".to_string());
+                current_args.push(format!("{}k", audio_bitrate));
+                current_args.push("-ar".to_string());
+                current_args.push(sample_rate.to_string());
             }
             
             current_args.push(out_path.clone());

@@ -53,6 +53,7 @@ function makeBlankDocument(name: string, width: number, height: number, dpi: num
 
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
+  const { logSuccess, logError } = useAppLogger();
   const navigate = useNavigate();
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,6 +94,7 @@ function PhotoEditorInner() {
       setCurrentProjectName(nav.name);
       setSaveProjectName(nav.name);
       dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+      logSuccess('Photo project created', nav.name, { source: 'photo-editor' });
     } else if (nav.loadProjectId) {
       loadProject(nav.loadProjectId).then((loaded: LoadedProject) => {
         dispatch({ type: 'OPEN_DOCUMENT', payload: loaded.document });
@@ -102,32 +104,42 @@ function PhotoEditorInner() {
         setCurrentProjectId(nav.loadProjectId);
         setCurrentProjectName(loaded.projectName);
         setSaveProjectName(loaded.projectName);
-      }).catch((err: unknown) => console.error('Failed to load project:', err));
+        logSuccess('Photo project opened', loaded.projectName, { source: 'photo-editor' });
+      }).catch((err: unknown) => {
+        console.error('Failed to load project:', err);
+        logError('Photo project open failed', String(err), { source: 'photo-editor' });
+      });
     }
-  }, [location.state, dispatch]);
+  }, [location.state, dispatch, logSuccess, logError]);
 
   // ─── Open Image Handler ───────────────────────────────────────
   const handleOpenImage = useCallback(async () => {
-    const doc = await openImageFromDisk();
-    if (!doc) return;
+    try {
+      const doc = await openImageFromDisk();
+      if (!doc) return;
 
-    // Calculate fit-to-screen zoom
-    const container = containerRef.current;
-    if (container) {
-      const canvasArea = container.querySelector('.pe-viewport');
-      if (canvasArea) {
-        const fitZoom = calculateFitZoom(
-          doc.width,
-          doc.height,
-          canvasArea.clientWidth,
-          canvasArea.clientHeight
-        );
-        doc.zoom = fitZoom;
+      // Calculate fit-to-screen zoom
+      const container = containerRef.current;
+      if (container) {
+        const canvasArea = container.querySelector('.pe-viewport');
+        if (canvasArea) {
+          const fitZoom = calculateFitZoom(
+            doc.width,
+            doc.height,
+            canvasArea.clientWidth,
+            canvasArea.clientHeight
+          );
+          doc.zoom = fitZoom;
+        }
       }
-    }
 
-    dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
-  }, [dispatch]);
+      dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+      logSuccess('Photo opened', doc.fileName, { source: 'photo-editor' });
+    } catch (err) {
+      console.error('Image open failed:', err);
+      logError('Photo open failed', String(err), { source: 'photo-editor' });
+    }
+  }, [dispatch, logSuccess, logError]);
 
   const openResizeDialog = useCallback(() => {
     if (!activeDocument) return;
@@ -152,16 +164,19 @@ function PhotoEditorInner() {
         await updateProject(currentProjectId, state, projectName);
         setCurrentProjectName(projectName);
         setIntegrationMessage(`Project "${projectName}" saved.`);
+        logSuccess('Photo project saved', projectName, { source: 'photo-editor' });
       } else {
         const id = await saveProject(state, projectName);
         setCurrentProjectId(id);
         setCurrentProjectName(projectName);
         setIntegrationMessage(`Project "${projectName}" saved.`);
+        logSuccess('Photo project saved', projectName, { source: 'photo-editor' });
       }
     } catch (err) {
       setIntegrationMessage(`Save failed: ${err}`);
+      logError('Photo project save failed', String(err), { source: 'photo-editor' });
     }
-  }, [activeDocument, currentProjectId, currentProjectName, state]);
+  }, [activeDocument, currentProjectId, currentProjectName, state, logSuccess, logError]);
 
   const handleSaveProjectAs = useCallback(async () => {
     if (!activeDocument) return;
@@ -172,20 +187,29 @@ function PhotoEditorInner() {
   const handleExportProjectFile = useCallback(async () => {
     if (!activeDocument) return;
     const name = currentProjectName ?? activeDocument.fileName ?? 'Untitled Project';
-    await exportProjectAsFile(state, name);
-  }, [activeDocument, currentProjectName, state]);
-
-  const { logSuccess } = useAppLogger();
+    try {
+      await exportProjectAsFile(state, name);
+      logSuccess('Photo project exported', name, { source: 'photo-editor' });
+    } catch (err) {
+      console.error('Project export failed:', err);
+      logError('Photo project export failed', String(err), { source: 'photo-editor' });
+    }
+  }, [activeDocument, currentProjectName, state, logSuccess, logError]);
 
   // ─── Export Handler ───────────────────────────────────────────
   const handleExport = useCallback(async () => {
     if (!activeDocument?.imageData) return;
     const { format, quality, scale } = state.exportOptions;
     const renderedImageData = applyAllAdjustments(activeDocument.imageData, activeDocument.pendingAdjustments);
-    await exportImageToFile(renderedImageData, activeDocument.fileName, format, quality, scale);
-    dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: activeDocument.id, dirty: false } });
-    logSuccess('Export', `Exported image as ${format.toUpperCase()}`);
-  }, [activeDocument, dispatch, state.exportOptions, logSuccess]);
+    try {
+      await exportImageToFile(renderedImageData, activeDocument.fileName, format, quality, scale);
+      dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: activeDocument.id, dirty: false } });
+      logSuccess('Photo exported', `Exported ${activeDocument.fileName} as ${format.toUpperCase()}.`, { source: 'photo-editor' });
+    } catch (err) {
+      console.error('Image export failed:', err);
+      logError('Photo export failed', String(err), { source: 'photo-editor' });
+    }
+  }, [activeDocument, dispatch, state.exportOptions, logSuccess, logError]);
 
   const handleBatchExport = useCallback(async () => {
     const { format, quality, scale } = state.exportOptions;
@@ -193,11 +217,17 @@ function PhotoEditorInner() {
       ...doc,
       imageData: doc.imageData ? applyAllAdjustments(doc.imageData, doc.pendingAdjustments) : null,
     }));
-    await exportBatchToFiles(renderedDocuments, format, quality, scale);
-    state.documents.forEach((doc) => {
-      dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: doc.id, dirty: false } });
-    });
-  }, [dispatch, state.documents, state.exportOptions]);
+    try {
+      await exportBatchToFiles(renderedDocuments, format, quality, scale);
+      state.documents.forEach((doc) => {
+        dispatch({ type: 'SET_DOCUMENT_DIRTY', payload: { id: doc.id, dirty: false } });
+      });
+      logSuccess('Photo batch export complete', `${renderedDocuments.length} image${renderedDocuments.length === 1 ? '' : 's'} exported.`, { source: 'photo-editor' });
+    } catch (err) {
+      console.error('Batch export failed:', err);
+      logError('Photo batch export failed', String(err), { source: 'photo-editor' });
+    }
+  }, [dispatch, state.documents, state.exportOptions, logSuccess, logError]);
 
   const saveExportPreset = useCallback(() => {
     const name = window.prompt('Preset name');
@@ -208,17 +238,20 @@ function PhotoEditorInner() {
     ];
     setExportPresets(next);
     localStorage.setItem('dawndesk.photoEditor.exportPresets', JSON.stringify(next));
-  }, [exportPresets, state.exportOptions]);
+    logSuccess('Photo export preset saved', name.trim(), { source: 'photo-editor' });
+  }, [exportPresets, state.exportOptions, logSuccess]);
 
   // ─── Copy to Clipboard ────────────────────────────────────────
   const handleCopyToClipboard = useCallback(async () => {
     if (!activeDocument?.imageData) return;
     try {
       await copyImageToClipboard(activeDocument.imageData);
+      logSuccess('Photo copied', activeDocument.fileName, { source: 'photo-editor' });
     } catch (err) {
       console.error('Clipboard copy failed:', err);
+      logError('Photo copy failed', String(err), { source: 'photo-editor' });
     }
-  }, [activeDocument]);
+  }, [activeDocument, logSuccess, logError]);
 
   // ─── Filter & Transform Handlers ──────────────────────────────
   const applyFilter = useCallback(
@@ -228,8 +261,9 @@ function PhotoEditorInner() {
       if (!activeLayer?.imageData || activeLayer.locked) return;
       const result = fn(activeLayer.imageData);
       dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: result, label: name } });
+      logSuccess('Photo filter applied', name, { source: 'photo-editor' });
     },
-    [activeDocument, dispatch, state.activeLayerId, state.layers]
+    [activeDocument, dispatch, state.activeLayerId, state.layers, logSuccess]
   );
 
   const handleRotate = useCallback(
@@ -655,6 +689,7 @@ function PhotoEditorInner() {
                 onClick={() => {
                   dispatch({ type: 'RESIZE_ACTIVE_DOCUMENT', payload: { width: resizeValues.width, height: resizeValues.height } });
                   setShowResizeDialog(false);
+                  logSuccess('Photo resized', `${resizeValues.width} x ${resizeValues.height}`, { source: 'photo-editor' });
                 }}
               >
                 Resize

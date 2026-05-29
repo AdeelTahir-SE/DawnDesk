@@ -4,6 +4,7 @@ import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 
 interface MenuItem {
   label: string;
+  description?: string;
   shortcut?: string;
   action?: () => void;
   disabled?: boolean;
@@ -85,6 +86,45 @@ export default function MenuBar() {
       { label: '', separator: true },
       { label: 'Render Queue', action: () => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' }) },
     ],
+    Auto: [
+      {
+        label: 'Quick Cleanup',
+        description: 'Trims small dead space, closes gaps, adds gentle cross dissolves, balances audio, and applies light visual polish.',
+        action: () => dispatch({ type: 'APPLY_AUTO_EDIT', payload: { preset: 'quick-cleanup' } }),
+        disabled: !state.project || state.project.tracks.every(track => track.clips.length === 0),
+      },
+      {
+        label: 'Smart Trim',
+        description: 'Automatically tightens selected media, or the whole timeline, by removing tiny lead/trail padding and closing gaps per track.',
+        action: () => dispatch({ type: 'APPLY_AUTO_EDIT', payload: { preset: 'smart-trim' } }),
+        disabled: !state.project || state.project.tracks.every(track => track.clips.length === 0),
+      },
+      {
+        label: 'Smooth Transitions',
+        description: 'Adds sensible cross-dissolve transitions between timeline clips so cuts feel less abrupt.',
+        action: () => dispatch({ type: 'APPLY_AUTO_EDIT', payload: { preset: 'smooth-transitions' } }),
+        disabled: !state.project || state.project.tracks.every(track => track.clips.length === 0),
+      },
+      {
+        label: 'Visual Polish',
+        description: 'Applies export-supported brightness/contrast and sharpening effects to selected visual media.',
+        action: () => dispatch({ type: 'APPLY_AUTO_EDIT', payload: { preset: 'visual-polish' } }),
+        disabled: !state.project || state.project.tracks.every(track => track.clips.length === 0),
+      },
+      {
+        label: 'Audio Balance',
+        description: 'Normalizes clip and track volume so exported media keeps a clear audio bed.',
+        action: () => dispatch({ type: 'APPLY_AUTO_EDIT', payload: { preset: 'audio-balance' } }),
+        disabled: !state.project || state.project.tracks.every(track => track.clips.length === 0),
+      },
+      { label: '', separator: true },
+      {
+        label: 'Product Finish',
+        description: 'A complete one-click finish: trims, transitions, visual polish, audio balance, color lift, and a title overlay.',
+        action: () => dispatch({ type: 'APPLY_AUTO_EDIT', payload: { preset: 'product-finish' } }),
+        disabled: !state.project || state.project.tracks.every(track => track.clips.length === 0),
+      },
+    ],
   };
 
   return (
@@ -101,7 +141,10 @@ export default function MenuBar() {
                   ? <div key={i} className="ve-menu-separator" />
                   : <button key={i} className={`ve-menu-dropdown-item ${item.disabled ? 'disabled' : ''}`}
                       onClick={() => handleItemClick(item)}>
-                      <span>{item.label}</span>
+                      <span className="ve-menu-item-copy">
+                        <span>{item.label}</span>
+                        {item.description && <span className="ve-menu-description">{item.description}</span>}
+                      </span>
                       {item.shortcut && <span className="ve-menu-shortcut">{item.shortcut}</span>}
                     </button>
               ))}

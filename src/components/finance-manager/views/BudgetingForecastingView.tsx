@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, PieChart, BarChart3, Building, Loader2, X, TrendingUp } from "lucide-react";
+import { Plus, PieChart, Building, Loader2, X, TrendingUp } from "lucide-react";
 
 export type BudgetItem = {
   id: number;
@@ -9,17 +9,31 @@ export type BudgetItem = {
   period: string;
 };
 
+type TransactionItem = {
+  id: number;
+  amount: number;
+  type_: string;
+  category: string;
+  date: string;
+  status: string;
+};
+
 export default function BudgetingForecastingView() {
   const [activeTab, setActiveTab] = useState("budgets");
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await invoke<BudgetItem[]>("get_budgets");
-      setBudgets(res);
+      const [budgetRows, txRows] = await Promise.all([
+        invoke<BudgetItem[]>("get_budgets"),
+        invoke<TransactionItem[]>("get_transactions"),
+      ]);
+      setBudgets(budgetRows);
+      setTransactions(txRows);
     } catch (e) {
       console.error(e);
     }
@@ -62,9 +76,9 @@ export default function BudgetingForecastingView() {
              <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-yellow-400 animate-spin" /></div>
           ) : (
             <>
-              {activeTab === "budgets" && <BudgetsTable budgets={budgets} />}
-              {activeTab === "variance" && <VarianceAnalysis />}
-              {activeTab === "scenarios" && <ScenarioModeling />}
+              {activeTab === "budgets" && <BudgetsTable budgets={budgets} transactions={transactions} />}
+              {activeTab === "variance" && <VarianceAnalysis budgets={budgets} transactions={transactions} />}
+              {activeTab === "scenarios" && <ScenarioModeling budgets={budgets} transactions={transactions} />}
             </>
           )}
         </div>
@@ -75,7 +89,15 @@ export default function BudgetingForecastingView() {
   );
 }
 
-function BudgetsTable({ budgets }: { budgets: BudgetItem[] }) {
+function getBudgetActual(budget: BudgetItem, transactions: TransactionItem[]) {
+  return transactions
+    .filter((tx) => tx.status.toLowerCase() !== "void")
+    .filter((tx) => tx.type_.toLowerCase() === "expense")
+    .filter((tx) => tx.category.toLowerCase() === budget.category.toLowerCase())
+    .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+function BudgetsTable({ budgets, transactions }: { budgets: BudgetItem[]; transactions: TransactionItem[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-950/50">
       <table className="w-full text-left text-sm text-white/80">
@@ -93,9 +115,9 @@ function BudgetsTable({ budgets }: { budgets: BudgetItem[] }) {
             <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">No budgets found.</td></tr>
           )}
           {budgets.map((b) => {
-            const actual = 0; // Mock actual spend for now
+            const actual = getBudgetActual(b, transactions);
             const remaining = b.limit_amount - actual;
-            const pct = (actual / b.limit_amount) * 100;
+            const pct = b.limit_amount > 0 ? Math.min(100, (actual / b.limit_amount) * 100) : 0;
             return (
               <tr key={b.id} className="transition-colors hover:bg-neutral-800/30">
                 <td className="px-6 py-4 font-bold text-white flex items-center gap-2">
@@ -122,24 +144,70 @@ function BudgetsTable({ budgets }: { budgets: BudgetItem[] }) {
   );
 }
 
-function VarianceAnalysis() {
+function VarianceAnalysis({ budgets, transactions }: { budgets: BudgetItem[]; transactions: TransactionItem[] }) {
+  const rows = useMemo(() => budgets.map((budget) => {
+    const actual = getBudgetActual(budget, transactions);
+    return {
+      budget,
+      actual,
+      variance: budget.limit_amount - actual,
+      percentUsed: budget.limit_amount > 0 ? (actual / budget.limit_amount) * 100 : 0,
+    };
+  }), [budgets, transactions]);
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <BarChart3 className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Budget vs Actual (BvA)</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Compare real-time GL actuals against forecasted budget limits.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Generate BvA Report</button>
+    <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-950/50">
+      <table className="w-full text-left text-sm text-white/80">
+        <thead className="border-b border-neutral-800 bg-neutral-900/50 text-xs uppercase tracking-wider text-white/50">
+          <tr>
+            <th className="px-6 py-4 font-semibold">Budget</th>
+            <th className="px-6 py-4 font-semibold text-right">Limit</th>
+            <th className="px-6 py-4 font-semibold text-right">Actual</th>
+            <th className="px-6 py-4 font-semibold text-right">Variance</th>
+            <th className="px-6 py-4 font-semibold">Use</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-800">
+          {rows.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">Create budgets and expense transactions to see variance analysis.</td></tr>}
+          {rows.map(({ budget, actual, variance, percentUsed }) => (
+            <tr key={budget.id}>
+              <td className="px-6 py-4 font-bold text-white">{budget.category}</td>
+              <td className="px-6 py-4 text-right font-mono">${budget.limit_amount.toFixed(2)}</td>
+              <td className="px-6 py-4 text-right font-mono">${actual.toFixed(2)}</td>
+              <td className={`px-6 py-4 text-right font-mono ${variance < 0 ? "text-red-300" : "text-green-300"}`}>${variance.toFixed(2)}</td>
+              <td className="px-6 py-4">{percentUsed.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function ScenarioModeling() {
+function ScenarioModeling({ budgets, transactions }: { budgets: BudgetItem[]; transactions: TransactionItem[] }) {
+  const totalBudget = budgets.reduce((sum, budget) => sum + budget.limit_amount, 0);
+  const totalActual = budgets.reduce((sum, budget) => sum + getBudgetActual(budget, transactions), 0);
+  const burnChange = totalActual * 0.1;
+
   return (
     <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
       <TrendingUp className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">What-If Scenarios</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Model hiring plans, market downturns, and pricing changes to see EBITDA impact.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Create New Scenario</button>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">This scenario uses current budgets and expense transactions instead of a saved template.</p>
+      <div className="mx-auto mt-6 grid max-w-2xl gap-3 md:grid-cols-3">
+        <ScenarioMetric label="Base Budget" value={`$${totalBudget.toFixed(2)}`} />
+        <ScenarioMetric label="Actual Spend" value={`$${totalActual.toFixed(2)}`} />
+        <ScenarioMetric label="+10% Spend Case" value={`$${(totalActual + burnChange).toFixed(2)}`} />
+      </div>
+    </div>
+  );
+}
+
+function ScenarioMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
+      <p className="mt-2 text-xl font-black text-white">{value}</p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, CheckCircle2, X } from "lucide-react";
+import { useAppLogger } from "../../../utils/LoggerContext";
 
 interface Goal {
   id: number;
@@ -12,6 +13,7 @@ interface Goal {
 }
 
 export default function GoalsView() {
+  const { logSuccess, logError } = useAppLogger();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newGoal, setNewGoal] = useState({ name: "", target_amount: 0, current_amount: 0, deadline: "", auto_allocate_percent: 0 });
@@ -41,10 +43,12 @@ export default function GoalsView() {
         } 
       });
       setShowAddModal(false);
+      logSuccess("Finance goal created", newGoal.name, { source: "finance" });
       setNewGoal({ name: "", target_amount: 0, current_amount: 0, deadline: "", auto_allocate_percent: 0 });
       fetchGoals();
     } catch (e) {
       console.error(e);
+      logError("Finance goal create failed", String(e), { source: "finance" });
     }
   };
 

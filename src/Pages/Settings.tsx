@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Bell,
   Check,
@@ -17,9 +18,11 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
+import { LOGGER_SOURCES, useAppLogger, type LogLevel, type LoggerSource } from "../utils/LoggerContext";
 
 const TABS = [
   { id: "general", label: "General", icon: <Sliders className="h-4 w-4" /> },
+  { id: "loggers", label: "Operation Toasts", icon: <Bell className="h-4 w-4" /> },
   { id: "appearance", label: "Appearance", icon: <Monitor className="h-4 w-4" /> },
   { id: "ai", label: "AI Settings", icon: <Sparkles className="h-4 w-4" /> },
   { id: "privacy", label: "Privacy", icon: <Shield className="h-4 w-4" /> },
@@ -39,9 +42,19 @@ const defaultSettings = {
 };
 
 export default function Settings() {
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState(defaultSettings);
   const [saved, setSaved] = useState(false);
+  const logger = useAppLogger();
+  const { logSuccess } = logger;
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && TABS.some((item) => item.id === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem("dawndesk_global_settings");
@@ -58,6 +71,15 @@ export default function Settings() {
     const nextSettings = { ...settings, [key]: value };
     setSettings(nextSettings);
     localStorage.setItem("dawndesk_global_settings", JSON.stringify(nextSettings));
+    if (key === "notifications" && typeof value === "boolean") {
+      logger.updateLoggerSettings({ toastsEnabled: value });
+    }
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1400);
+    logSuccess("Settings", `${key} updated`, { source: "settings" });
+  };
+
+  const markSaved = () => {
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1400);
   };
@@ -141,6 +163,10 @@ export default function Settings() {
             </SettingsGrid>
           )}
 
+          {activeTab === "loggers" && (
+            <LoggerSettingsPanel onSaved={markSaved} />
+          )}
+
           {activeTab === "appearance" && (
             <SettingsGrid>
               <SettingSelect
@@ -201,11 +227,12 @@ export default function Settings() {
                 <p className="mt-3 dd-body">
                   Clear cached app preferences and workspace layout settings. Finance and project databases are stored separately.
                 </p>
-                <button
-                  onClick={() => {
-                    localStorage.removeItem("dawndesk_global_settings");
-                    setSettings(defaultSettings);
-                  }}
+            <button
+              onClick={() => {
+                localStorage.removeItem("dawndesk_global_settings");
+                setSettings(defaultSettings);
+                logSuccess("Settings", "App preferences reset", { source: "settings" });
+              }}
                   className="mt-5 dd-btn-danger"
                 >
                   Reset App Preferences
@@ -241,6 +268,153 @@ export default function Settings() {
 
 function SettingsGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">{children}</div>;
+}
+
+const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
+  info: "Info",
+  success: "Success",
+  warning: "Warnings",
+  error: "Errors",
+};
+
+function LoggerSettingsPanel({ onSaved }: { onSaved: () => void }) {
+  const { logs, settings, updateLoggerSettings, resetLoggerSettings, logSuccess } = useAppLogger();
+
+  const update = (patch: Parameters<typeof updateLoggerSettings>[0]) => {
+    updateLoggerSettings(patch);
+    onSaved();
+  };
+
+  const updateLevel = (level: LogLevel, value: boolean) => {
+    update({ levels: { ...settings.levels, [level]: value } });
+  };
+
+  const updateSource = (source: LoggerSource, value: boolean) => {
+    update({ sources: { ...settings.sources, [source]: value } });
+  };
+
+  const updateMutedAction = (action: string, value: boolean) => {
+    update({ mutedActions: { ...settings.mutedActions, [action]: value } });
+  };
+
+  const recentActions = Array.from(new Set(logs.filter((log) => log.channel === "operation").map((log) => log.action))).slice(0, 10);
+
+  return (
+    <div className="space-y-5">
+      <SettingsGrid>
+        <SettingToggle
+          icon={<Bell />}
+          title="Operation Toasts"
+          text="Show toast feedback when DawnDesk performs app operations such as save, import, export, apply effects, or errors."
+          checked={settings.enabled && settings.toastsEnabled && settings.channels.operation}
+          onChange={(value) => update({ enabled: value, toastsEnabled: value, channels: { ...settings.channels, operation: value } })}
+        />
+        <SettingToggle
+          icon={<Info />}
+          title="Keep Log File"
+          text="Write operation history to the local DawnDesk activity log even if toast notifications are disabled."
+          checked={settings.fileEnabled}
+          onChange={(value) => update({ fileEnabled: value })}
+        />
+        <SettingToggle
+          icon={<Monitor />}
+          title="Console Logging"
+          text="Mirror operation entries into the developer console for debugging."
+          checked={settings.consoleEnabled}
+          onChange={(value) => update({ consoleEnabled: value })}
+        />
+        <div className="dd-card">
+          <div className="flex gap-4">
+            <span className="dd-icon-box"><Bell /></span>
+            <div className="flex-1">
+              <h3 className="dd-card-title">Preview Toast</h3>
+              <p className="mt-1 dd-subtext">Send a sample operation toast using the current logger settings.</p>
+              <button
+                className="mt-5 dd-btn-secondary"
+                onClick={() => logSuccess("Settings", "Operation toast preview is working.", { source: "settings" })}
+              >
+                Test Toast
+              </button>
+            </div>
+          </div>
+        </div>
+      </SettingsGrid>
+
+      <div className="dd-card">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="dd-card-title">Toast Levels</h3>
+            <p className="mt-1 dd-subtext">Choose which operation severities can show toast feedback.</p>
+          </div>
+          <button
+            className="dd-btn-secondary"
+            onClick={() => {
+              resetLoggerSettings();
+              onSaved();
+            }}
+          >
+            Reset
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {(Object.keys(LOG_LEVEL_LABELS) as LogLevel[]).map((level) => (
+            <SettingInlineToggle
+              key={level}
+              label={LOG_LEVEL_LABELS[level]}
+              checked={settings.levels[level]}
+              onChange={(value) => updateLevel(level, value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="dd-card">
+        <h3 className="dd-card-title">Sub-App Toasts</h3>
+        <p className="mt-1 dd-subtext">Turn operation toasts on or off for specific DawnDesk apps.</p>
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {LOGGER_SOURCES.filter((source) => source.id !== "shell").map((source) => (
+            <SettingInlineToggle
+              key={source.id}
+              label={source.label}
+              checked={settings.sources[source.id]}
+              onChange={(value) => updateSource(source.id, value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="dd-card">
+        <h3 className="dd-card-title">Specific Operation Loggers</h3>
+        <p className="mt-1 dd-subtext">Mute noisy operation names that appear in recent activity.</p>
+        {recentActions.length === 0 ? (
+          <p className="mt-5 dd-subtext">No operation toasts have been recorded yet.</p>
+        ) : (
+          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {recentActions.map((action) => (
+              <SettingInlineToggle
+                key={action}
+                label={action}
+                checked={!settings.mutedActions[action]}
+                onChange={(value) => updateMutedAction(action, !value)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SettingInlineToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-950/40 px-3 py-2">
+      <span className="text-sm font-semibold text-white/80">{label}</span>
+      <span className="relative inline-flex cursor-pointer items-center">
+        <input type="checkbox" className="peer sr-only" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+        <span className="h-5 w-9 rounded-full bg-neutral-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-yellow-400 peer-checked:after:translate-x-4" />
+      </span>
+    </label>
+  );
 }
 
 function SettingToggle({ icon, title, text, checked, onChange }: { icon: ReactNode; title: string; text: string; checked: boolean; onChange: (value: boolean) => void }) {

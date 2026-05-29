@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { TRANSITION_DEFINITIONS } from '../../../engine/video-editor/constants';
 import { Search, ArrowRightLeft, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpRight, ZoomIn, ZoomOut, RotateCw, Zap, Sparkles, Flame, Wand2, Moon, Sun } from 'lucide-react';
+import { setTransitionDragData } from '../dragDrop';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpRight, ZoomIn, ZoomOut, RotateCw, Zap, Sparkles, Flame, Wand2, Moon, Sun,
@@ -48,10 +49,9 @@ export default function TransitionBrowser() {
         {filtered.map(t => {
           const Icon = ICON_MAP[t.icon] || ArrowRightLeft;
           return (
-            <div key={t.type} className="ve-effect-card" draggable title={t.description}
+            <div key={t.type} className="ve-effect-card" draggable={true} title={t.description}
               onDragStart={(e) => {
-                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'transition', transitionType: t.type, duration: t.defaultDuration }));
-                e.dataTransfer.effectAllowed = 'copy';
+                setTransitionDragData(e.dataTransfer, { dragKind: 'transition', transitionType: t.type, duration: t.defaultDuration });
               }}
               onDoubleClick={() => {
                 if (state.selectedClipIds.length > 0) {

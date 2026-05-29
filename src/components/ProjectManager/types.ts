@@ -86,6 +86,16 @@ export interface LocalLabel {
   color: string;
 }
 
+export interface LocalStrategy {
+  id: number;
+  project_id: number;
+  name: string;
+  category: string;
+  markdown: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LocalIssueLink {
   id: number;
   link_type: string; // e.g. 'Blocks', 'Duplicates', 'Relates To'

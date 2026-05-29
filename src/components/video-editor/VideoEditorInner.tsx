@@ -1,5 +1,5 @@
 import './video-editor.css';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useVideoEditor } from '../../engine/video-editor/VideoEditorContext';
 import MenuBar from './toolbar/MenuBar';
 import EditorToolbar from './toolbar/EditorToolbar';
@@ -16,9 +16,59 @@ import { Film, FolderOpen, Plus } from 'lucide-react';
 import { useFFmpeg } from '../../engine/video-editor/useFFmpeg';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export default function VideoEditorInner() {
   const { state, dispatch } = useVideoEditor();
   const { checkFFmpeg, loadProject, saveProject, saveProjectAs, importMedia, importMediaPaths } = useFFmpeg();
+  const [leftPanelWidth, setLeftPanelWidth] = useState(280);
+  const [rightPanelWidth, setRightPanelWidth] = useState(300);
+  const [timelineHeight, setTimelineHeight] = useState(260);
+
+  const layoutVars = {
+    '--ve-left-panel-width': state.leftPanelOpen ? `${leftPanelWidth}px` : '0px',
+    '--ve-right-panel-width': state.rightPanelOpen ? `${rightPanelWidth}px` : '0px',
+    '--ve-timeline-height': `${timelineHeight}px`,
+  } as CSSProperties;
+
+  const startResize = useCallback((
+    axis: 'left' | 'right' | 'timeline',
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const initialLeft = leftPanelWidth;
+    const initialRight = rightPanelWidth;
+    const initialTimeline = timelineHeight;
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = axis === 'timeline' ? 'row-resize' : 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      if (axis === 'left') {
+        setLeftPanelWidth(clamp(initialLeft + moveEvent.clientX - startX, 220, 440));
+      } else if (axis === 'right') {
+        setRightPanelWidth(clamp(initialRight - (moveEvent.clientX - startX), 240, 480));
+      } else {
+        setTimelineHeight(clamp(initialTimeline - (moveEvent.clientY - startY), 170, 500));
+      }
+    };
+
+    const handleUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  }, [leftPanelWidth, rightPanelWidth, timelineHeight]);
 
   // Auto-check FFmpeg and show modal if no project
   useEffect(() => {
@@ -100,15 +150,34 @@ export default function VideoEditorInner() {
   }, [dispatch, importMedia, loadProject, saveProject, saveProjectAs, state.project, state.selectedClipIds, state.timelineZoom, state.playheadTime]);
 
   return (
-    <div className="ve-layout animate-fadeIn duration-500">
+    <div className="ve-layout animate-fadeIn duration-500" style={layoutVars}>
       {state.project ? (
         <>
           <PlaybackEngine />
           <MenuBar />
           <EditorToolbar />
           {state.leftPanelOpen && <LeftPanel />}
+          {state.leftPanelOpen && (
+            <div
+              className="ve-panel-resizer ve-panel-resizer-left"
+              onMouseDown={(event) => startResize('left', event)}
+              title="Resize media panel"
+            />
+          )}
           <PreviewCanvas />
+          {state.rightPanelOpen && (
+            <div
+              className="ve-panel-resizer ve-panel-resizer-right"
+              onMouseDown={(event) => startResize('right', event)}
+              title="Resize inspector"
+            />
+          )}
           {state.rightPanelOpen && <RightPanel />}
+          <div
+            className="ve-panel-resizer ve-panel-resizer-timeline"
+            onMouseDown={(event) => startResize('timeline', event)}
+            title="Resize timeline"
+          />
           <Timeline />
           <StatusBar />
           {state.showExportDialog && <ExportDialog />}
@@ -134,7 +203,6 @@ export default function VideoEditorInner() {
         </>
       ) : (
         <div className="ve-welcome-shell">
-          <MenuBar />
           <div className="ve-welcome-stage">
             <div className="ve-welcome-card">
               <div className="ve-welcome-icon">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Package, Search, BarChart, Loader2, X, RefreshCw } from "lucide-react";
 
@@ -17,6 +17,7 @@ export default function InventoryCOGSView() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [query, setQuery] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -32,6 +33,14 @@ export default function InventoryCOGSView() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const filteredItems = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return items;
+    return items.filter((item) =>
+      [item.sku, item.name, item.description].some((value) => value.toLowerCase().includes(term))
+    );
+  }, [items, query]);
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-in fade-in zoom-in-95 duration-300">
@@ -52,6 +61,8 @@ export default function InventoryCOGSView() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
               <input
                 placeholder="Search SKU or Product..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
                 className="w-full sm:w-64 rounded-xl border border-neutral-800 bg-neutral-950 px-9 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
               />
             </div>
@@ -72,9 +83,9 @@ export default function InventoryCOGSView() {
              <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-yellow-400 animate-spin" /></div>
           ) : (
             <>
-              {activeTab === "items" && <InventoryTable items={items} />}
-              {activeTab === "cogs" && <COGSView />}
-              {activeTab === "valuation" && <ValuationView />}
+              {activeTab === "items" && <InventoryTable items={filteredItems} />}
+              {activeTab === "cogs" && <COGSView items={filteredItems} />}
+              {activeTab === "valuation" && <ValuationView items={filteredItems} />}
             </>
           )}
         </div>
@@ -130,24 +141,92 @@ function InventoryTable({ items }: { items: InventoryItem[] }) {
   );
 }
 
-function COGSView() {
+function COGSView({ items }: { items: InventoryItem[] }) {
+  const totals = useMemo(() => {
+    const inventoryCost = items.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0);
+    const salesValue = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+    const grossProfit = salesValue - inventoryCost;
+    const margin = salesValue > 0 ? (grossProfit / salesValue) * 100 : 0;
+    return { inventoryCost, salesValue, grossProfit, margin };
+  }, [items]);
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <BarChart className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Cost of Goods Sold</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Analyze real-time COGS impact on gross margins automatically generated from inventory changes.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">View Profitability</button>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
+      <div className="flex items-center gap-2">
+        <BarChart className="h-5 w-5 text-yellow-400" />
+        <h3 className="text-lg font-bold text-white">Cost & Margin Analysis</h3>
+      </div>
+      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+        <InventoryMetric label="Inventory Cost" value={`$${totals.inventoryCost.toFixed(2)}`} />
+        <InventoryMetric label="Retail Value" value={`$${totals.salesValue.toFixed(2)}`} />
+        <InventoryMetric label="Gross Profit" value={`$${totals.grossProfit.toFixed(2)}`} />
+        <InventoryMetric label="Gross Margin" value={`${totals.margin.toFixed(1)}%`} />
+      </div>
+      <div className="mt-6 overflow-x-auto rounded-xl border border-neutral-800">
+        <table className="w-full text-left text-sm text-white/80">
+          <thead className="border-b border-neutral-800 bg-neutral-900/50 text-xs uppercase tracking-wider text-white/50">
+            <tr>
+              <th className="px-6 py-4 font-semibold">Item</th>
+              <th className="px-6 py-4 font-semibold text-right">Quantity</th>
+              <th className="px-6 py-4 font-semibold text-right">Unit Margin</th>
+              <th className="px-6 py-4 font-semibold text-right">Inventory COGS</th>
+              <th className="px-6 py-4 font-semibold text-right">Potential Gross Profit</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-800">
+            {items.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">Add inventory items to calculate COGS.</td></tr>}
+            {items.map((item) => {
+              const unitMargin = item.unit_price - item.unit_cost;
+              return (
+                <tr key={item.id}>
+                  <td className="px-6 py-4 font-bold text-white">{item.name}</td>
+                  <td className="px-6 py-4 text-right font-mono">{item.quantity}</td>
+                  <td className="px-6 py-4 text-right font-mono">${unitMargin.toFixed(2)}</td>
+                  <td className="px-6 py-4 text-right font-mono">${(item.quantity * item.unit_cost).toFixed(2)}</td>
+                  <td className="px-6 py-4 text-right font-mono text-green-400">${(item.quantity * unitMargin).toFixed(2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function ValuationView() {
+function ValuationView({ items }: { items: InventoryItem[] }) {
+  const [method, setMethod] = useState("FIFO");
+  const totalValue = items.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0);
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6 text-center">
       <RefreshCw className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">Inventory Valuation</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Track inventory value across multiple warehouses using FIFO, LIFO, or Weighted Average.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Change Costing Method</button>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Current valuation is calculated from on-hand quantity and unit cost. FIFO/LIFO layers are not created until purchase lots are recorded.</p>
+      <div className="mt-6 flex justify-center gap-2">
+        {["FIFO", "LIFO", "Weighted Average"].map((option) => (
+          <button
+            key={option}
+            onClick={() => setMethod(option)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${method === option ? "bg-yellow-400 text-black" : "bg-neutral-800 text-white hover:bg-neutral-700"}`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+      <div className="mx-auto mt-6 max-w-sm rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{method} Book Value</p>
+        <p className="mt-2 text-3xl font-black text-white">${totalValue.toFixed(2)}</p>
+        <p className="mt-1 text-xs text-white/40">{items.length} inventory items included</p>
+      </div>
+    </div>
+  );
+}
+
+function InventoryMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
+      <p className="mt-2 text-xl font-black text-white">{value}</p>
     </div>
   );
 }

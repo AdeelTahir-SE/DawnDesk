@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, Map, Milestone, Plus, Trash2 } from "lucide-react";
+import { useAppLogger } from "../../utils/LoggerContext";
 import type { LocalIssue, LocalVersion } from "./types";
 
 const STATUS_BAR_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -47,6 +48,7 @@ interface EpicBar {
 }
 
 export default function Roadmap({ projectId }: { projectId: number | null }) {
+  const { logSuccess, logError, logWarning } = useAppLogger();
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [versions, setVersions] = useState<LocalVersion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,14 +82,20 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
 
   const createVersion = async () => {
     if (projectId === null || !versionName.trim()) return;
-    await invoke("create_version", {
-      projectId,
-      name: versionName.trim(),
-      releaseDate: releaseDate || null,
-    });
-    setVersionName("");
-    setReleaseDate("");
-    await refreshVersions();
+    try {
+      await invoke("create_version", {
+        projectId,
+        name: versionName.trim(),
+        releaseDate: releaseDate || null,
+      });
+      logSuccess("Roadmap version created", versionName.trim(), { source: "project-manager" });
+      setVersionName("");
+      setReleaseDate("");
+      await refreshVersions();
+    } catch (err) {
+      console.error("Failed to create version:", err);
+      logError("Roadmap version create failed", String(err), { source: "project-manager" });
+    }
   };
 
   const epics: EpicBar[] = useMemo(() => {
@@ -225,8 +233,14 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
                   <span className="text-blue-200/50">{version.release_date ?? "No date"}</span>
                   <button
                     onClick={async () => {
-                      await invoke("delete_version", { id: version.id });
-                      await refreshVersions();
+                      try {
+                        await invoke("delete_version", { id: version.id });
+                        await refreshVersions();
+                        logWarning("Roadmap version deleted", version.name, { source: "project-manager" });
+                      } catch (err) {
+                        console.error("Failed to delete version:", err);
+                        logError("Roadmap version delete failed", String(err), { source: "project-manager" });
+                      }
                     }}
                     className="text-blue-200/45 hover:text-red-400"
                   >

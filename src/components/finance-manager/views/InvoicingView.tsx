@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Download, Send, FileText, CheckCircle2, CircleDashed, Clock, X, Trash2 } from "lucide-react";
+import { exportTextFile } from "../../../utils/exportFile";
+import { useAppLogger } from "../../../utils/LoggerContext";
 
 interface Invoice {
   id: number;
@@ -17,8 +19,10 @@ interface InvoiceItem {
 }
 
 export default function InvoicingView() {
+  const { logSuccess, logError } = useAppLogger();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [exportStatus, setExportStatus] = useState("");
   
   const [newInv, setNewInv] = useState({ client_name: "", status: "draft", due_date: "" });
   const [newItems, setNewItems] = useState<InvoiceItem[]>([{desc: "", amount: 0}]);
@@ -50,9 +54,11 @@ export default function InvoicingView() {
       setShowAddModal(false);
       setNewInv({ client_name: "", status: "draft", due_date: "" });
       setNewItems([{desc: "", amount: 0}]);
+      logSuccess("Finance invoice created", newInv.client_name, { source: "finance" });
       fetchInvoices();
     } catch (e) {
       console.error(e);
+      logError("Finance invoice create failed", String(e), { source: "finance" });
     }
   };
 
@@ -89,6 +95,32 @@ export default function InvoicingView() {
     setNewItems(newItems.filter((_, i) => i !== index));
   };
 
+  const exportInvoice = async (invoice: Invoice) => {
+    try {
+      const path = await exportTextFile({
+        title: `Export Invoice INV-${invoice.id.toString().padStart(4, "0")}`,
+        defaultPath: `INV-${invoice.id.toString().padStart(4, "0")}.txt`,
+        filters: [{ name: "Text", extensions: ["txt"] }],
+        contents: [
+          `Invoice INV-${invoice.id.toString().padStart(4, "0")}`,
+          `Client: ${invoice.client_name}`,
+          `Due Date: ${invoice.due_date}`,
+          `Status: ${invoice.status}`,
+          `Amount: $${invoice.total_amount.toFixed(2)}`,
+          "",
+          "Line Items:",
+          ...JSON.parse(invoice.items_json || "[]").map((item: InvoiceItem) => `- ${item.desc}: $${Number(item.amount).toFixed(2)}`),
+        ].join("\n"),
+      });
+
+      setExportStatus(path ? `Exported to ${path}` : "");
+      if (path) logSuccess("Finance invoice exported", path, { source: "finance" });
+    } catch (e) {
+      console.error(e);
+      logError("Finance invoice export failed", String(e), { source: "finance" });
+    }
+  };
+
   return (
     <div className="p-8 flex flex-col gap-8 h-full animate-in fade-in zoom-in-95 duration-300">
       <div className="flex items-end justify-between">
@@ -100,6 +132,7 @@ export default function InvoicingView() {
           <Plus className="w-5 h-5" /> Create Invoice
         </button>
       </div>
+      {exportStatus && <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">{exportStatus}</div>}
 
       <div className="flex-1 overflow-auto rounded-2xl border border-brand-border bg-brand-elevated shadow-sm">
         <table className="w-full text-left text-sm">
@@ -127,7 +160,7 @@ export default function InvoicingView() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-1.5 hover:bg-brand-border/50 text-brand-text-muted hover:text-brand-text rounded-md transition-colors" title="Export PDF">
+                    <button onClick={() => exportInvoice(inv)} className="p-1.5 hover:bg-brand-border/50 text-brand-text-muted hover:text-brand-text rounded-md transition-colors" title="Export Invoice">
                       <Download className="w-4 h-4" />
                     </button>
                     <button className="p-1.5 hover:bg-brand-border/50 text-brand-text-muted hover:text-brand-text rounded-md transition-colors" title="Send to Client">

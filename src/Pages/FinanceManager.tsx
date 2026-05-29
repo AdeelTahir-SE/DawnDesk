@@ -51,7 +51,11 @@ const NAV_ITEMS = [
 
 export default function FinanceManager() {
   const [activeView, setActiveView] = useState("dashboard");
+  const [navSearch, setNavSearch] = useState("");
   const activeItem = NAV_ITEMS.find((item) => item.id === activeView) ?? NAV_ITEMS[0];
+  const filteredNavItems = NAV_ITEMS.filter((item) =>
+    item.label.toLowerCase().includes(navSearch.trim().toLowerCase())
+  );
 
   const renderView = () => {
     switch (activeView) {
@@ -104,14 +108,19 @@ export default function FinanceManager() {
                 <p className="dd-subtext">Enterprise ERP Workspace</p>
               </div>
             </div>
-            <button className="dd-search mt-5">
+            <div className="dd-search mt-5">
               <Search className="h-4 w-4" />
-              Search transactions, bills...
-            </button>
+              <input
+                value={navSearch}
+                onChange={(event) => setNavSearch(event.target.value)}
+                placeholder="Search modules..."
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/40"
+              />
+            </div>
           </div>
 
           <nav className="custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            {NAV_ITEMS.map((item) => (
+            {filteredNavItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveView(item.id)}
@@ -123,6 +132,11 @@ export default function FinanceManager() {
                 {item.label}
               </button>
             ))}
+            {filteredNavItems.length === 0 && (
+              <p className="px-3 py-4 text-xs font-semibold text-white/40">
+                No finance modules match that search.
+              </p>
+            )}
           </nav>
 
           <div className="space-y-3 border-t border-neutral-800 p-4">
@@ -135,7 +149,7 @@ export default function FinanceManager() {
                 Ledger, accounts, and reports stay on this device.
               </p>
             </div>
-            <button className="dd-nav-item">
+            <button onClick={() => setActiveView("compliance")} className="dd-nav-item">
               <Bell className="h-5 w-5" />
               Alerts
               <span className="ml-auto rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-bold text-black">3</span>

@@ -278,8 +278,6 @@ export default function Board({ projectId }: { projectId: number | null }) {
 
   const [selectedIssue, setSelectedIssue] = useState<LocalIssue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [createStatus, setCreateStatus] = useState<string>("To Do");
-
   const activeSprint = useMemo(
     () => sprints.find((s) => s.status === "active") ?? null,
     [sprints]
@@ -401,9 +399,8 @@ export default function Board({ projectId }: { projectId: number | null }) {
     }
   };
 
-  const openCreateModal = (status = "To Do") => {
+  const openCreateModal = () => {
     setSelectedIssue(null);
-    setCreateStatus(status);
     setIsModalOpen(true);
   };
 
@@ -559,7 +556,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
                 wipLimit={wipLimit}
                 onOpenModal={openIssueModal}
                 onQuickStatus={handleQuickStatusChange}
-                onOpenCreateModal={() => openCreateModal(status)}
+                onOpenCreateModal={openCreateModal}
               />
             );
           })}

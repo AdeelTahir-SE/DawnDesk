@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Layout, Loader2, Folder, X, Search, Calendar } from "lucide-react";
+import { useAppLogger } from "../../utils/LoggerContext";
 import { LocalProject } from "./types";
 
 interface ProjectListScreenProps {
@@ -8,6 +9,7 @@ interface ProjectListScreenProps {
 }
 
 export default function ProjectListScreen({ onProjectSelect }: ProjectListScreenProps) {
+  const { logSuccess, logError } = useAppLogger();
   const [projects, setProjects] = useState<LocalProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,8 +62,10 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
       if (projs.length > 0) {
         onProjectSelect(projs[0].id);
       }
+      logSuccess("Project created", newProjName.trim(), { source: "project-manager" });
     } catch (e) {
       console.error(e);
+      logError("Project creation failed", String(e), { source: "project-manager" });
     }
     setCreating(false);
   };

@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 import { Search, Plus, Grid3X3, List, Film, Music, Image, X, Loader2 } from 'lucide-react';
-import type { MediaItem } from '../../../engine/video-editor/types';
-
-
+import type { MediaItem, Track } from '../../../engine/video-editor/types';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { getDragMediaPayload } from '../dragDrop';
 
 const typeIcons: Record<string, React.ElementType> = { video: Film, audio: Music, image: Image };
 
@@ -26,11 +26,26 @@ const flagColors: Record<string, string> = {
   green: '#22c55e', blue: '#3b82f6', purple: '#a855f7',
 };
 
+function trackAcceptsMedia(track: Track, mediaType: MediaItem['type']) {
+  return track.type === mediaType || (track.type === 'video' && mediaType === 'image');
+}
+
+function mediaOverlapsTrack(track: Track, startTime: number, duration: number) {
+  const endTime = startTime + duration;
+  return track.clips.some(clip =>
+    startTime < clip.startTime + clip.duration &&
+    endTime > clip.startTime
+  );
+}
+
 export default function MediaBin() {
   const { state, dispatch } = useVideoEditor();
   const { importMedia } = useFFmpeg();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [brokenThumbIds, setBrokenThumbIds] = useState<Set<string>>(() => new Set());
+  const [dragGhost, setDragGhost] = useState<{ item: MediaItem; x: number; y: number } | null>(null);
+  const dragRef = useRef<{ item: MediaItem; startX: number; startY: number; active: boolean } | null>(null);
 
   const media = state.project?.mediaPool || [];
 
@@ -40,17 +55,37 @@ export default function MediaBin() {
     return media.filter(m => m.name.toLowerCase().includes(q) || m.type.includes(q) || m.codec.toLowerCase().includes(q));
   }, [media, search]);
 
-  const handleDragStart = (e: React.DragEvent, item: MediaItem) => {
-    e.dataTransfer.setData('application/json', JSON.stringify(item));
-    e.dataTransfer.effectAllowed = 'copy';
+  const getThumbnailSrc = (item: MediaItem) => {
+    if (brokenThumbIds.has(item.id)) return '';
+    if (item.thumbnail) {
+      if (/^(data:|https?:|asset:)/i.test(item.thumbnail)) return item.thumbnail;
+      return convertFileSrc(item.thumbnail);
+    }
+    return item.type === 'image' && item.path ? convertFileSrc(item.path) : '';
+  };
+
+  const markBrokenThumbnail = (itemId: string) => {
+    setBrokenThumbIds(prev => {
+      const next = new Set(prev);
+      next.add(itemId);
+      return next;
+    });
   };
 
   const handleAddToTimeline = (item: MediaItem) => {
     if (!state.project) return;
-    const targetTrack = state.project.tracks.find(t =>
+    const acceptsMedia = (trackType: string) =>
+      (item.type === 'audio' && trackType === 'audio') || (item.type !== 'audio' && trackType === 'video');
+    const selectedTrack = state.selectedTrackId
+      ? state.project.tracks.find(t => t.id === state.selectedTrackId && acceptsMedia(t.type) && !t.locked)
+      : null;
+    const targetTrack = selectedTrack || state.project.tracks.find(t =>
       (item.type === 'audio' && t.type === 'audio') || (item.type !== 'audio' && t.type === 'video')
     );
-    if (!targetTrack) return;
+    if (!targetTrack) {
+      dispatch({ type: 'ADD_MEDIA_TO_NEW_TRACK', payload: { media: getDragMediaPayload(item), startTime: state.playheadTime } });
+      return;
+    }
     const lastEnd = targetTrack.clips.reduce((max, c) => Math.max(max, c.startTime + c.duration), 0);
     dispatch({
       type: 'ADD_CLIP',
@@ -66,6 +101,103 @@ export default function MediaBin() {
         },
       },
     });
+  };
+
+  const addMediaAtPointer = (item: MediaItem, clientX: number, clientY: number) => {
+    if (!state.project) return;
+    const elements = document.elementsFromPoint(clientX, clientY);
+    const trackEl = elements
+      .map(el => (el instanceof HTMLElement ? el.closest('.ve-track-clips') : null))
+      .find(Boolean) as HTMLElement | null;
+    const timelineEl = elements.find(el => el.classList.contains('ve-timeline-scroll')) as HTMLElement | undefined;
+
+    const duration = item.duration || item.outPoint || 5;
+    let startTime = state.playheadTime;
+
+    if (trackEl) {
+      const rect = trackEl.getBoundingClientRect();
+      startTime = Math.max(0, (clientX - rect.left + trackEl.scrollLeft) / state.timelineZoom);
+      const targetTrack = state.project.tracks.find(track => track.id === trackEl.dataset.trackId);
+      if (targetTrack && trackAcceptsMedia(targetTrack, item.type) && !targetTrack.locked && !mediaOverlapsTrack(targetTrack, startTime, duration)) {
+        dispatch({
+          type: 'ADD_CLIP',
+          payload: {
+            trackId: targetTrack.id,
+            clip: {
+              id: `clip-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              trackId: targetTrack.id,
+              mediaId: item.id,
+              mediaName: item.name,
+              mediaType: item.type,
+              startTime,
+              duration,
+              inPoint: item.inPoint || 0,
+              outPoint: item.outPoint || duration,
+              speed: 1,
+              reversed: false,
+              volume: 1,
+              opacity: 1,
+              positionX: 0,
+              positionY: 0,
+              scale: 1,
+              rotation: 0,
+              effects: [],
+              transition: null,
+              color: '',
+              locked: false,
+              label: '',
+              path: item.path,
+            },
+          },
+        });
+        return;
+      }
+    } else if (timelineEl) {
+      const rect = timelineEl.getBoundingClientRect();
+      startTime = Math.max(0, (clientX - rect.left + timelineEl.scrollLeft) / state.timelineZoom);
+    } else {
+      return;
+    }
+
+    dispatch({ type: 'ADD_MEDIA_TO_NEW_TRACK', payload: { media: getDragMediaPayload(item), startTime } });
+  };
+
+  const handleMediaMouseDown = (e: React.MouseEvent, item: MediaItem) => {
+    if (e.button !== 0) return;
+    dragRef.current = { item, startX: e.clientX, startY: e.clientY, active: false };
+
+    const handleMouseMove = (me: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const dx = me.clientX - drag.startX;
+      const dy = me.clientY - drag.startY;
+      if (!drag.active && Math.abs(dx) + Math.abs(dy) < 5) return;
+      drag.active = true;
+      setDragGhost({ item: drag.item, x: me.clientX, y: me.clientY });
+      const elements = document.elementsFromPoint(me.clientX, me.clientY);
+      document.querySelectorAll('.ve-track-clips.drop-target').forEach(el => el.classList.remove('drop-target'));
+      const trackEl = elements
+        .map(el => (el instanceof HTMLElement ? el.closest('.ve-track-clips') : null))
+        .find(Boolean);
+      if (trackEl) trackEl.classList.add('drop-target');
+      me.preventDefault();
+    };
+
+    const handleMouseUp = (me: MouseEvent) => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      document.querySelectorAll('.ve-track-clips.drop-target').forEach(el => el.classList.remove('drop-target'));
+      setDragGhost(null);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      if (drag?.active) {
+        addMediaAtPointer(drag.item, me.clientX, me.clientY);
+        me.preventDefault();
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   return (
@@ -90,14 +222,21 @@ export default function MediaBin() {
         <div className="ve-media-grid">
           {filtered.map(item => {
             const Icon = typeIcons[item.type] || Film;
+            const thumbnailSrc = getThumbnailSrc(item);
             return (
               <div key={item.id} className={`ve-media-item ${state.selectedMediaIds.includes(item.id) ? 'selected' : ''}`}
                 onClick={() => dispatch({ type: 'SELECT_MEDIA', payload: [item.id] })}
                 onDoubleClick={() => handleAddToTimeline(item)}
-                draggable onDragStart={e => handleDragStart(e, item)}>
+                onMouseDown={e => handleMediaMouseDown(e, item)}>
                 <div className="ve-media-thumb">
-                  {item.thumbnail ? (
-                    <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  {thumbnailSrc ? (
+                    <img
+                      src={thumbnailSrc}
+                      alt=""
+                      draggable={false}
+                      onError={() => markBrokenThumbnail(item.id)}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                   ) : (
                     <Icon size={20} />
                   )}
@@ -119,7 +258,7 @@ export default function MediaBin() {
               <div key={item.id} className={`ve-media-list-item ${state.selectedMediaIds.includes(item.id) ? 'selected' : ''}`}
                 onClick={() => dispatch({ type: 'SELECT_MEDIA', payload: [item.id] })}
                 onDoubleClick={() => handleAddToTimeline(item)}
-                draggable onDragStart={e => handleDragStart(e, item)}>
+                onMouseDown={e => handleMediaMouseDown(e, item)}>
                 <Icon size={14} style={{ color: 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: 'JetBrains Mono' }}>{formatDuration(item.duration)}</span>
@@ -127,6 +266,12 @@ export default function MediaBin() {
               </div>
             );
           })}
+        </div>
+      )}
+      {dragGhost && (
+        <div className="ve-media-drag-ghost" style={{ left: dragGhost.x + 12, top: dragGhost.y + 12 }}>
+          <span className="ve-media-drag-ghost-dot" />
+          <span>{dragGhost.item.name}</span>
         </div>
       )}
     </div>

@@ -295,6 +295,11 @@ function MultiCurrencyTable({ rates }: { rates: ExchangeRate[] }) {
 }
 
 function GLSettings() {
+  const [fiscalMonth, setFiscalMonth] = useState("January");
+  const [eliminations, setEliminations] = useState(true);
+  const [statistical, setStatistical] = useState(true);
+  const [reversing, setReversing] = useState(true);
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
@@ -307,7 +312,7 @@ function GLSettings() {
               <p className="font-bold text-white text-sm">Fiscal Year Start Month</p>
               <p className="text-xs text-white/40">Determines when year-end closing occurs.</p>
             </div>
-            <select className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-white outline-none">
+            <select value={fiscalMonth} onChange={(event) => setFiscalMonth(event.target.value)} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-white outline-none">
               <option>January</option>
               <option>July</option>
               <option>October</option>
@@ -318,31 +323,41 @@ function GLSettings() {
               <p className="font-bold text-white text-sm">Enable Inter-company Eliminations</p>
               <p className="text-xs text-white/40">Auto-eliminate transactions between subsidiaries.</p>
             </div>
-            <div className="h-5 w-9 rounded-full bg-yellow-400 relative">
-               <div className="absolute right-1 top-1 h-3 w-3 rounded-full bg-black"></div>
-            </div>
+            <ToggleButton checked={eliminations} onChange={() => setEliminations((value) => !value)} />
           </div>
           <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
             <div>
               <p className="font-bold text-white text-sm">Enable Statistical Accounts</p>
               <p className="text-xs text-white/40">Track non-monetary metrics (e.g. headcount).</p>
             </div>
-            <div className="h-5 w-9 rounded-full bg-yellow-400 relative">
-               <div className="absolute right-1 top-1 h-3 w-3 rounded-full bg-black"></div>
-            </div>
+            <ToggleButton checked={statistical} onChange={() => setStatistical((value) => !value)} />
           </div>
           <div className="flex items-center justify-between pb-2">
             <div>
               <p className="font-bold text-white text-sm">Allow Reversing Journal Entries</p>
               <p className="text-xs text-white/40">Enable auto-reversal of accruals on the next period.</p>
             </div>
-            <div className="h-5 w-9 rounded-full bg-yellow-400 relative">
-               <div className="absolute right-1 top-1 h-3 w-3 rounded-full bg-black"></div>
-            </div>
+            <ToggleButton checked={reversing} onChange={() => setReversing((value) => !value)} />
           </div>
+          <p className="rounded-xl border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-xs font-semibold text-yellow-200">
+            Settings saved locally for this session. Fiscal year starts in {fiscalMonth}.
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+function ToggleButton({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-yellow-400" : "bg-neutral-700"}`}
+      aria-pressed={checked}
+    >
+      <span className={`absolute top-1 h-3 w-3 rounded-full bg-black transition-all ${checked ? "right-1" : "left-1 bg-white"}`} />
+    </button>
   );
 }
 

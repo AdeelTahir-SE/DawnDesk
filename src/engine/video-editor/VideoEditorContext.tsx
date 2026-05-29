@@ -9,6 +9,7 @@ import type {
   VideoEditorAction,
   Track,
   Clip,
+  MediaItem,
   HistorySnapshot,
 } from './types';
 import {
@@ -16,13 +17,16 @@ import {
   DEFAULT_EXPORT_SETTINGS,
   DEFAULT_VIDEO_TRACK_HEIGHT,
   DEFAULT_AUDIO_TRACK_HEIGHT,
+  EFFECT_DEFINITIONS,
   TIMELINE_DEFAULT_ZOOM,
   TRACK_COLORS,
+  TRANSITION_DEFINITIONS,
 } from './constants';
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
 const MAX_HISTORY = 50;
+const NOISY_ACTIONS = new Set<VideoEditorAction['type']>(['SET_PLAYHEAD']);
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -121,6 +125,141 @@ function snapTime(state: VideoEditorState, time: number, ignoreClipId?: string):
   );
 
   return Math.abs(nearest - time) <= snapDistance ? Math.max(0, nearest) : Math.max(0, time);
+}
+
+function trackAcceptsMedia(track: Track, mediaType: MediaItem['type']): boolean {
+  return track.type === mediaType || (track.type === 'video' && mediaType === 'image');
+}
+
+function createClipFromMedia(media: MediaItem, trackId: string, startTime: number): Clip {
+  const fallbackDuration = media.type === 'image' ? 5 : 0.1;
+  const duration = Math.max(0.1, media.duration || media.outPoint || fallbackDuration);
+  return {
+    id: generateId(),
+    trackId,
+    mediaId: media.id,
+    mediaName: media.name,
+    mediaType: media.type,
+    startTime: Math.max(0, startTime),
+    duration,
+    inPoint: media.inPoint || 0,
+    outPoint: media.outPoint || duration,
+    speed: 1,
+    reversed: false,
+    volume: 1,
+    opacity: 1,
+    positionX: 0,
+    positionY: 0,
+    scale: 1,
+    rotation: 0,
+    effects: [],
+    transition: null,
+    color: '',
+    locked: false,
+    label: '',
+    path: media.path,
+  };
+}
+
+function createEffect(effectType: string): Clip['effects'][number] | null {
+  const definition = EFFECT_DEFINITIONS.find(effect => effect.type === effectType);
+  if (!definition) return null;
+  return {
+    id: `fx-${generateId()}`,
+    type: definition.type,
+    name: definition.name,
+    category: definition.category,
+    enabled: true,
+    params: JSON.parse(JSON.stringify(definition.defaultParams)),
+    keyframes: [],
+    expanded: false,
+  };
+}
+
+function applyAutoTrim(tracks: Track[], targetIds: Set<string>): Track[] {
+  return tracks.map(track => {
+    let cursor = 0;
+    const clips = [...track.clips]
+      .sort((a, b) => a.startTime - b.startTime)
+      .map(clip => {
+        if (!targetIds.has(clip.id) || clip.locked || track.locked) {
+          cursor = Math.max(cursor, clip.startTime + clip.duration);
+          return clip;
+        }
+
+        const trimAmount = clip.duration > 3 ? 0.12 : clip.duration > 1.5 ? 0.06 : 0;
+        const newDuration = Math.max(0.35, clip.duration - trimAmount);
+        const trimmedClip = {
+          ...clip,
+          startTime: cursor,
+          duration: newDuration,
+          outPoint: Math.max(clip.inPoint + 0.1, clip.outPoint - trimAmount * clip.speed),
+        };
+        cursor = trimmedClip.startTime + trimmedClip.duration;
+        return trimmedClip;
+      });
+
+    return { ...track, clips };
+  });
+}
+
+function applyAutoTransitions(tracks: Track[], targetIds: Set<string>): Track[] {
+  const transitionDef = TRANSITION_DEFINITIONS.find(transition => transition.type === 'cross-dissolve');
+  if (!transitionDef) return tracks;
+
+  return tracks.map(track => {
+    if (track.type !== 'video') return track;
+    const sortedIds = [...track.clips].sort((a, b) => a.startTime - b.startTime).map(clip => clip.id);
+    return {
+      ...track,
+      clips: track.clips.map(clip => {
+        if (!targetIds.has(clip.id) || clip.locked || track.locked || clip.mediaType === 'audio') return clip;
+        const index = sortedIds.indexOf(clip.id);
+        if (index <= 0 && clip.duration < 1) return clip;
+        return {
+          ...clip,
+          transition: {
+            id: `tr-${generateId()}`,
+            type: transitionDef.type,
+            duration: Math.min(0.6, Math.max(0.25, clip.duration * 0.18)),
+            easing: 'ease-in-out',
+            edge: index === 0 ? 'end' : 'start',
+          },
+        };
+      }),
+    };
+  });
+}
+
+function applyVisualPolish(tracks: Track[], targetIds: Set<string>): Track[] {
+  return tracks.map(track => ({
+    ...track,
+    clips: track.clips.map(clip => {
+      if (!targetIds.has(clip.id) || clip.locked || track.locked || clip.mediaType === 'audio') return clip;
+      const existingTypes = new Set(clip.effects.map(effect => effect.type));
+      const additions = ['brightness-contrast', 'sharpen']
+        .filter(type => !existingTypes.has(type))
+        .map(type => createEffect(type))
+        .filter((effect): effect is Clip['effects'][number] => Boolean(effect));
+      return {
+        ...clip,
+        opacity: Math.max(clip.opacity ?? 1, 1),
+        effects: [...clip.effects, ...additions],
+      };
+    }),
+  }));
+}
+
+function applyAudioBalance(tracks: Track[], targetIds: Set<string>): Track[] {
+  return tracks.map(track => ({
+    ...track,
+    volume: track.type === 'audio' ? Math.min(1, Math.max(0.75, track.volume)) : track.volume,
+    clips: track.clips.map(clip => {
+      if (!targetIds.has(clip.id) || clip.locked || track.locked) return clip;
+      if (clip.mediaType !== 'audio' && track.type !== 'audio') return clip;
+      return { ...clip, volume: 1 };
+    }),
+  }));
 }
 
 /* ── Initial State ─────────────────────────────────────────────────────── */
@@ -436,13 +575,43 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       const s = pushHistory(state, 'Add clip');
       const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
-      if (!targetTrack || targetTrack.locked || hasOverlap(targetTrack, action.payload.clip, action.payload.clip.startTime)) return s;
+      if (!targetTrack || targetTrack.locked || !trackAcceptsMedia(targetTrack, action.payload.clip.mediaType) || hasOverlap(targetTrack, action.payload.clip, action.payload.clip.startTime)) return s;
       const tracks = s.project!.tracks.map(t => {
         if (t.id !== action.payload.trackId) return t;
         return { ...t, clips: [...t.clips, action.payload.clip] };
       });
       const duration = calculateProjectDuration(tracks);
       return { ...s, project: { ...s.project!, tracks, duration } };
+    }
+
+    case 'ADD_MEDIA_TO_NEW_TRACK': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Add media to timeline');
+      const trackType = action.payload.media.type === 'audio' ? 'audio' : 'video';
+      const trackCount = s.project!.tracks.filter(t => t.type === trackType).length;
+      const label = trackType === 'video' ? 'Video' : 'Audio';
+      const newTrack: Track = {
+        id: generateId(),
+        name: `${label} ${trackCount + 1}`,
+        type: trackType,
+        clips: [],
+        muted: false,
+        solo: false,
+        locked: false,
+        visible: true,
+        volume: 1,
+        height: trackType === 'video' ? DEFAULT_VIDEO_TRACK_HEIGHT : DEFAULT_AUDIO_TRACK_HEIGHT,
+        color: TRACK_COLORS[(s.project!.tracks.length) % TRACK_COLORS.length],
+      };
+      const clip = createClipFromMedia(action.payload.media, newTrack.id, action.payload.startTime);
+      newTrack.clips = [clip];
+      const tracks = [...s.project!.tracks, newTrack];
+      return {
+        ...s,
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
+        selectedClipIds: [clip.id],
+        selectedTrackId: newTrack.id,
+      };
     }
 
     case 'REMOVE_CLIPS': {
@@ -467,7 +636,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
       if (!found) return s;
       const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
-      if (!targetTrack || found.clip.locked || found.track.locked || targetTrack.locked || targetTrack.type !== found.clip.mediaType && !(targetTrack.type === 'video' && found.clip.mediaType === 'image')) return s;
+      if (!targetTrack || found.clip.locked || found.track.locked || targetTrack.locked || !trackAcceptsMedia(targetTrack, found.clip.mediaType)) return s;
       const snappedStart = snapTime(s, action.payload.startTime, action.payload.clipId);
       const movedClip = { ...found.clip, trackId: action.payload.trackId, startTime: snappedStart };
       if (hasOverlap(targetTrack, movedClip, snappedStart)) return s;
@@ -667,7 +836,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       const newSelectedIds = newClips.map(c => c.id);
       
       const tracks = s.project!.tracks.map(t => {
-        const clipsForTrack = newClips.filter(c => c.trackId === t.id);
+        const clipsForTrack = newClips.filter(c => c.trackId === t.id && !t.locked && !hasOverlap(t, c, c.startTime));
         if (clipsForTrack.length > 0) {
           return { ...t, clips: [...t.clips, ...clipsForTrack] };
         }
@@ -688,7 +857,14 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         ...clip,
         effects: [...clip.effects, action.payload.effect],
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return {
+        ...state,
+        project: { ...state.project, tracks },
+        selectedClipIds: [action.payload.clipId],
+        selectedEffectId: action.payload.effect.id,
+        activeRightPanel: 'effects',
+        isDirty: true,
+      };
     }
 
     case 'REMOVE_EFFECT': {
@@ -995,6 +1171,80 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     // ── History ──────────────────────────────────────────────────────────
     // UNDO and REDO are handled by the wrapper videoEditorReducer
 
+    case 'APPLY_AUTO_EDIT': {
+      if (!state.project) return state;
+      const selectedIds = action.payload.clipIds?.length
+        ? action.payload.clipIds
+        : state.selectedClipIds.length > 0
+          ? state.selectedClipIds
+          : state.project.tracks.flatMap(track => track.clips.map(clip => clip.id));
+      if (selectedIds.length === 0) return state;
+
+      const targetIds = new Set(selectedIds);
+      const s = pushHistory(state, 'Apply auto edit');
+      let tracks = s.project!.tracks;
+
+      if (action.payload.preset === 'smart-trim' || action.payload.preset === 'quick-cleanup' || action.payload.preset === 'product-finish') {
+        tracks = applyAutoTrim(tracks, targetIds);
+      }
+
+      if (action.payload.preset === 'smooth-transitions' || action.payload.preset === 'quick-cleanup' || action.payload.preset === 'product-finish') {
+        tracks = applyAutoTransitions(tracks, targetIds);
+      }
+
+      if (action.payload.preset === 'visual-polish' || action.payload.preset === 'quick-cleanup' || action.payload.preset === 'product-finish') {
+        tracks = applyVisualPolish(tracks, targetIds);
+      }
+
+      if (action.payload.preset === 'audio-balance' || action.payload.preset === 'quick-cleanup' || action.payload.preset === 'product-finish') {
+        tracks = applyAudioBalance(tracks, targetIds);
+      }
+
+      const nextState: VideoEditorState = {
+        ...s,
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
+        selectedClipIds: selectedIds,
+        activeRightPanel: action.payload.preset === 'audio-balance' ? 'audio' : 'effects',
+      };
+
+      if (action.payload.preset === 'product-finish') {
+        return {
+          ...nextState,
+          colorGrading: {
+            ...nextState.colorGrading,
+            contrast: Math.max(nextState.colorGrading.contrast, 8),
+            saturation: Math.max(nextState.colorGrading.saturation, 8),
+            vibrance: Math.max(nextState.colorGrading.vibrance, 12),
+            vignette: { ...nextState.colorGrading.vignette, amount: Math.max(nextState.colorGrading.vignette.amount, 12) },
+          },
+          activeTextOverlay: nextState.activeTextOverlay ?? {
+            id: `text-${generateId()}`,
+            text: nextState.project?.name || 'Project Title',
+            fontFamily: 'Sora',
+            fontSize: 42,
+            fontWeight: 800,
+            color: '#ffffff',
+            backgroundColor: '#000000',
+            backgroundOpacity: 0.35,
+            alignment: 'center',
+            lineHeight: 1.2,
+            letterSpacing: 0,
+            x: 0.5,
+            y: 0.85,
+            width: 0.8,
+            rotation: 0,
+            opacity: 1,
+            shadow: { enabled: true, color: '#000000', offsetX: 2, offsetY: 2, blur: 8 },
+            outline: { enabled: false, color: '#000000', width: 2 },
+            animation: 'fade',
+            animationDuration: 0.5,
+          },
+        };
+      }
+
+      return nextState;
+    }
+
     case 'PUSH_HISTORY':
       return pushHistory(state, action.payload.label);
 
@@ -1087,7 +1337,9 @@ export function VideoEditorProvider({ children }: { children: ReactNode }) {
   const { logInfo } = useAppLogger();
 
   const dispatch = useCallback((action: VideoEditorAction) => {
-    logInfo('Video Editor', `Performed action: ${action.type}`);
+    if (!NOISY_ACTIONS.has(action.type)) {
+      logInfo('Video Editor', `Performed action: ${action.type}`);
+    }
     baseDispatch(action);
   }, [baseDispatch, logInfo]);
 

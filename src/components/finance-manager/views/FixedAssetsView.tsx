@@ -74,8 +74,8 @@ export default function FixedAssetsView() {
           ) : (
             <>
               {activeTab === "assets" && <AssetsTable assets={assets} />}
-              {activeTab === "depreciation" && <DepreciationView />}
-              {activeTab === "disposals" && <DisposalsView />}
+              {activeTab === "depreciation" && <DepreciationView assets={assets} />}
+              {activeTab === "disposals" && <DisposalsView assets={assets} />}
             </>
           )}
         </div>
@@ -128,24 +128,71 @@ function AssetsTable({ assets }: { assets: FixedAsset[] }) {
   );
 }
 
-function DepreciationView() {
+function getAccumulatedDepreciation(asset: FixedAsset) {
+  const purchaseDate = new Date(asset.purchase_date);
+  const now = new Date();
+  const monthsHeld = Math.max(0, (now.getFullYear() - purchaseDate.getFullYear()) * 12 + now.getMonth() - purchaseDate.getMonth());
+  const depreciableBase = Math.max(0, asset.purchase_price - asset.salvage_value);
+  const monthlyDepreciation = asset.useful_life_years > 0 ? depreciableBase / (asset.useful_life_years * 12) : 0;
+  return Math.min(depreciableBase, monthlyDepreciation * monthsHeld);
+}
+
+function DepreciationView({ assets }: { assets: FixedAsset[] }) {
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <Calculator className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Automated Depreciation</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Generate straight-line, declining balance, or MACRS depreciation entries automatically.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Run Month-End Depreciation</button>
+    <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-950/50">
+      <table className="w-full text-left text-sm text-white/80">
+        <thead className="border-b border-neutral-800 bg-neutral-900/50 text-xs uppercase tracking-wider text-white/50">
+          <tr>
+            <th className="px-6 py-4 font-semibold">Asset</th>
+            <th className="px-6 py-4 font-semibold text-right">Depreciable Base</th>
+            <th className="px-6 py-4 font-semibold text-right">Monthly Depreciation</th>
+            <th className="px-6 py-4 font-semibold text-right">Accumulated</th>
+            <th className="px-6 py-4 font-semibold text-right">Net Book Value</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-800">
+          {assets.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">Register assets to calculate depreciation.</td></tr>}
+          {assets.map((asset) => {
+            const base = Math.max(0, asset.purchase_price - asset.salvage_value);
+            const monthly = asset.useful_life_years > 0 ? base / (asset.useful_life_years * 12) : 0;
+            const accumulated = getAccumulatedDepreciation(asset);
+            return (
+              <tr key={asset.id}>
+                <td className="px-6 py-4 font-bold text-white"><Calculator className="mr-2 inline h-4 w-4 text-white/40" />{asset.name}</td>
+                <td className="px-6 py-4 text-right font-mono">${base.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right font-mono">${monthly.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right font-mono text-yellow-300">${accumulated.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right font-mono text-green-300">${(asset.purchase_price - accumulated).toFixed(2)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function DisposalsView() {
+function DisposalsView({ assets }: { assets: FixedAsset[] }) {
+  const inactiveAssets = assets.filter((asset) => asset.status.toLowerCase() !== "active");
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
+    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50 px-6">
       <AlertTriangle className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">Asset Disposals & Write-offs</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Record sales or write-offs of assets and automatically calculate gain/loss on disposal.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Record Disposal</button>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Disposals are based on assets whose status is no longer Active.</p>
+      <div className="mx-auto mt-6 grid max-w-md grid-cols-2 gap-3">
+        <AssetMetric label="Inactive Assets" value={inactiveAssets.length.toString()} />
+        <AssetMetric label="Current Assets" value={(assets.length - inactiveAssets.length).toString()} />
+      </div>
+    </div>
+  );
+}
+
+function AssetMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }

@@ -57,25 +57,50 @@ interface JournalEntry {
   status: string;
 }
 
+interface TransactionItem {
+  id: number;
+  account_id: number | null;
+  amount: number;
+  type_: string;
+  category: string;
+  description: string;
+  date: string;
+  status: string;
+}
+
+interface PeriodClose {
+  id: number;
+  period: string;
+  task: string;
+  assigned_to: string;
+  status: string;
+}
+
 export default function DashboardView() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [bills, setBills] = useState<VendorBill[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [periodCloses, setPeriodCloses] = useState<PeriodClose[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [accs, invs, vendorBills, jes] = await Promise.all([
+        const [accs, invs, vendorBills, jes, txs, closeTasks] = await Promise.all([
           invoke<Account[]>("get_accounts"),
           invoke<Invoice[]>("get_invoices"),
           invoke<VendorBill[]>("get_vendor_bills"),
           invoke<JournalEntry[]>("get_journal_entries"),
+          invoke<TransactionItem[]>("get_transactions"),
+          invoke<PeriodClose[]>("get_period_closes"),
         ]);
         setAccounts(accs);
         setInvoices(invs);
         setBills(vendorBills);
         setJournalEntries(jes);
+        setTransactions(txs);
+        setPeriodCloses(closeTasks);
       } catch (e) {
         console.error(e);
       }
@@ -84,31 +109,52 @@ export default function DashboardView() {
   }, []);
 
   const metrics = useMemo(() => {
-    const totalCash = accounts.reduce((sum, account) => sum + account.balance, 0);
-    const totalAR = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
-    const totalAP = bills.reduce((sum, bill) => sum + bill.total_amount, 0);
-    
-    // Just a mock metric for Net Position
+    const cashTypes = ["cash", "bank", "checking", "savings", "treasury"];
+    const totalCash = accounts
+      .filter((account) => cashTypes.some((type) => account.type_.toLowerCase().includes(type)))
+      .reduce((sum, account) => sum + account.balance, 0);
+    const totalAR = invoices
+      .filter((inv) => inv.status.toLowerCase() !== "paid")
+      .reduce((sum, inv) => sum + inv.total_amount, 0);
+    const totalAP = bills
+      .filter((bill) => bill.status.toLowerCase() !== "paid")
+      .reduce((sum, bill) => sum + bill.total_amount, 0);
     const netPosition = totalCash + totalAR - totalAP;
 
-    // Build some simple mock trend data for the area chart based on AR/AP
-    const trendData = [
-      { name: "Jan", cash: totalCash * 0.8, ar: totalAR * 0.5, ap: totalAP * 0.4 },
-      { name: "Feb", cash: totalCash * 0.85, ar: totalAR * 0.6, ap: totalAP * 0.5 },
-      { name: "Mar", cash: totalCash * 0.9, ar: totalAR * 0.8, ap: totalAP * 0.7 },
-      { name: "Apr", cash: totalCash * 0.95, ar: totalAR * 0.9, ap: totalAP * 0.8 },
-      { name: "May", cash: totalCash, ar: totalAR, ap: totalAP },
-    ];
+    const monthKeys = buildRecentMonthKeys(6);
+    const trendData = monthKeys.map(({ key, name }) => {
+      const cash = transactions
+        .filter((tx) => tx.status.toLowerCase() !== "void" && tx.date.startsWith(key))
+        .reduce((sum, tx) => sum + (tx.type_.toLowerCase() === "income" ? tx.amount : -tx.amount), 0);
+      const ar = invoices
+        .filter((invoice) => invoice.status.toLowerCase() !== "paid" && invoice.due_date.startsWith(key))
+        .reduce((sum, invoice) => sum + invoice.total_amount, 0);
+      const ap = bills
+        .filter((bill) => bill.status.toLowerCase() !== "paid" && bill.due_date.startsWith(key))
+        .reduce((sum, bill) => sum + bill.total_amount, 0);
+
+      return { name, cash, ar, ap };
+    });
 
     const categoryData = [
       { name: "Cash Equivalents", value: totalCash },
       { name: "Accounts Receivable", value: totalAR },
-    ];
+    ].filter((item) => item.value > 0);
 
     const upcomingBills = bills
       .filter((b) => b.status !== "Paid")
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
       .slice(0, 3);
+
+    const today = new Date();
+    const overdueInvoices = invoices.filter((invoice) => invoice.status.toLowerCase() !== "paid" && new Date(invoice.due_date) < today).length;
+    const overdueBills = bills.filter((bill) => bill.status.toLowerCase() !== "paid" && new Date(bill.due_date) < today).length;
+    const unbalancedJournals = journalEntries.filter((entry) => Math.abs(entry.total_debit - entry.total_credit) > 0.005).length;
+    const openCloseTasks = periodCloses.filter((task) => {
+      const status = task.status.toLowerCase();
+      return status !== "closed" && status !== "complete";
+    }).length;
+    const healthDeductions = overdueInvoices * 8 + overdueBills * 6 + unbalancedJournals * 12 + openCloseTasks * 3;
 
     return {
       totalCash,
@@ -118,9 +164,9 @@ export default function DashboardView() {
       trendData,
       categoryData,
       upcomingBills,
-      healthScore: 92, // Mock score for ERP dashboard
+      healthScore: Math.max(0, Math.min(100, 100 - healthDeductions)),
     };
-  }, [accounts, invoices, bills]);
+  }, [accounts, invoices, bills, journalEntries, periodCloses, transactions]);
 
   const COLORS = ["#2FBF71", "#3B82F6", "#F7C948", "#EF4444", "#F59E0B"];
 
@@ -137,7 +183,7 @@ export default function DashboardView() {
               </p>
             </div>
             <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-right">
-              <p className="dd-subtext">System Health</p>
+              <p className="dd-subtext">Data Health</p>
               <p className="text-3xl font-black text-green-400">{metrics.healthScore}</p>
             </div>
           </div>
@@ -180,27 +226,31 @@ export default function DashboardView() {
               Liquidity Trend
             </h3>
             <span className="rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1 text-xs font-semibold text-white/50">
-              Year to Date
+              Last 6 Months
             </span>
           </div>
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={metrics.trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F7C948" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#F7C948" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#2A3647" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} stroke="#7F8DA1" fontSize={12} />
-                <YAxis axisLine={false} tickLine={false} stroke="#7F8DA1" fontSize={12} tickFormatter={(value) => `$${value}`} />
-                <Tooltip contentStyle={{ backgroundColor: "#171F2B", border: "1px solid #2A3647", borderRadius: 12, color: "#F3F7FF" }} />
-                <Area type="monotone" dataKey="cash" stroke="#F7C948" strokeWidth={3} fill="url(#cashFill)" />
-                <Area type="monotone" dataKey="ar" stroke="#3B82F6" strokeWidth={3} fill="none" />
-                <Area type="monotone" dataKey="ap" stroke="#EF4444" strokeWidth={3} fill="none" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {metrics.trendData.some((point) => point.cash !== 0 || point.ar !== 0 || point.ap !== 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={metrics.trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F7C948" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#F7C948" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#2A3647" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} stroke="#7F8DA1" fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} stroke="#7F8DA1" fontSize={12} tickFormatter={(value) => `$${value}`} />
+                  <Tooltip contentStyle={{ backgroundColor: "#171F2B", border: "1px solid #2A3647", borderRadius: 12, color: "#F3F7FF" }} />
+                  <Area type="monotone" dataKey="cash" stroke="#F7C948" strokeWidth={3} fill="url(#cashFill)" />
+                  <Area type="monotone" dataKey="ar" stroke="#3B82F6" strokeWidth={3} fill="none" />
+                  <Area type="monotone" dataKey="ap" stroke="#EF4444" strokeWidth={3} fill="none" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="grid h-full place-items-center dd-empty p-0 border-0">No transaction, receivable, or payable activity yet</div>
+            )}
           </div>
         </div>
 
@@ -270,6 +320,21 @@ export default function DashboardView() {
       </section>
     </div>
   );
+}
+
+function buildRecentMonthKeys(count: number) {
+  const months: { key: string; name: string }[] = [];
+  const cursor = new Date();
+  cursor.setDate(1);
+
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const month = new Date(cursor.getFullYear(), cursor.getMonth() - index, 1);
+    const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+    const name = month.toLocaleString(undefined, { month: "short" });
+    months.push({ key, name });
+  }
+
+  return months;
 }
 
 function MetricCard({

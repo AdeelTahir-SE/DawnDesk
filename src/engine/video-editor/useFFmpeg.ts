@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import type { MediaItem, MediaProbeResult, ExportSettings } from './types';
@@ -29,26 +29,32 @@ export function useFFmpeg() {
     
     for (const path of filePaths) {
       try {
+        const extension = (path.split('.').pop() || '').toLowerCase();
+        const isImageFile = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'].includes(extension);
         const probe = await invoke<MediaProbeResult>('ve_probe_media', { path });
         
         let thumbnail = '';
-        if (probe.has_video) {
+        if (isImageFile) {
+          thumbnail = convertFileSrc(path);
+        } else if (probe.has_video) {
           try {
-            thumbnail = await invoke<string>('ve_generate_thumbnail', { path, time: 0.0 });
+            const thumbnailTime = probe.duration > 1 ? Math.min(10, Math.max(0.5, probe.duration * 0.25)) : 0;
+            thumbnail = await invoke<string>('ve_generate_thumbnail', { path, time: thumbnailTime });
           } catch (e) {
             console.error('Thumbnail generation failed', e);
           }
         }
 
         const name = path.split(/[/\\]/).pop() || 'Unknown';
-        const type = probe.has_video ? 'video' : (probe.has_audio ? 'audio' : 'image');
+        const type = isImageFile ? 'image' : (probe.has_video ? 'video' : (probe.has_audio ? 'audio' : 'image'));
+        const duration = type === 'image' ? 5 : probe.duration;
         
         newItems.push({
           id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           name,
           type,
           path,
-          duration: probe.duration,
+          duration,
           width: probe.width || 0,
           height: probe.height || 0,
           fps: probe.fps || 0,
@@ -61,7 +67,7 @@ export function useFFmpeg() {
           flag: 'none',
           tags: [],
           inPoint: 0,
-          outPoint: probe.duration,
+          outPoint: duration,
           folderId: null,
         });
       } catch (e) {
@@ -80,7 +86,7 @@ export function useFFmpeg() {
         multiple: true,
         filters: [{
           name: 'Media',
-          extensions: ['mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'png', 'jpg', 'jpeg']
+          extensions: ['mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif']
         }]
       });
       if (!files) return;
@@ -148,9 +154,23 @@ export function useFFmpeg() {
         logSuccess('Export', `Export complete: ${event.payload}`);
       });
 
+      const unlistenError = await listen<string>('export-error', (event) => {
+        dispatch({ type: 'EXPORT_ERROR', payload: event.payload });
+        dispatch({
+          type: 'UPDATE_RENDER_JOB',
+          payload: { jobId, updates: { status: 'error', error: event.payload, endTime: Date.now() } },
+        });
+        unlistenProgress();
+        unlistenComplete();
+        unlistenError();
+        unlistenRef.current = null;
+        logError('Export', event.payload);
+      });
+
       unlistenRef.current = () => {
         unlistenProgress();
         unlistenComplete();
+        unlistenError();
       };
 
       await invoke('ve_export_project', { settings: { ...settings, outputPath: finalOutputPath }, project: state.project });

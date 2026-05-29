@@ -8,14 +8,15 @@ import Roadmap from "../components/ProjectManager/Roadmap";
 import Reports from "../components/ProjectManager/Reports";
 import ProjectSettings from "../components/ProjectManager/ProjectSettings";
 import SearchAndFilters from "../components/ProjectManager/SearchAndFilters";
-import { LayoutDashboard, Settings, ArrowLeft, Loader2, ListTodo, Map, LineChart, Search } from "lucide-react";
+import Strategies from "../components/ProjectManager/Strategies";
+import { LayoutDashboard, Settings, ArrowLeft, Loader2, ListTodo, Map, LineChart, Search, FileText } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
 import { LocalProject } from "../components/ProjectManager/types";
 
 export default function ProjectManager() {
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [activeProject, setActiveProject] = useState<LocalProject | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "backlog" | "board" | "roadmap" | "search" | "reports" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "backlog" | "board" | "roadmap" | "strategies" | "search" | "reports" | "settings">("dashboard");
   const [loadingProject, setLoadingProject] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -89,6 +90,7 @@ export default function ProjectManager() {
                 {[
                   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
                   { id: "roadmap", label: "Roadmap", icon: Map },
+                  { id: "strategies", label: "Strategies", icon: FileText },
                   { id: "backlog", label: "Backlog", icon: ListTodo },
                   { id: "board", label: "Active Sprint", icon: LayoutDashboard },
                   { id: "search", label: "Search & Filters", icon: Search },
@@ -133,6 +135,7 @@ export default function ProjectManager() {
               {activeTab === "backlog" && <Backlog projectId={activeProjectId} />}
               {activeTab === "board" && <Board projectId={activeProjectId} />}
               {activeTab === "roadmap" && <Roadmap projectId={activeProjectId} />}
+              {activeTab === "strategies" && <Strategies projectId={activeProjectId} />}
               {activeTab === "search" && <SearchAndFilters projectId={activeProjectId} />}
               {activeTab === "reports" && <Reports projectId={activeProjectId} />}
               {activeTab === "settings" && <ProjectSettings project={activeProject} onProjectDeleted={() => setActiveProjectId(null)} onProjectUpdated={(proj) => setActiveProject(proj)} />}

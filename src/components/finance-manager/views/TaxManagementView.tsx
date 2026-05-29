@@ -64,8 +64,8 @@ export default function TaxManagementView() {
           ) : (
             <>
               {activeTab === "codes" && <TaxCodesTable codes={taxCodes} />}
-              {activeTab === "jurisdictions" && <JurisdictionsView />}
-              {activeTab === "reporting" && <TaxReportingView />}
+              {activeTab === "jurisdictions" && <JurisdictionsView codes={taxCodes} />}
+              {activeTab === "reporting" && <TaxReportingView codes={taxCodes} />}
             </>
           )}
         </div>
@@ -113,24 +113,52 @@ function TaxCodesTable({ codes }: { codes: TaxCode[] }) {
   );
 }
 
-function JurisdictionsView() {
+function JurisdictionsView({ codes }: { codes: TaxCode[] }) {
+  const jurisdictions = codes.reduce<Record<string, TaxCode[]>>((groups, code) => {
+    const key = code.code.split("-")[0] || "Unmapped";
+    groups[key] = [...(groups[key] ?? []), code];
+    return groups;
+  }, {});
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <Map className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Tax Nexus & Jurisdictions</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Manage states, provinces, and countries where you have established tax nexus.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Add Jurisdiction</button>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
+      <div className="flex items-center gap-2">
+        <Map className="h-5 w-5 text-yellow-400" />
+        <h3 className="text-lg font-bold text-white">Tax Nexus & Jurisdictions</h3>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {Object.keys(jurisdictions).length === 0 && <div className="md:col-span-3 py-8 text-center text-sm text-white/40">Create tax codes to group jurisdictions.</div>}
+        {Object.entries(jurisdictions).map(([jurisdiction, rows]) => (
+          <div key={jurisdiction} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{jurisdiction}</p>
+            <p className="mt-2 text-2xl font-black text-white">{rows.length}</p>
+            <p className="mt-1 text-xs text-white/40">{rows.filter((row) => row.active).length} active codes</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function TaxReportingView() {
+function TaxReportingView({ codes }: { codes: TaxCode[] }) {
+  const activeCodes = codes.filter((code) => code.active);
+  const averageRate = activeCodes.length > 0 ? activeCodes.reduce((sum, code) => sum + code.rate_percent, 0) / activeCodes.length : 0;
+
   return (
     <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
       <FileText className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Automated Tax Returns</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Generate pre-filled 1099s, VAT returns, and Sales Tax liability reports.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Run Tax Report</button>
+      <h3 className="text-lg font-bold text-white">Tax Configuration Summary</h3>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Liability filings require taxable transaction lines; this view summarizes configured active tax rates.</p>
+      <div className="mx-auto mt-6 grid max-w-md grid-cols-2 gap-3">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Active Codes</p>
+          <p className="mt-2 text-2xl font-black text-white">{activeCodes.length}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Avg Rate</p>
+          <p className="mt-2 text-2xl font-black text-white">{averageRate.toFixed(2)}%</p>
+        </div>
+      </div>
     </div>
   );
 }

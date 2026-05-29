@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, ArrowRightLeft, CreditCard, Landmark, Wallet, MoreVertical, X } from "lucide-react";
+import { useAppLogger } from "../../../utils/LoggerContext";
 
 interface Account {
   id: number;
@@ -11,6 +12,7 @@ interface Account {
 }
 
 export default function AccountsView() {
+  const { logSuccess, logError } = useAppLogger();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newAccount, setNewAccount] = useState({ name: "", type_: "checking", initial_balance: 0, currency: "USD" });
@@ -33,10 +35,12 @@ export default function AccountsView() {
     try {
       await invoke("create_account", { input: { ...newAccount, initial_balance: Number(newAccount.initial_balance) } });
       setShowAddModal(false);
+      logSuccess("Finance account created", newAccount.name, { source: "finance" });
       setNewAccount({ name: "", type_: "checking", initial_balance: 0, currency: "USD" });
       fetchAccounts();
     } catch (e) {
       console.error(e);
+      logError("Finance account create failed", String(e), { source: "finance" });
     }
   };
 

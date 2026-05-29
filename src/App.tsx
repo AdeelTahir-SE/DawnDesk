@@ -22,7 +22,7 @@ function NavigationLogger() {
   const { logInfo } = useAppLogger();
 
   useEffect(() => {
-    logInfo("Navigation", `Navigated to ${location.pathname}`);
+    logInfo("Navigation", `Navigated to ${location.pathname}`, { channel: 'navigation' });
   }, [location.pathname, logInfo]);
 
   return null;

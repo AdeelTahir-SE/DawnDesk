@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Download, Loader2, Play, Save, Search, Trash2 } from "lucide-react";
+import { useAppLogger } from "../../utils/LoggerContext";
 import type { LocalIssue, LocalSavedFilter, LocalSprint } from "./types";
 
 const PRIORITIES = ["All", "Highest", "High", "Medium", "Low", "Lowest"];
@@ -28,6 +29,7 @@ function csvEscape(value: unknown) {
 }
 
 export default function SearchAndFilters({ projectId }: { projectId: number | null }) {
+  const { logSuccess, logError, logWarning } = useAppLogger();
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
   const [savedFilters, setSavedFilters] = useState<LocalSavedFilter[]>([]);
@@ -89,8 +91,10 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
     try {
       const data = await invoke<LocalIssue[]>("jql_search", { projectId, jql });
       setIssues(data);
+      logSuccess("Project search complete", `${data.length} issue${data.length === 1 ? "" : "s"} found.`, { source: "project-manager" });
     } catch (err) {
       console.error("JQL search failed:", err);
+      logError("Project search failed", String(err), { source: "project-manager" });
     }
     setLoading(false);
   };
@@ -102,13 +106,19 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
       priority !== "All" ? `priority = "${priority}"` : "",
       type !== "All" ? `issue_type = "${type}"` : "",
     ].filter(Boolean).join(" AND ");
-    await invoke("create_saved_filter", {
-      projectId,
-      name: filterName.trim(),
-      jqlQuery: filterQuery || "1=1",
-    });
-    setFilterName("");
-    await fetchData();
+    try {
+      await invoke("create_saved_filter", {
+        projectId,
+        name: filterName.trim(),
+        jqlQuery: filterQuery || "1=1",
+      });
+      logSuccess("Project filter saved", filterName.trim(), { source: "project-manager" });
+      setFilterName("");
+      await fetchData();
+    } catch (err) {
+      console.error("Failed to save filter:", err);
+      logError("Project filter save failed", String(err), { source: "project-manager" });
+    }
   };
 
   const exportCsv = () => {
@@ -127,10 +137,12 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
       ]),
     ];
     downloadText("project-issues.csv", rows.map((row) => row.map(csvEscape).join(",")).join("\n"), "text/csv");
+    logSuccess("Project CSV exported", `${filteredIssues.length} issue${filteredIssues.length === 1 ? "" : "s"} exported.`, { source: "project-manager" });
   };
 
   const exportJson = () => {
     downloadText("project-issues.json", JSON.stringify(filteredIssues, null, 2), "application/json");
+    logSuccess("Project JSON exported", `${filteredIssues.length} issue${filteredIssues.length === 1 ? "" : "s"} exported.`, { source: "project-manager" });
   };
 
   if (loading && issues.length === 0) {
@@ -244,8 +256,14 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
                   </button>
                   <button
                     onClick={async () => {
-                      await invoke("delete_saved_filter", { id: filter.id });
-                      await fetchData();
+                      try {
+                        await invoke("delete_saved_filter", { id: filter.id });
+                        await fetchData();
+                        logWarning("Project filter deleted", filter.name, { source: "project-manager" });
+                      } catch (err) {
+                        console.error("Failed to delete filter:", err);
+                        logError("Project filter delete failed", String(err), { source: "project-manager" });
+                      }
                     }}
                     className="text-white/35 hover:text-red-400"
                   >

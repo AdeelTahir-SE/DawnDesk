@@ -77,10 +77,10 @@ export default function AccountsPayableView() {
           ) : (
             <>
               {activeTab === "bills" && <VendorBillsTable bills={bills} />}
-              {activeTab === "runs" && <PaymentRunsTable />}
-              {activeTab === "matching" && <ThreeWayMatching />}
-              {activeTab === "aging" && <APAging />}
-              {activeTab === "electronic" && <ElectronicPayments />}
+              {activeTab === "runs" && <PaymentRunsTable bills={bills} />}
+              {activeTab === "matching" && <ThreeWayMatching bills={bills} />}
+              {activeTab === "aging" && <APAging bills={bills} />}
+              {activeTab === "electronic" && <ElectronicPayments bills={bills} />}
             </>
           )}
         </div>
@@ -133,10 +133,13 @@ function VendorBillsTable({ bills }: { bills: VendorBill[] }) {
   );
 }
 
-function PaymentRunsTable() {
-  const runs = [
-    { id: "PR-2026-05-30", date: "2026-05-30", bills: 12, amount: "$45,200.00", status: "Scheduled" },
-  ];
+function PaymentRunsTable({ bills }: { bills: VendorBill[] }) {
+  const unpaidBills = bills.filter((bill) => bill.status.toLowerCase() !== "paid");
+  const total = unpaidBills.reduce((sum, bill) => sum + bill.total_amount, 0);
+  const runDate = unpaidBills
+    .map((bill) => bill.due_date)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-950/50">
       <table className="w-full text-left text-sm text-white/80">
@@ -150,25 +153,24 @@ function PaymentRunsTable() {
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-800">
-          {runs.map((r, i) => (
-            <tr key={i} className="transition-colors hover:bg-neutral-800/30">
-              <td className="px-6 py-4 font-mono font-bold text-white">{r.id}</td>
-              <td className="px-6 py-4">{r.date}</td>
-              <td className="px-6 py-4">{r.bills}</td>
-              <td className="px-6 py-4 text-right font-mono text-yellow-400">{r.amount}</td>
-              <td className="px-6 py-4"><span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-500/10 text-blue-400">{r.status}</span></td>
+          {unpaidBills.length === 0 ? (
+            <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">No unpaid bills available for a payment run.</td></tr>
+          ) : (
+            <tr className="transition-colors hover:bg-neutral-800/30">
+              <td className="px-6 py-4 font-mono font-bold text-white">PR-{new Date().toISOString().slice(0, 10)}</td>
+              <td className="px-6 py-4">{runDate}</td>
+              <td className="px-6 py-4">{unpaidBills.length}</td>
+              <td className="px-6 py-4 text-right font-mono text-yellow-400">${total.toFixed(2)}</td>
+              <td className="px-6 py-4"><span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-500/10 text-blue-400">Ready</span></td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
     </div>
   );
 }
 
-function ThreeWayMatching() {
-  const matches = [
-    { bill: "INV-992", po: "PO-1042", receipt: "GR-5021", status: "Matched", discrepancy: "$0.00" },
-  ];
+function ThreeWayMatching({ bills }: { bills: VendorBill[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-950/50">
       <table className="w-full text-left text-sm text-white/80">
@@ -182,13 +184,15 @@ function ThreeWayMatching() {
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-800">
-          {matches.map((m, i) => (
-            <tr key={i} className="transition-colors hover:bg-neutral-800/30">
-              <td className="px-6 py-4 font-mono font-bold text-white">{m.bill}</td>
-              <td className="px-6 py-4 font-mono text-white/60">{m.po}</td>
-              <td className="px-6 py-4 font-mono text-white/60">{m.receipt}</td>
-              <td className="px-6 py-4 font-mono text-green-400">{m.discrepancy}</td>
-              <td className="px-6 py-4"><span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-green-500/10 text-green-400"><FileCheck className="h-3 w-3" />{m.status}</span></td>
+          {bills.length === 0 ? (
+            <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">No vendor bills to match.</td></tr>
+          ) : bills.map((bill) => (
+            <tr key={bill.id} className="transition-colors hover:bg-neutral-800/30">
+              <td className="px-6 py-4 font-mono font-bold text-white">{bill.bill_number}</td>
+              <td className="px-6 py-4 font-mono text-white/60">Attach PO in Procurement</td>
+              <td className="px-6 py-4 font-mono text-white/60">{bill.items_json === "[]" ? "No receipt lines" : "Receipt lines present"}</td>
+              <td className="px-6 py-4 font-mono text-yellow-300">${bill.total_amount.toFixed(2)}</td>
+              <td className="px-6 py-4"><span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-bold text-orange-300"><FileCheck className="h-3 w-3" />Needs PO link</span></td>
             </tr>
           ))}
         </tbody>
@@ -197,24 +201,65 @@ function ThreeWayMatching() {
   );
 }
 
-function APAging() {
+function APAging({ bills }: { bills: VendorBill[] }) {
+  const today = new Date();
+  const buckets = [
+    { label: "Current", min: -Infinity, max: 0 },
+    { label: "1-30 Days", min: 1, max: 30 },
+    { label: "31-60 Days", min: 31, max: 60 },
+    { label: "61-90 Days", min: 61, max: 90 },
+    { label: "90+ Days", min: 91, max: Infinity },
+  ].map((bucket) => {
+    const matchingBills = bills.filter((bill) => {
+      if (bill.status.toLowerCase() === "paid") return false;
+      const days = Math.floor((today.getTime() - new Date(bill.due_date).getTime()) / 86_400_000);
+      return days >= bucket.min && days <= bucket.max;
+    });
+    return {
+      ...bucket,
+      count: matchingBills.length,
+      amount: matchingBills.reduce((sum, bill) => sum + bill.total_amount, 0),
+    };
+  });
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <ShieldAlert className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Accounts Payable Aging Report</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">View outstanding vendor balances bucketed by 30, 60, and 90+ days past due.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Generate Report</button>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="h-5 w-5 text-yellow-400" />
+        <h3 className="text-lg font-bold text-white">Accounts Payable Aging</h3>
+      </div>
+      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-5">
+        {buckets.map((bucket) => (
+          <div key={bucket.label} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{bucket.label}</p>
+            <p className="mt-2 text-xl font-black text-white">${bucket.amount.toFixed(2)}</p>
+            <p className="mt-1 text-xs text-white/40">{bucket.count} bills</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function ElectronicPayments() {
+function ElectronicPayments({ bills }: { bills: VendorBill[] }) {
+  const payable = bills.filter((bill) => bill.status.toLowerCase() !== "paid");
+  const total = payable.reduce((sum, bill) => sum + bill.total_amount, 0);
+
   return (
     <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
       <UploadCloud className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">ACH / Wire Transfers</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Connect your bank feed to remit payments directly from DawnDesk.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Setup Bank Connection</button>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Electronic payment setup needs a connected bank account. Current payable batch is shown from open vendor bills.</p>
+      <div className="mx-auto mt-6 grid max-w-md grid-cols-2 gap-3">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Bills Ready</p>
+          <p className="mt-2 text-2xl font-black text-white">{payable.length}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Batch Total</p>
+          <p className="mt-2 text-2xl font-black text-white">${total.toFixed(2)}</p>
+        </div>
+      </div>
     </div>
   );
 }

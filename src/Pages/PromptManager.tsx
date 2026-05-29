@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Edit, FileQuestion, Plus, Search, Trash2, Variable, X } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
+import { useAppLogger } from "../utils/LoggerContext";
 
 interface Prompt {
   id: string;
@@ -79,6 +80,7 @@ const SEEDED_PROMPTS: Prompt[] = [
 const extractVariables = (content: string) => Array.from(new Set(content.match(/\[[^\]]+\]/g) ?? []));
 
 export default function PromptManager() {
+  const { logSuccess, logWarning } = useAppLogger();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
@@ -126,12 +128,14 @@ export default function PromptManager() {
   const handleCopy = (id: string, text: string) => {
     void navigator.clipboard.writeText(text);
     setCopiedId(id);
+    logSuccess("Prompt copied", "Prompt content copied to clipboard.", { source: "prompts" });
     window.setTimeout(() => setCopiedId(null), 1400);
   };
 
   const handleDelete = (id: string) => {
     if (!window.confirm("Delete this prompt template?")) return;
     savePrompts(prompts.filter((prompt) => prompt.id !== id));
+    logWarning("Prompt deleted", "Prompt template removed from the library.", { source: "prompts" });
   };
 
   const openCreateModal = () => {
@@ -169,6 +173,7 @@ export default function PromptManager() {
 
     if (modalMode === "create") {
       savePrompts([{ id: `custom-${Date.now()}`, title, category: finalCategory, content, isCustom: true }, ...prompts]);
+      logSuccess("Prompt created", title, { source: "prompts" });
     } else if (editingPromptId) {
       savePrompts(
         prompts.map((prompt) =>
@@ -177,6 +182,7 @@ export default function PromptManager() {
             : prompt,
         ),
       );
+      logSuccess("Prompt updated", title, { source: "prompts" });
     }
 
     setIsModalOpen(false);

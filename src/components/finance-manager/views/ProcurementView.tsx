@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, ShoppingCart, Truck, ShieldCheck, Search, Loader2, X, ClipboardCheck } from "lucide-react";
 
@@ -11,17 +11,34 @@ export type PurchaseOrder = {
   items_json: string;
 };
 
+type VendorBill = {
+  id: number;
+  vendor_name: string;
+  bill_number: string;
+  date: string;
+  due_date: string;
+  total_amount: number;
+  status: string;
+  items_json: string;
+};
+
 export default function ProcurementView() {
   const [activeTab, setActiveTab] = useState("pos");
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
+  const [bills, setBills] = useState<VendorBill[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [query, setQuery] = useState("");
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await invoke<PurchaseOrder[]>("get_purchase_orders");
-      setPos(res);
+      const [purchaseOrders, vendorBills] = await Promise.all([
+        invoke<PurchaseOrder[]>("get_purchase_orders"),
+        invoke<VendorBill[]>("get_vendor_bills"),
+      ]);
+      setPos(purchaseOrders);
+      setBills(vendorBills);
     } catch (e) {
       console.error(e);
     }
@@ -31,6 +48,12 @@ export default function ProcurementView() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const filteredPos = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return pos;
+    return pos.filter((po) => po.vendor_name.toLowerCase().includes(term) || `po-${po.id}`.includes(term));
+  }, [pos, query]);
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-in fade-in zoom-in-95 duration-300">
@@ -51,6 +74,8 @@ export default function ProcurementView() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
               <input
                 placeholder="Search POs or Vendors..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
                 className="w-full sm:w-64 rounded-xl border border-neutral-800 bg-neutral-950 px-9 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-yellow-400/60"
               />
             </div>
@@ -71,9 +96,9 @@ export default function ProcurementView() {
              <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-yellow-400 animate-spin" /></div>
           ) : (
             <>
-              {activeTab === "pos" && <PurchaseOrdersTable pos={pos} />}
-              {activeTab === "approvals" && <ApprovalsView />}
-              {activeTab === "matching" && <ThreeWayMatchingView />}
+              {activeTab === "pos" && <PurchaseOrdersTable pos={filteredPos} />}
+              {activeTab === "approvals" && <ApprovalsView pos={filteredPos} />}
+              {activeTab === "matching" && <ThreeWayMatchingView pos={filteredPos} bills={bills} />}
             </>
           )}
         </div>
@@ -123,24 +148,96 @@ function PurchaseOrdersTable({ pos }: { pos: PurchaseOrder[] }) {
   );
 }
 
-function ApprovalsView() {
+function ApprovalsView({ pos }: { pos: PurchaseOrder[] }) {
+  const pending = pos.filter((po) => !["approved", "paid", "closed"].includes(po.status.toLowerCase()));
+  const total = pending.reduce((sum, po) => sum + po.total_amount, 0);
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <ShieldCheck className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Pending Approvals</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Set up multi-level approval hierarchies based on department and amount thresholds.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Configure Workflows</button>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-5 w-5 text-yellow-400" />
+        <h3 className="text-lg font-bold text-white">Pending Approvals</h3>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <ProcurementMetric label="Pending POs" value={pending.length.toString()} />
+        <ProcurementMetric label="Pending Amount" value={`$${total.toFixed(2)}`} />
+      </div>
+      <div className="mt-6 overflow-x-auto rounded-xl border border-neutral-800">
+        <table className="w-full text-left text-sm text-white/80">
+          <thead className="border-b border-neutral-800 bg-neutral-900/50 text-xs uppercase tracking-wider text-white/50">
+            <tr>
+              <th className="px-6 py-4 font-semibold">PO</th>
+              <th className="px-6 py-4 font-semibold">Vendor</th>
+              <th className="px-6 py-4 font-semibold text-right">Amount</th>
+              <th className="px-6 py-4 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-800">
+            {pending.length === 0 && <tr><td colSpan={4} className="px-6 py-8 text-center text-white/40">No purchase orders require approval.</td></tr>}
+            {pending.map((po) => (
+              <tr key={po.id}>
+                <td className="px-6 py-4 font-mono text-white">PO-{po.id.toString().padStart(5, "0")}</td>
+                <td className="px-6 py-4 font-bold text-white">{po.vendor_name}</td>
+                <td className="px-6 py-4 text-right font-mono">${po.total_amount.toFixed(2)}</td>
+                <td className="px-6 py-4 text-yellow-300">{po.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function ThreeWayMatchingView() {
+function ThreeWayMatchingView({ pos, bills }: { pos: PurchaseOrder[]; bills: VendorBill[] }) {
+  const rows = bills.map((bill) => {
+    const po = pos.find((candidate) => candidate.vendor_name.toLowerCase() === bill.vendor_name.toLowerCase());
+    const discrepancy = po ? bill.total_amount - po.total_amount : bill.total_amount;
+    return { bill, po, discrepancy };
+  });
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <ClipboardCheck className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">3-Way Match Validation</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Automatically verify Purchase Order vs. Receiving Report vs. Vendor Invoice.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">View Exceptions</button>
+    <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-950/50">
+      <table className="w-full text-left text-sm text-white/80">
+        <thead className="border-b border-neutral-800 bg-neutral-900/50 text-xs uppercase tracking-wider text-white/50">
+          <tr>
+            <th className="px-6 py-4 font-semibold">Vendor Bill</th>
+            <th className="px-6 py-4 font-semibold">Purchase Order</th>
+            <th className="px-6 py-4 font-semibold text-right">Bill Amount</th>
+            <th className="px-6 py-4 font-semibold text-right">PO Amount</th>
+            <th className="px-6 py-4 font-semibold">Result</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-800">
+          {rows.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-white/40">Create vendor bills and purchase orders to run matching.</td></tr>}
+          {rows.map(({ bill, po, discrepancy }) => {
+            const matched = po && Math.abs(discrepancy) < 0.01;
+            return (
+              <tr key={bill.id}>
+                <td className="px-6 py-4 font-mono text-white">{bill.bill_number}</td>
+                <td className="px-6 py-4 font-mono text-white/60">{po ? `PO-${po.id.toString().padStart(5, "0")}` : "No matching PO"}</td>
+                <td className="px-6 py-4 text-right font-mono">${bill.total_amount.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right font-mono">{po ? `$${po.total_amount.toFixed(2)}` : "-"}</td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${matched ? "bg-green-500/10 text-green-400" : "bg-orange-500/10 text-orange-300"}`}>
+                    <ClipboardCheck className="h-3 w-3" />
+                    {matched ? "Matched" : po ? `Variance $${Math.abs(discrepancy).toFixed(2)}` : "Missing PO"}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProcurementMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }

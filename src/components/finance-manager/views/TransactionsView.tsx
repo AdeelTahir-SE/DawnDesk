@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, Plus, Paperclip, Repeat, X, ArrowDown, ArrowUp, SlidersHorizontal } from "lucide-react";
+import { useAppLogger } from "../../../utils/LoggerContext";
 
 interface Transaction {
   id: number;
@@ -23,6 +24,7 @@ interface Account {
 }
 
 export default function TransactionsView() {
+  const { logSuccess, logError, logWarning } = useAppLogger();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -69,10 +71,12 @@ export default function TransactionsView() {
         } 
       });
       setShowAddModal(false);
+      logSuccess("Finance transaction added", newTx.description || newTx.category, { source: "finance" });
       setNewTx({ ...newTx, amount: 0, description: "", notes: "" });
       fetchData();
     } catch (e) {
       console.error(e);
+      logError("Finance transaction add failed", String(e), { source: "finance" });
     }
   };
 
@@ -80,8 +84,10 @@ export default function TransactionsView() {
     try {
       await invoke("delete_transaction", { id });
       fetchData();
+      logWarning("Finance transaction deleted", `Transaction #${id}`, { source: "finance" });
     } catch (e) {
       console.error(e);
+      logError("Finance transaction delete failed", String(e), { source: "finance" });
     }
   }
 

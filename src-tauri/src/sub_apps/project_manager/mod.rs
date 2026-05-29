@@ -170,6 +170,16 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             wip_limit INTEGER,
             FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS strategies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            markdown TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
         "
     ).map_err(|e| e.to_string())?;
 
@@ -792,6 +802,98 @@ pub fn delete_label(app: AppHandle, id: i64) -> Result<String, String> {
     let conn = db_connection(&app)?;
     conn.execute("DELETE FROM labels WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok("Label deleted".to_string())
+}
+
+// =============================================================================
+// STRATEGIES
+// =============================================================================
+
+#[derive(Serialize, Deserialize)]
+pub struct Strategy {
+    pub id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub category: String,
+    pub markdown: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateStrategyInput {
+    pub project_id: i64,
+    pub name: String,
+    pub category: String,
+    pub markdown: String,
+    pub created_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStrategyInput {
+    pub id: i64,
+    pub name: String,
+    pub category: String,
+    pub markdown: String,
+    pub updated_at: String,
+}
+
+#[tauri::command]
+pub fn create_strategy(app: AppHandle, input: CreateStrategyInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "INSERT INTO strategies (project_id, name, category, markdown, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![input.project_id, input.name, input.category, input.markdown, input.created_at, input.created_at],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok("Strategy created".to_string())
+}
+
+#[tauri::command]
+pub fn get_strategies(app: AppHandle, project_id: i64) -> Result<Vec<Strategy>, String> {
+    let conn = db_connection(&app)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, project_id, name, category, markdown, created_at, updated_at FROM strategies WHERE project_id = ?1 ORDER BY updated_at DESC, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![project_id], |row| {
+            Ok(Strategy {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                name: row.get(2)?,
+                category: row.get(3)?,
+                markdown: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn update_strategy(app: AppHandle, input: UpdateStrategyInput) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute(
+        "UPDATE strategies SET name = ?1, category = ?2, markdown = ?3, updated_at = ?4 WHERE id = ?5",
+        params![input.name, input.category, input.markdown, input.updated_at, input.id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok("Strategy updated".to_string())
+}
+
+#[tauri::command]
+pub fn delete_strategy(app: AppHandle, id: i64) -> Result<String, String> {
+    let conn = db_connection(&app)?;
+    conn.execute("DELETE FROM strategies WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok("Strategy deleted".to_string())
 }
 
 #[tauri::command]

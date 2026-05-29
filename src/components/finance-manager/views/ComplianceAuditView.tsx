@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, ShieldAlert, Key, UserCheck, Loader2, X, Lock } from "lucide-react";
+import { Download, FileJson, Plus, ShieldAlert, Key, UserCheck, Loader2, X, Lock } from "lucide-react";
+import { exportTextFile, toJsonExport } from "../../../utils/exportFile";
 
 export type AuditLog = {
   id: number;
@@ -10,19 +11,52 @@ export type AuditLog = {
   description: string;
 };
 
+type ComplianceRole = {
+  id: number;
+  name: string;
+  description: string;
+  permissions_json: string;
+  is_system: boolean;
+};
+
+type ComplianceEvidencePackage = {
+  generated_at: string;
+  summary: {
+    audit_log_count: number;
+    role_count: number;
+    tax_code_count: number;
+    open_period_close_count: number;
+  };
+  audit_logs: AuditLog[];
+  roles: ComplianceRole[];
+  tax_codes: unknown[];
+  period_closes: unknown[];
+};
+
 export default function ComplianceAuditView() {
   const [activeTab, setActiveTab] = useState("logs");
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [roles, setRoles] = useState<ComplianceRole[]>([]);
+  const [evidence, setEvidence] = useState<ComplianceEvidencePackage | null>(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [error, setError] = useState("");
 
   const loadData = async () => {
     setLoading(true);
+    setError("");
     try {
-      const res = await invoke<AuditLog[]>("get_audit_logs");
-      setLogs(res);
+      const [auditLogs, complianceRoles, evidencePackage] = await Promise.all([
+        invoke<AuditLog[]>("get_audit_logs"),
+        invoke<ComplianceRole[]>("get_compliance_roles"),
+        invoke<ComplianceEvidencePackage>("get_compliance_evidence"),
+      ]);
+      setLogs(auditLogs);
+      setRoles(complianceRoles);
+      setEvidence(evidencePackage);
     } catch (e) {
       console.error(e);
+      setError(e instanceof Error ? e.message : String(e));
     }
     setLoading(false);
   };
@@ -47,7 +81,7 @@ export default function ComplianceAuditView() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => setShowModal(true)} className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300">
-              <Plus className="h-4 w-4" /> Simulate Action
+              <Plus className="h-4 w-4" /> Record Event
             </button>
           </div>
         </div>
@@ -61,11 +95,13 @@ export default function ComplianceAuditView() {
         <div className="mt-6">
           {loading ? (
              <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-yellow-400 animate-spin" /></div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">{error}</div>
           ) : (
             <>
               {activeTab === "logs" && <AuditLogsTable logs={logs} />}
-              {activeTab === "rbac" && <RBACView />}
-              {activeTab === "soc2" && <SOC2View />}
+              {activeTab === "rbac" && <RBACView roles={roles} />}
+              {activeTab === "soc2" && <EvidenceView evidence={evidence} />}
             </>
           )}
         </div>
@@ -74,6 +110,15 @@ export default function ComplianceAuditView() {
       {showModal && <CreateLogModal onClose={() => setShowModal(false)} onSaved={loadData} />}
     </div>
   );
+}
+
+function parsePermissions(role: ComplianceRole) {
+  try {
+    const permissions = JSON.parse(role.permissions_json);
+    return Array.isArray(permissions) ? permissions.map(String) : [];
+  } catch {
+    return [];
+  }
 }
 
 function AuditLogsTable({ logs }: { logs: AuditLog[] }) {
@@ -109,32 +154,123 @@ function AuditLogsTable({ logs }: { logs: AuditLog[] }) {
   );
 }
 
-function RBACView() {
+function RBACView({ roles }: { roles: ComplianceRole[] }) {
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <Key className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Role-Based Access Control</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Manage granular permissions for Controllers, CFOs, AP Clerks, and Auditors.</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Manage Roles</button>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50">
+      <div className="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-bold text-white">
+            <Key className="h-5 w-5 text-yellow-400" />
+            Role-Based Access Control
+          </h3>
+          <p className="mt-1 text-sm text-white/50">System roles persisted in the local finance database.</p>
+        </div>
+        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1 text-xs font-bold text-white/60">
+          {roles.length} roles
+        </span>
+      </div>
+      <div className="divide-y divide-neutral-800">
+        {roles.length === 0 && <div className="px-6 py-8 text-center text-sm text-white/40">No compliance roles configured.</div>}
+        {roles.map((role) => (
+          <div key={role.id} className="grid gap-4 px-6 py-5 lg:grid-cols-[0.8fr_1.3fr]">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-white">{role.name}</p>
+                {role.is_system && <span className="rounded-full bg-yellow-400/10 px-2 py-0.5 text-[11px] font-bold uppercase text-yellow-300">System</span>}
+              </div>
+              <p className="mt-1 text-sm text-white/50">{role.description}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {parsePermissions(role).map((permission) => (
+                <span key={permission} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs font-mono text-white/60">
+                  {permission}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function SOC2View() {
+function EvidenceView({ evidence }: { evidence: ComplianceEvidencePackage | null }) {
+  const [exportStatus, setExportStatus] = useState("");
+
+  const exportEvidencePackage = async () => {
+    if (!evidence) return;
+
+    const path = await exportTextFile({
+      title: "Export Compliance Evidence",
+      defaultPath: `dawndesk-compliance-evidence-${new Date().toISOString().slice(0, 10)}.json`,
+      contents: toJsonExport(evidence),
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+
+    setExportStatus(path ? `Exported to ${path}` : "");
+  };
+
+  if (!evidence) {
+    return (
+      <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
+        <Lock className="h-10 w-10 text-white/20 mx-auto mb-4" />
+        <h3 className="text-lg font-bold text-white">Compliance Evidence</h3>
+        <p className="text-sm text-white/50 max-w-md mx-auto mt-2">No evidence package could be generated yet.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <Lock className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Compliance Evidence</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Automatically collect system snapshots for external auditors (SOC1/SOC2, SOX).</p>
-      <button className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Export Evidence Package</button>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-bold text-white">
+            <Lock className="h-5 w-5 text-yellow-400" />
+            Evidence Package
+          </h3>
+          <p className="mt-1 text-sm text-white/50">Generated from current audit, tax, close, and access-control records.</p>
+          <p className="mt-2 font-mono text-xs text-white/35">{evidence.generated_at}</p>
+        </div>
+        <button onClick={exportEvidencePackage} className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300">
+          <Download className="h-4 w-4" />
+          Export JSON
+        </button>
+      </div>
+      {exportStatus && <div className="mt-4 rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">{exportStatus}</div>}
+
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <EvidenceMetric label="Audit Logs" value={evidence.summary.audit_log_count} />
+        <EvidenceMetric label="Access Roles" value={evidence.summary.role_count} />
+        <EvidenceMetric label="Tax Codes" value={evidence.summary.tax_code_count} />
+        <EvidenceMetric label="Open Close Tasks" value={evidence.summary.open_period_close_count} />
+      </div>
+
+      <div className="mt-6 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-white">
+          <FileJson className="h-4 w-4 text-yellow-400" />
+          Export Contents
+        </div>
+        <p className="mt-2 text-sm text-white/50">
+          The downloaded file includes complete audit log rows, compliance role permissions, tax code configuration, and period close task records from this local workspace.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EvidenceMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }
 
 function CreateLogModal({ onClose, onSaved }: { onClose: () => void, onSaved: () => void }) {
-  const [user, setUser] = useState("admin@dawndesk.io");
-  const [action, setAction] = useState("UPDATE_GL_ACCOUNT");
-  const [desc, setDesc] = useState("Modified chart of accounts balance manually.");
+  const [user, setUser] = useState("");
+  const [action, setAction] = useState("");
+  const [desc, setDesc] = useState("");
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,24 +297,24 @@ function CreateLogModal({ onClose, onSaved }: { onClose: () => void, onSaved: ()
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
       <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Simulate Audit Event</h2>
+          <h2 className="text-xl font-bold text-white">Record Audit Event</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-white/50 uppercase">User</label>
-            <input required value={user} onChange={e => setUser(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-white outline-none focus:border-yellow-400" />
+            <input required value={user} onChange={e => setUser(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-white outline-none focus:border-yellow-400" placeholder="name or email" />
           </div>
           <div>
             <label className="text-xs font-semibold text-white/50 uppercase">Action Code</label>
-            <input required value={action} onChange={e => setAction(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-white outline-none focus:border-yellow-400 font-mono uppercase" />
+            <input required value={action} onChange={e => setAction(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-white outline-none focus:border-yellow-400 font-mono uppercase" placeholder="e.g. UPDATE_GL_ACCOUNT" />
           </div>
           <div>
             <label className="text-xs font-semibold text-white/50 uppercase">Description</label>
-            <textarea required value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-white outline-none focus:border-yellow-400 h-24 resize-none" />
+            <textarea required value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-white outline-none focus:border-yellow-400 h-24 resize-none" placeholder="What changed, and why?" />
           </div>
           <button disabled={saving} type="submit" className="w-full mt-4 rounded-xl bg-yellow-400 py-3 font-bold text-black hover:bg-yellow-300 transition-colors">
-            {saving ? "Logging..." : "Commit Log"}
+            {saving ? "Recording..." : "Record Audit Event"}
           </button>
         </form>
       </div>
