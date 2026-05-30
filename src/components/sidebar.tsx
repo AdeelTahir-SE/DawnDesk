@@ -10,7 +10,8 @@ import {
     Wrench, 
     Settings,
     LineChart,
-    StickyNote
+    StickyNote,
+    Workflow
 } from "lucide-react";
 
 type SidebarProps = {
@@ -55,6 +56,7 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
                 <SidebarLink icon={Video} label="Video Editor" to="/video-editor" showItems={showItems} />
                 <SidebarLink icon={LineChart} label="Finance" to="/finance" showItems={showItems} />
                 <SidebarLink icon={StickyNote} label="Notes" to="/notes" showItems={showItems} />
+                <SidebarLink icon={Workflow} label="Workflow" to="/workflow" showItems={showItems} />
                 <SidebarLink icon={Wrench} label="Dev Tools" to="/dev-tools" showItems={showItems} />
                 <SidebarLink icon={Settings} label="Settings" to="/settings" showItems={showItems} />
             </nav>

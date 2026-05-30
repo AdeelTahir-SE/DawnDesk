@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useState,useEffect } from "react";
-import { ListTodo, Image as ImageIcon, Video, Terminal, FolderKanban, Wrench } from "lucide-react";
+import { ListTodo, Image as ImageIcon, Video, Terminal, FolderKanban, Wrench, Workflow } from "lucide-react";
 import { TodoItem } from "../utils/types";
 import { readTextFile, BaseDirectory, exists } from '@tauri-apps/plugin-fs';
 import { useAppLogger, LogEntry } from "../utils/LoggerContext";
@@ -196,6 +196,10 @@ useEffect(() => {
                             <Link to="/dev-tools" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
                                 <Wrench className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
                                 <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Dev Tools</span>
+                            </Link>
+                            <Link to="/workflow" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
+                                <Workflow className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
+                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Workflow</span>
                             </Link>
                         </div>
                     </article>

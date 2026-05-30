@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import Home from "./Pages/Home";
 import Dashboard from "./Pages/Dashboard";
+import AuthChoice from "./Pages/AuthChoice";
 import PhotoEditor from "./Pages/PhotoEditor";
 import PhotoEditorHelp from "./Pages/PhotoEditorHelp";
 import Settings from "./Pages/Settings";
@@ -13,6 +14,8 @@ import ProjectManager from "./Pages/ProjectManager";
 import DevTools from "./Pages/DevTools";
 import FinanceManager from "./Pages/FinanceManager";
 import NotesApp from "./Pages/NotesApp";
+import RequireGoogleAuth from "./components/RequireGoogleAuth";
+import WorkflowBuilder from "./Pages/WorkflowBuilder";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppLogger } from "./utils/LoggerContext";
@@ -28,12 +31,25 @@ function NavigationLogger() {
   return null;
 }
 
+function ThemeBootstrap() {
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("dawndesk_theme") || "dark";
+    const isLight = savedTheme === "light";
+    document.documentElement.classList.toggle("light", isLight);
+    document.documentElement.classList.toggle("dark", !isLight);
+  }, []);
+
+  return null;
+}
+
 function App() {
   return (
     <>
+      <ThemeBootstrap />
       <NavigationLogger />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/auth" element={<AuthChoice />} />
 
       <Route path="/*" element={<AppShell />}>
         <Route path="dashboard" element={<Dashboard />} />
@@ -42,10 +58,11 @@ function App() {
         <Route path="video-editor" element={<VideoEditor />} />
         <Route path="settings" element={<Settings />} />
         <Route path="prompts" element={<PromptManager />} />
-        <Route path="project-manager" element={<ProjectManager />} />
+        <Route path="project-manager" element={<RequireGoogleAuth moduleName="Project Manager"><ProjectManager /></RequireGoogleAuth>} />
         <Route path="dev-tools" element={<DevTools />} />
-        <Route path="finance" element={<FinanceManager />} />
+        <Route path="finance" element={<RequireGoogleAuth moduleName="Finance Manager"><FinanceManager /></RequireGoogleAuth>} />
         <Route path="notes" element={<NotesApp />} />
+        <Route path="workflow" element={<WorkflowBuilder />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
       </Routes>

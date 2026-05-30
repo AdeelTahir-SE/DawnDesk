@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Wallet,
   Wand2,
+  Workflow,
 } from "lucide-react";
 
 import ProjectBackground from "./backgrounds/ProjectBackground";
@@ -150,6 +151,21 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
       buttonText: "Open Notes",
       BackgroundComponent: NotesBackground,
     };
+  } else if (appKey === "workflow") {
+    content = {
+      appName: "DawnDesk Workflow",
+      appIcon: <Workflow className="h-5 w-5 text-yellow-400" />,
+      title: "Welcome to\n",
+      titleHighlight: "Workflow Builder",
+      subtitle: "Create typed local automations with text, file, tool, output, and logic nodes.",
+      features: [
+        { icon: <Workflow className="h-5 w-5 text-yellow-400" />, title: "Connect Nodes", desc: "Link only compatible outputs and inputs." },
+        { icon: <Code2 className="h-5 w-5 text-yellow-400" />, title: "Use Local Tools", desc: "Route work into DawnDesk editors and dev utilities." },
+        { icon: <Flag className="h-5 w-5 text-yellow-400" />, title: "Control Flow", desc: "Plan loops and branches without AI dependency." },
+      ],
+      buttonText: "Open Workflow Builder",
+      BackgroundComponent: DevToolsBackground,
+    };
   }
 
   return (
@@ -157,7 +173,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
       {content.BackgroundComponent && (
         <>
           <content.BackgroundComponent />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-neutral-950 from-30% via-neutral-950/88 via-64% to-neutral-950/10" />
+          <div className="dd-welcome-overlay pointer-events-none absolute inset-0 bg-gradient-to-r from-neutral-950 from-30% via-neutral-950/88 via-64% to-neutral-950/10" />
         </>
       )}
 

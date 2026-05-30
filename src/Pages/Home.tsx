@@ -34,10 +34,10 @@ export default function Home(){
           </p>
 
           <Link
-            to="/dashboard"
+            to="/auth"
             className="bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-neutral-900 font-bold py-2.5 px-6 rounded-lg transition-colors duration-150"
           >
-            Explore DawnDesk
+            Get Started
           </Link>
         </div>
       </div>
