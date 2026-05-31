@@ -5,6 +5,7 @@ This document plans AI-assisted Photo Editor features. It is documentation only 
 ## Status
 
 - Stage: planned
+- Target version: `0.5.0`
 - Related route: `/photo-editor`
 - Related docs: `docs/FEATURES.md`, `docs/ARCHITECTURE.md`, `docs/ARCHITECTURE_DIAGRAMS.md`, `docs/TESTING.md`
 
@@ -77,4 +78,3 @@ Planned metadata:
 - Missing API key test.
 - Preview-before-apply UI test.
 - Export metadata test when AI history is saved.
-

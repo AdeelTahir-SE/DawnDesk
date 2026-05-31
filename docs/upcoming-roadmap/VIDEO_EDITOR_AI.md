@@ -5,6 +5,7 @@ This document plans AI-assisted Video Editor features. It is documentation only 
 ## Status
 
 - Stage: planned
+- Target version: `0.6.0`
 - Related route: `/video-editor`
 - Related docs: `docs/FEATURES.md`, `docs/ARCHITECTURE.md`, `docs/ARCHITECTURE_DIAGRAMS.md`, `docs/TESTING.md`
 
@@ -72,4 +73,3 @@ Planned metadata:
 - Timeline proposal validation test.
 - Preview-before-apply UI test.
 - Rejection path test to ensure original timeline is unchanged.
-

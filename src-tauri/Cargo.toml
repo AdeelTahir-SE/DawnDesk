@@ -1,6 +1,6 @@
 [package]
 name = "dawndesk"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -31,4 +31,3 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 base64 = "0.22"
 tauri-plugin-deep-link = "2.4.9"
-

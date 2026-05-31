@@ -2,7 +2,7 @@
 
 DawnDesk uses semantic versioning while it is in early development.
 
-Current version: `0.1.0`
+Current version: `0.2.0`
 
 ## Version Sources
 
@@ -148,3 +148,16 @@ Then manually update:
 | Version | Status | Notes |
 | --- | --- | --- |
 | `0.1.0` | Early development | Initial DawnDesk app baseline. |
+| `0.2.0` | Current | Structured multi-sub-app baseline with documentation, testing, asset cleanup, auth flow updates, and versioning rules. |
+
+## Planned Version Milestones
+
+These versions are targets for future work. Update them when scope changes or implementation lands.
+
+| Target Version | Planned Scope | Notes |
+| --- | --- | --- |
+| `0.3.0` | Shared AI model settings and AI client foundation | Adds provider configuration, secret-safe runtime setup, usage logging, and failure handling. |
+| `0.4.0` | RAG Knowledge Base | Adds user-approved indexing, retrieval, source display, and vector-store management. |
+| `0.5.0` | Photo Editor AI | Adds AI-assisted photo edit proposals with preview-before-apply behavior. |
+| `0.6.0` | Video Editor AI | Adds transcript, scene, caption, and timeline proposal workflows with user review. |
+| `0.7.0` | AI Workspace Assistant | Adds cross-app assistant behavior after the AI and RAG foundations are stable. |

@@ -2,6 +2,13 @@
 
 This document plans DawnDesk AI infrastructure before implementation. It covers provider configuration, model calls, retrieval augmented generation, privacy boundaries, and documentation rules.
 
+## Version Targets
+
+| Version | Planned Scope |
+| --- | --- |
+| `0.3.0` | Shared AI model settings, provider configuration, AI client foundation, usage logs, and safe failure states. |
+| `0.4.0` | RAG indexing, vector store management, retrieval filters, and source display. |
+
 ## Goals
 
 - Add one shared AI layer instead of separate model code inside every sub-app.
@@ -109,4 +116,3 @@ When implemented, add tests for:
 - Source citation metadata.
 - Failure states and retries.
 - User approval before write operations.
-
