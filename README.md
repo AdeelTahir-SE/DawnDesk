@@ -32,6 +32,7 @@ The documentation is kept in a small set of living files. When a feature changes
 - [Development guide](docs/DEVELOPMENT.md)
 - [Asset inventory](docs/ASSETS.md)
 - [Documentation maintenance](docs/DOCUMENTATION_GUIDE.md)
+- [Feature and sub-app format](docs/FEATURE_AND_SUB_APP_FORMAT.md)
 
 ## Tech Stack
 
@@ -76,3 +77,4 @@ Do not create one-off documentation files for every feature. Update the existing
 - Add setup, commands, troubleshooting, or environment changes to `docs/DEVELOPMENT.md`.
 - Add new images, videos, icons, and cleanup notes to `docs/ASSETS.md`.
 - Add documentation process changes to `docs/DOCUMENTATION_GUIDE.md`.
+- Follow `docs/FEATURE_AND_SUB_APP_FORMAT.md` when adding a new feature or sub-app.

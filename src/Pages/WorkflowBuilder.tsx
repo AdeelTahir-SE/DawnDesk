@@ -108,8 +108,6 @@ type RunLog = {
   status: Extract<NodeStatus, "success" | "error">;
 };
 
-type WorkflowValue = string | number | boolean | Record<string, unknown> | WorkflowValue[];
-
 type OutputPort = {
   id: string;
   label: string;

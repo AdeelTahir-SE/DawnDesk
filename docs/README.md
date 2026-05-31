@@ -9,6 +9,7 @@ This folder is the source of truth for DawnDesk documentation. Keep it small and
 - [Development](DEVELOPMENT.md): Setup, commands, builds, checks, and troubleshooting.
 - [Assets](ASSETS.md): Active image and media assets, where they live, and how to clean them up safely.
 - [Documentation Guide](DOCUMENTATION_GUIDE.md): How to keep docs maintained without creating messy duplicate files.
+- [Feature and Sub-App Format](FEATURE_AND_SUB_APP_FORMAT.md): Required format for adding new sub-apps and features.
 
 ## Update Checklist
 
@@ -19,6 +20,7 @@ When adding or changing a feature:
 3. Update `ARCHITECTURE.md` if routes, state flow, native commands, data models, or storage changed.
 4. Update `DEVELOPMENT.md` if setup, scripts, environment variables, or troubleshooting changed.
 5. Update `ASSETS.md` if any public or bundled asset changed.
+6. Follow `FEATURE_AND_SUB_APP_FORMAT.md` for naming, routing, folder layout, docs, and release checklist.
 
 ## Ownership Rule
 
