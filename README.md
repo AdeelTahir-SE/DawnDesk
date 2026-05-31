@@ -1,160 +1,78 @@
-<div align="center">
-
-<img src="./public/realistic_logo.png" alt="DawnDesk Logo" width="200"/>
-
 # DawnDesk
 
-**Your All-in-One Productivity Powerhouse**
+DawnDesk is a local-first desktop productivity workspace built with React, TypeScript, Tailwind CSS, and Tauri. It brings multiple work tools into one shell: dashboard, project management, finance, notes, prompt management, photo editing, video editing, workflow building, developer tools, and settings.
 
-*One Tab. Full Stack. Complete Control.*
-
-[![GitHub Stars](https://img.shields.io/github/stars/yourusername/DawnDesk?style=flat-square&color=DAA520)](https://github.com)
-[![GitHub Watchers](https://img.shields.io/github/watchers/yourusername/DawnDesk?style=flat-square)](https://github.com)
-[![GitHub Forks](https://img.shields.io/github/forks/yourusername/DawnDesk?style=flat-square)](https://github.com)
-[![Status](https://img.shields.io/badge/Status-Early%20Access-orange?style=flat-square)](#)
-
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](http://discord.gg)
-[![Twitter](https://img.shields.io/badge/Twitter-Follow-000000?style=flat-square&logo=x&logoColor=white)](https://twitter.com)
-
-</div>
-
----
-
-## ⚡ Overview
-
-**DawnDesk** is an all-in-one productivity platform built for professionals and teams tired of context-switching. Stop juggling between a dozen apps — bring everything together in one unified workspace. 
-
-Our philosophy is **"one tab, full stack."** We've engineered a seamless experience where task management, calendar scheduling, messaging, notes, files, and high-performance sub-apps work together intelligently.
-
-> **Stop switching apps. Start shipping faster.**
-
----
-
-## 🚀 Core Features
-
-### 🛠️ Built-in Tools
-- **Task & Project Management**: Organize work with lists, boards, and timelines. Track progress in real-time.
-- **Notes & Docs**: Rich text editor with formatting, code blocks, and embedded media.
-- **Calendar & Scheduling**: Unified calendar view. Never miss a deadline or meeting again.
-- **Analytics & Productivity Insights**: Visualize your output. See where your time goes and optimize your workflow.
-
-### 🧩 Dynamic Sub-App Architecture (New!)
-To ensure a lightning-fast experience and keep the initial application bundle size minimal, DawnDesk utilizes an **On-Demand Dynamic Sub-App Loading System**.
-- **Download What You Need**: Sub-apps are not bundled by default. Users can download and install individual sub-apps only when required.
-- **Persistent Storage**: Once downloaded, sub-apps are stored locally for immediate offline access in the future.
-
-### 🎬 Featured Sub-Apps
-- **Video Editor** *(Active Development)*: A high-performance timeline editor featuring media import, trim, split, transitions, and local rendering utilizing FFmpeg. 
-- **Photo Editor** *(Planned)*: Layer-based image editing with crop, resize, filters, and export presets.
-- **AI Assistant** *(Planned)*: Task suggestions, content drafting, and productivity insights right inside your workspace.
-- **Workflow Automation** *(Planned)*: Visual workflow builder for recurring automations and rule-based actions.
-
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 19, TypeScript, Tailwind CSS, Lucide React, Framer Motion
-- **Backend / Desktop**: Tauri 2.0, Rust
-- **Build Tool**: Vite
-- **Media Processing**: FFmpeg & FFprobe (dynamically managed)
-- **Database**: Supabase / Local Storage
-- **Drag & Drop**: @dnd-kit
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Node.js** 18.0 or higher
-- **npm** or **yarn**
-- **Rust** (for Tauri desktop builds)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/DawnDesk.git
-   cd DawnDesk
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server (Web)**
-   ```bash
-   npm run dev
-   ```
-
-### Build Desktop App (Tauri)
-
-To run the full desktop experience with native permissions and sub-app support:
+## Quick Start
 
 ```bash
-# Development mode
-npm run tauri dev
+npm install
+npm run dev
+```
 
-# Production build
+For the desktop app:
+
+```bash
+npm run tauri dev
+```
+
+For a production build:
+
+```bash
+npm run build
 npm run tauri build
 ```
 
----
+## Documentation
 
-## 🔒 Permissions & Security
-DawnDesk is built with Tauri, leveraging a secure-by-default architecture. The app requests explicit permissions for:
-- `dialog:open`: To allow media and file selection.
-- `fs:write` / `fs:read`: To save project files, export videos, and manage dynamic sub-apps.
+The documentation is kept in a small set of living files. When a feature changes, update the relevant existing doc instead of creating a new one.
 
----
+- [Documentation index](docs/README.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Features](docs/FEATURES.md)
+- [Development guide](docs/DEVELOPMENT.md)
+- [Asset inventory](docs/ASSETS.md)
+- [Documentation maintenance](docs/DOCUMENTATION_GUIDE.md)
 
-## 📸 Screenshots
+## Tech Stack
 
-<div align="center">
-<table>
-<tr>
-<td><img src="./public/screenshot1.png" alt="Dashboard" width="100%"/></td>
-<td><img src="./public/screenshot2.png" alt="Task Management" width="100%"/></td>
-</tr>
-<tr>
-<td><img src="./public/screenshot3.png" alt="Calendar" width="100%"/></td>
-<td><img src="./public/screenshot4.png" alt="Analytics" width="100%"/></td>
-</tr>
-</table>
-</div>
+- React 19 and TypeScript
+- Vite
+- Tailwind CSS
+- Tauri 2 and Rust
+- Supabase for cloud-backed feature areas
+- FFmpeg and FFprobe sidecars for video tooling
 
----
+## Current App Areas
 
-## 🤝 Contributing
+- Dashboard
+- Project Manager
+- Finance Manager
+- Notes
+- Prompt Manager
+- Photo Editor
+- Video Editor
+- Workflow Builder
+- Developer Tools
+- Settings
 
-We're just getting started and love community contributions!
+## Repository Layout
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```text
+src/                  React app, pages, components, frontend engines
+src/assets/           Bundled frontend image assets imported by code
+public/               Static public assets referenced by URL
+src-tauri/            Tauri desktop shell, Rust commands, sidecars
+supabase/migrations/  Database schema migrations
+scripts/              Local helper scripts
+docs/                 Living project documentation
+```
 
----
+## Documentation Rule
 
-## 📄 License
+Do not create one-off documentation files for every feature. Update the existing docs:
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🐛 Support & Feedback
-
-Found a bug? Have a feature request?
-
-- 📧 Email: support@dawndesk.com
-- 💬 Discord: [Join our community](http://discord.gg)
-- 🐙 GitHub Issues: [Report bugs here](https://github.com)
-- 𝕏 Twitter: [@DawnDesk](https://twitter.com)
-
----
-
-<div align="center">
-Made with ❤️ for productivity enthusiasts
-</div>
+- Add user-facing capability changes to `docs/FEATURES.md`.
+- Add structure, data flow, or native-command changes to `docs/ARCHITECTURE.md`.
+- Add setup, commands, troubleshooting, or environment changes to `docs/DEVELOPMENT.md`.
+- Add new images, videos, icons, and cleanup notes to `docs/ASSETS.md`.
+- Add documentation process changes to `docs/DOCUMENTATION_GUIDE.md`.

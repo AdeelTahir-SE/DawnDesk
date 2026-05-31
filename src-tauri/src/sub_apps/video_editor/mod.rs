@@ -17,25 +17,29 @@ pub struct MediaProbeResult {
 
 #[tauri::command]
 pub async fn ve_check_ffmpeg(app: AppHandle) -> Result<bool, String> {
-    let output = app.shell()
+    let output = app
+        .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
         .args(["-version"])
         .output()
         .await
         .map_err(|e| e.to_string())?;
-    
+
     Ok(output.status.success())
 }
 
 #[tauri::command]
 pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeResult, String> {
-    let output = app.shell()
+    let output = app
+        .shell()
         .sidecar("ffprobe")
         .map_err(|e| e.to_string())?
         .args([
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_format",
             "-show_streams",
             &path,
@@ -73,14 +77,25 @@ pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeRe
                 if codec_type == "video" {
                     has_video = true;
                     if codec.is_none() {
-                        codec = stream.get("codec_name").and_then(|c| c.as_str()).map(|c| c.to_string());
+                        codec = stream
+                            .get("codec_name")
+                            .and_then(|c| c.as_str())
+                            .map(|c| c.to_string());
                     }
                     if width.is_none() {
-                        width = stream.get("width").and_then(|w| w.as_u64()).map(|w| w as u32);
-                        height = stream.get("height").and_then(|h| h.as_u64()).map(|h| h as u32);
+                        width = stream
+                            .get("width")
+                            .and_then(|w| w.as_u64())
+                            .map(|w| w as u32);
+                        height = stream
+                            .get("height")
+                            .and_then(|h| h.as_u64())
+                            .map(|h| h as u32);
                     }
                     if fps.is_none() {
-                        if let Some(r_frame_rate) = stream.get("r_frame_rate").and_then(|r| r.as_str()) {
+                        if let Some(r_frame_rate) =
+                            stream.get("r_frame_rate").and_then(|r| r.as_str())
+                        {
                             let parts: Vec<&str> = r_frame_rate.split('/').collect();
                             if parts.len() == 2 {
                                 let num: f64 = parts[0].parse().unwrap_or(0.0);
@@ -94,7 +109,10 @@ pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeRe
                 } else if codec_type == "audio" {
                     has_audio = true;
                     if codec.is_none() {
-                        codec = stream.get("codec_name").and_then(|c| c.as_str()).map(|c| c.to_string());
+                        codec = stream
+                            .get("codec_name")
+                            .and_then(|c| c.as_str())
+                            .map(|c| c.to_string());
                     }
                 }
             }
@@ -116,19 +134,31 @@ pub async fn ve_probe_media(app: AppHandle, path: String) -> Result<MediaProbeRe
 }
 
 #[tauri::command]
-pub async fn ve_generate_thumbnail(app: AppHandle, path: String, time: f64) -> Result<String, String> {
-    let output = app.shell()
+pub async fn ve_generate_thumbnail(
+    app: AppHandle,
+    path: String,
+    time: f64,
+) -> Result<String, String> {
+    let output = app
+        .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
         .args([
-            "-ss", &time.to_string(),
-            "-i", &path,
-            "-vframes", "1",
-            "-q:v", "2",
-            "-vf", "thumbnail,scale=320:-1",
-            "-f", "image2",
-            "-c:v", "mjpeg",
-            "pipe:1"
+            "-ss",
+            &time.to_string(),
+            "-i",
+            &path,
+            "-vframes",
+            "1",
+            "-q:v",
+            "2",
+            "-vf",
+            "thumbnail,scale=320:-1",
+            "-f",
+            "image2",
+            "-c:v",
+            "mjpeg",
+            "pipe:1",
         ])
         .output()
         .await
@@ -138,7 +168,7 @@ pub async fn ve_generate_thumbnail(app: AppHandle, path: String, time: f64) -> R
         return Err("Failed to generate thumbnail".into());
     }
 
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     let base64 = STANDARD.encode(&output.stdout);
     Ok(format!("data:image/jpeg;base64,{}", base64))
 }
@@ -149,11 +179,11 @@ pub async fn ve_generate_waveform(path: String) -> Result<Vec<f32>, String> {
     // For a real app, this might be too heavy or complex, so we'll simulate returning a simple array
     // based on file size/hash just for the UI, or actually do a basic ffmpeg volume filter output parsing.
     // For this implementation, we will use a very basic simulation to avoid blocking the main thread for long.
-    
+
     // In a full implementation, you'd do:
     // ffmpeg -i input.mp4 -filter:a "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level" -f null -
-    
-    // Simulated waveform data for now since actual parsing of audio peaks in Rust requires 
+
+    // Simulated waveform data for now since actual parsing of audio peaks in Rust requires
     // a bit more intensive processing (e.g., using rodio or parsing ffmpeg stdout frame by frame)
     let len = 100;
     let mut peaks = Vec::with_capacity(len);
@@ -162,7 +192,7 @@ pub async fn ve_generate_waveform(path: String) -> Result<Vec<f32>, String> {
         let val = ((i as f32 * 0.1 + seed).sin() * 0.5 + 0.5) * 0.8 + 0.2;
         peaks.push(val);
     }
-    
+
     Ok(peaks)
 }
 
@@ -231,7 +261,11 @@ fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
     let mut filters: Vec<String> = Vec::new();
 
     for effect in effects {
-        if !effect.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true) {
+        if !effect
+            .get("enabled")
+            .and_then(|e| e.as_bool())
+            .unwrap_or(true)
+        {
             continue;
         }
 
@@ -244,9 +278,15 @@ fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
                 }
             }
             "brightness-contrast" => {
-                let brightness = effect_param_f64(effect, "brightness", 0.0).clamp(-100.0, 100.0) / 100.0;
-                let contrast = 1.0 + effect_param_f64(effect, "contrast", 0.0).clamp(-100.0, 100.0) / 100.0;
-                filters.push(format!("eq=brightness={:.4}:contrast={:.4}", brightness, contrast.max(0.0)));
+                let brightness =
+                    effect_param_f64(effect, "brightness", 0.0).clamp(-100.0, 100.0) / 100.0;
+                let contrast =
+                    1.0 + effect_param_f64(effect, "contrast", 0.0).clamp(-100.0, 100.0) / 100.0;
+                filters.push(format!(
+                    "eq=brightness={:.4}:contrast={:.4}",
+                    brightness,
+                    contrast.max(0.0)
+                ));
             }
             "grayscale" => {
                 let amount = effect_param_f64(effect, "amount", 100.0).clamp(0.0, 100.0) / 100.0;
@@ -287,7 +327,11 @@ fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
             }
             "glow" => {
                 let intensity = effect_param_f64(effect, "intensity", 50.0).clamp(0.0, 100.0);
-                filters.push(format!("eq=brightness={:.4}:saturation={:.4}", intensity / 300.0, 1.0 + intensity / 500.0));
+                filters.push(format!(
+                    "eq=brightness={:.4}:saturation={:.4}",
+                    intensity / 300.0,
+                    1.0 + intensity / 500.0
+                ));
             }
             "mirror" => {
                 let axis = effect_param_str(effect, "axis", "horizontal");
@@ -300,7 +344,10 @@ fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
             }
             "pixelate" => {
                 let size = effect_param_f64(effect, "size", 10.0).clamp(2.0, 100.0);
-                filters.push(format!("scale=iw/{0}:ih/{0}:flags=neighbor,scale=iw*{0}:ih*{0}:flags=neighbor", size.round()));
+                filters.push(format!(
+                    "scale=iw/{0}:ih/{0}:flags=neighbor,scale=iw*{0}:ih*{0}:flags=neighbor",
+                    size.round()
+                ));
             }
             _ => {}
         }
@@ -325,8 +372,14 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
     if let Some(tracks) = project.get("tracks").and_then(|t| t.as_array()) {
         for track in tracks {
             let track_type = track.get("type").and_then(|t| t.as_str()).unwrap_or("");
-            let visible = track.get("visible").and_then(|v| v.as_bool()).unwrap_or(true);
-            let muted = track.get("muted").and_then(|m| m.as_bool()).unwrap_or(false);
+            let visible = track
+                .get("visible")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let muted = track
+                .get("muted")
+                .and_then(|m| m.as_bool())
+                .unwrap_or(false);
             let track_volume = value_f64(track, "volume", 1.0).clamp(0.0, 2.0);
             if muted || (track_type == "video" && !visible) {
                 continue;
@@ -336,7 +389,9 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                 for clip in track_clips {
                     let path = clip.get("path").and_then(|p| p.as_str()).unwrap_or("");
                     let media_type = clip.get("mediaType").and_then(|m| m.as_str()).unwrap_or("");
-                    if path.is_empty() || (media_type != "video" && media_type != "image" && media_type != "audio") {
+                    if path.is_empty()
+                        || (media_type != "video" && media_type != "image" && media_type != "audio")
+                    {
                         continue;
                     }
 
@@ -357,14 +412,22 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                         position_x: value_f64(clip, "positionX", 0.0),
                         position_y: value_f64(clip, "positionY", 0.0),
                         scale: value_f64(clip, "scale", 1.0).clamp(0.1, 4.0),
-                        effects: clip.get("effects").and_then(|e| e.as_array()).cloned().unwrap_or_default(),
+                        effects: clip
+                            .get("effects")
+                            .and_then(|e| e.as_array())
+                            .cloned()
+                            .unwrap_or_default(),
                     });
                 }
             }
         }
     }
 
-    clips.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap_or(std::cmp::Ordering::Equal));
+    clips.sort_by(|a, b| {
+        a.start_time
+            .partial_cmp(&b.start_time)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     clips
 }
 
@@ -379,22 +442,19 @@ fn codec_candidates(codec: &str) -> Vec<&'static str> {
 }
 
 async fn media_has_audio(app: &AppHandle, path: &str) -> bool {
-    let output = app.shell()
-        .sidecar("ffprobe")
-        .ok()
-        .and_then(|command| {
-            Some(command.args([
-                "-v",
-                "error",
-                "-select_streams",
-                "a:0",
-                "-show_entries",
-                "stream=codec_type",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                path,
-            ]))
-        });
+    let output = app.shell().sidecar("ffprobe").ok().and_then(|command| {
+        Some(command.args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path,
+        ]))
+    });
 
     if let Some(command) = output {
         if let Ok(result) = command.output().await {
@@ -408,25 +468,56 @@ async fn media_has_audio(app: &AppHandle, path: &str) -> bool {
 }
 
 #[tauri::command]
-pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, project: serde_json::Value) -> Result<String, String> {
-    let out_path = settings.get("outputPath").and_then(|p| p.as_str()).unwrap_or("export.mp4").to_string();
-    let width = settings.get("width").and_then(|v| v.as_u64()).unwrap_or(1920);
-    let height = settings.get("height").and_then(|v| v.as_u64()).unwrap_or(1080);
-    let fps = settings.get("frameRate").and_then(|v| v.as_f64()).unwrap_or(30.0);
-    let v_codec = settings.get("videoCodec").and_then(|v| v.as_str()).unwrap_or("h264").to_string();
-    let a_codec = settings.get("audioCodec").and_then(|v| v.as_str()).unwrap_or("aac").to_string();
-    let audio_bitrate = settings.get("audioBitrate").and_then(|v| v.as_u64()).unwrap_or(192);
-    let sample_rate = settings.get("audioSampleRate").and_then(|v| v.as_u64()).unwrap_or(48000);
+pub async fn ve_export_project(
+    app: AppHandle,
+    settings: serde_json::Value,
+    project: serde_json::Value,
+) -> Result<String, String> {
+    let out_path = settings
+        .get("outputPath")
+        .and_then(|p| p.as_str())
+        .unwrap_or("export.mp4")
+        .to_string();
+    let width = settings
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1920);
+    let height = settings
+        .get("height")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1080);
+    let fps = settings
+        .get("frameRate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(30.0);
+    let v_codec = settings
+        .get("videoCodec")
+        .and_then(|v| v.as_str())
+        .unwrap_or("h264")
+        .to_string();
+    let a_codec = settings
+        .get("audioCodec")
+        .and_then(|v| v.as_str())
+        .unwrap_or("aac")
+        .to_string();
+    let audio_bitrate = settings
+        .get("audioBitrate")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(192);
+    let sample_rate = settings
+        .get("audioSampleRate")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(48000);
     let mut duration = 5.0; // fallback duration
-    
+
     if let Some(duration_val) = project.get("duration").and_then(|d| d.as_f64()) {
         duration = duration_val.max(0.1);
     }
 
     let render_clips = collect_render_clips(&project);
-    
+
     let app_clone = app.clone();
-    
+
     tauri::async_runtime::spawn(async move {
         let mut args = vec!["-y".to_string()];
         let mut clips_with_audio = Vec::new();
@@ -434,7 +525,10 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
         args.push("-f".to_string());
         args.push("lavfi".to_string());
         args.push("-i".to_string());
-        args.push(format!("color=c=black:s={}x{}:r={}:d={}", width, height, fps, duration));
+        args.push(format!(
+            "color=c=black:s={}x{}:r={}:d={}",
+            width, height, fps, duration
+        ));
 
         for clip in &render_clips {
             if clip.media_type == "image" || is_image_path(&clip.path) {
@@ -470,7 +564,11 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
             let x_expr = format!("(W-w)/2+({:.6})*W/2", clip.position_x);
             let y_expr = format!("(H-h)/2+({:.6})*H/2", clip.position_y);
             let effect_chain = effect_filter_chain(&clip.effects);
-            let effect_prefix = if effect_chain.is_empty() { String::new() } else { format!("{},", effect_chain) };
+            let effect_prefix = if effect_chain.is_empty() {
+                String::new()
+            } else {
+                format!("{},", effect_chain)
+            };
 
             let source_filter = if clip.media_type == "image" || is_image_path(&clip.path) {
                 format!(
@@ -541,14 +639,23 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
 
         if !audio_labels.is_empty() {
             if audio_labels.len() == 1 {
-                filter_parts.push(format!("[{}]apad,atrim=0:{:.6},aresample={}[outa]", audio_labels[0], duration, sample_rate));
+                filter_parts.push(format!(
+                    "[{}]apad,atrim=0:{:.6},aresample={}[outa]",
+                    audio_labels[0], duration, sample_rate
+                ));
             } else {
-                let inputs = audio_labels.iter().map(|label| format!("[{}]", label)).collect::<String>();
+                let inputs = audio_labels
+                    .iter()
+                    .map(|label| format!("[{}]", label))
+                    .collect::<String>();
                 filter_parts.push(format!("{}amix=inputs={}:duration=longest:dropout_transition=0,apad,atrim=0:{:.6},aresample={}[outa]", inputs, audio_labels.len(), duration, sample_rate));
             }
         }
 
-        filter_parts.push(format!("[{}]fps={},format=yuv420p[outv]", previous_label, fps));
+        filter_parts.push(format!(
+            "[{}]fps={},format=yuv420p[outv]",
+            previous_label, fps
+        ));
 
         args.push("-filter_complex".to_string());
         args.push(filter_parts.join(";"));
@@ -570,12 +677,12 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
         args.push("+faststart".to_string());
 
         let mut success = false;
-        
+
         for codec in codec_candidates(&v_codec) {
             let mut current_args = args.clone();
             current_args.push("-c:v".to_string());
             current_args.push(codec.to_string());
-            
+
             if codec.contains("libx") {
                 current_args.push("-preset".to_string());
                 current_args.push("fast".to_string());
@@ -592,17 +699,17 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
                 current_args.push("-ar".to_string());
                 current_args.push(sample_rate.to_string());
             }
-            
+
             current_args.push(out_path.clone());
-            
+
             // Execute ffmpeg and parse progress
             let mut command = app_clone.shell().sidecar("ffmpeg").unwrap();
             for arg in &current_args {
                 command = command.arg(arg);
             }
-            
+
             use tauri_plugin_shell::process::CommandEvent;
-            
+
             if let Ok((mut rx, _child)) = command.spawn() {
                 while let Some(event) = rx.recv().await {
                     match event {
@@ -619,10 +726,13 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
                                         let m: f64 = parts[1].parse().unwrap_or(0.0);
                                         let s: f64 = parts[2].parse().unwrap_or(0.0);
                                         let current_time = h * 3600.0 + m * 60.0 + s;
-                                        
+
                                         if duration > 0.0 {
-                                            let mut progress = (current_time / duration * 100.0) as u32;
-                                            if progress > 100 { progress = 100; }
+                                            let mut progress =
+                                                (current_time / duration * 100.0) as u32;
+                                            if progress > 100 {
+                                                progress = 100;
+                                            }
                                             let _ = app_clone.emit("export-progress", progress);
                                         }
                                     }
@@ -638,13 +748,13 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
                         _ => {}
                     }
                 }
-                
+
                 if success {
                     break;
                 }
             }
         }
-        
+
         if success {
             let _ = app_clone.emit("export-progress", 100);
             let _ = app_clone.emit("export-complete", out_path.clone());
@@ -652,7 +762,7 @@ pub async fn ve_export_project(app: AppHandle, settings: serde_json::Value, proj
             let _ = app_clone.emit("export-error", "All codec fallbacks failed.");
         }
     });
-    
+
     Ok("Export started".into())
 }
 
@@ -684,7 +794,7 @@ mod tests {
     async fn test_ve_generate_waveform() {
         // It's a simulated function but let's test if it returns exactly 100 length vector
         let path = "dummy_path.mp4".to_string();
-        
+
         let waveform_result = ve_generate_waveform(path).await;
         assert!(waveform_result.is_ok());
         let peaks = waveform_result.unwrap();

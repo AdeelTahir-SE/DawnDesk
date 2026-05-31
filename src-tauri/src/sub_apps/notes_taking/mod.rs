@@ -168,7 +168,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
     // Enable WAL mode for better concurrent read performance
-    conn.execute_batch("PRAGMA journal_mode=WAL;").map_err(|e| e.to_string())?;
+    conn.execute_batch("PRAGMA journal_mode=WAL;")
+        .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS notebooks (
@@ -182,7 +183,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             FOREIGN KEY(parent_id) REFERENCES notebooks(id) ON DELETE SET NULL
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS notes (
@@ -206,7 +208,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             FOREIGN KEY(notebook_id) REFERENCES notebooks(id) ON DELETE SET NULL
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tags (
@@ -217,7 +220,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             FOREIGN KEY(parent_id) REFERENCES tags(id) ON DELETE SET NULL
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS note_tags (
@@ -228,7 +232,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS note_links (
@@ -241,7 +246,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             UNIQUE(source_note_id, target_note_id)
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS note_versions (
@@ -254,7 +260,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS note_templates (
@@ -266,7 +273,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     // Create indices for performance
     conn.execute_batch(
@@ -279,8 +287,9 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
          CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
          CREATE INDEX IF NOT EXISTS idx_note_links_source ON note_links(source_note_id);
          CREATE INDEX IF NOT EXISTS idx_note_links_target ON note_links(target_note_id);
-         CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id);"
-    ).map_err(|e| e.to_string())?;
+         CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id);",
+    )
+    .map_err(|e| e.to_string())?;
 
     Ok(conn)
 }
@@ -303,27 +312,29 @@ pub fn notes_create_note(app: AppHandle, input: CreateNoteInput) -> Result<NoteI
         "SELECT id, title, content, notebook_id, is_pinned, is_favorite, is_archived, is_deleted, deleted_at, color, word_count, char_count, reading_time_minutes, is_daily_note, daily_date, created_at, updated_at FROM notes WHERE id = ?1"
     ).map_err(|e| e.to_string())?;
 
-    let note = stmt.query_row(params![id], |row| {
-        Ok(NoteItem {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            content: row.get(2)?,
-            notebook_id: row.get(3)?,
-            is_pinned: row.get(4)?,
-            is_favorite: row.get(5)?,
-            is_archived: row.get(6)?,
-            is_deleted: row.get(7)?,
-            deleted_at: row.get(8)?,
-            color: row.get(9)?,
-            word_count: row.get(10)?,
-            char_count: row.get(11)?,
-            reading_time_minutes: row.get(12)?,
-            is_daily_note: row.get(13)?,
-            daily_date: row.get(14)?,
-            created_at: row.get(15)?,
-            updated_at: row.get(16)?,
+    let note = stmt
+        .query_row(params![id], |row| {
+            Ok(NoteItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                notebook_id: row.get(3)?,
+                is_pinned: row.get(4)?,
+                is_favorite: row.get(5)?,
+                is_archived: row.get(6)?,
+                is_deleted: row.get(7)?,
+                deleted_at: row.get(8)?,
+                color: row.get(9)?,
+                word_count: row.get(10)?,
+                char_count: row.get(11)?,
+                reading_time_minutes: row.get(12)?,
+                is_daily_note: row.get(13)?,
+                daily_date: row.get(14)?,
+                created_at: row.get(15)?,
+                updated_at: row.get(16)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     Ok(note)
 }
@@ -335,27 +346,29 @@ pub fn notes_get_notes(app: AppHandle) -> Result<Vec<NoteItem>, String> {
         "SELECT id, title, content, notebook_id, is_pinned, is_favorite, is_archived, is_deleted, deleted_at, color, word_count, char_count, reading_time_minutes, is_daily_note, daily_date, created_at, updated_at FROM notes ORDER BY is_pinned DESC, updated_at DESC"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map([], |row| {
-        Ok(NoteItem {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            content: row.get(2)?,
-            notebook_id: row.get(3)?,
-            is_pinned: row.get(4)?,
-            is_favorite: row.get(5)?,
-            is_archived: row.get(6)?,
-            is_deleted: row.get(7)?,
-            deleted_at: row.get(8)?,
-            color: row.get(9)?,
-            word_count: row.get(10)?,
-            char_count: row.get(11)?,
-            reading_time_minutes: row.get(12)?,
-            is_daily_note: row.get(13)?,
-            daily_date: row.get(14)?,
-            created_at: row.get(15)?,
-            updated_at: row.get(16)?,
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(NoteItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                notebook_id: row.get(3)?,
+                is_pinned: row.get(4)?,
+                is_favorite: row.get(5)?,
+                is_archived: row.get(6)?,
+                is_deleted: row.get(7)?,
+                deleted_at: row.get(8)?,
+                color: row.get(9)?,
+                word_count: row.get(10)?,
+                char_count: row.get(11)?,
+                reading_time_minutes: row.get(12)?,
+                is_daily_note: row.get(13)?,
+                daily_date: row.get(14)?,
+                created_at: row.get(15)?,
+                updated_at: row.get(16)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut notes = Vec::new();
     for row in rows {
@@ -432,7 +445,8 @@ pub fn notes_update_note(app: AppHandle, input: UpdateNoteInput) -> Result<Strin
     values.push(Box::new(input.id));
 
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+    conn.execute(&sql, params_refs.as_slice())
+        .map_err(|e| e.to_string())?;
 
     Ok("Note updated".to_string())
 }
@@ -440,7 +454,8 @@ pub fn notes_update_note(app: AppHandle, input: UpdateNoteInput) -> Result<Strin
 #[tauri::command]
 pub fn notes_delete_note(app: AppHandle, id: i64) -> Result<String, String> {
     let conn = db_connection(&app)?;
-    conn.execute("DELETE FROM notes WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok("Note permanently deleted".to_string())
 }
 
@@ -452,27 +467,29 @@ pub fn notes_search_notes(app: AppHandle, query: String) -> Result<Vec<NoteItem>
         "SELECT id, title, content, notebook_id, is_pinned, is_favorite, is_archived, is_deleted, deleted_at, color, word_count, char_count, reading_time_minutes, is_daily_note, daily_date, created_at, updated_at FROM notes WHERE is_deleted = 0 AND (title LIKE ?1 OR content LIKE ?1) ORDER BY updated_at DESC"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map(params![pattern], |row| {
-        Ok(NoteItem {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            content: row.get(2)?,
-            notebook_id: row.get(3)?,
-            is_pinned: row.get(4)?,
-            is_favorite: row.get(5)?,
-            is_archived: row.get(6)?,
-            is_deleted: row.get(7)?,
-            deleted_at: row.get(8)?,
-            color: row.get(9)?,
-            word_count: row.get(10)?,
-            char_count: row.get(11)?,
-            reading_time_minutes: row.get(12)?,
-            is_daily_note: row.get(13)?,
-            daily_date: row.get(14)?,
-            created_at: row.get(15)?,
-            updated_at: row.get(16)?,
+    let rows = stmt
+        .query_map(params![pattern], |row| {
+            Ok(NoteItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                notebook_id: row.get(3)?,
+                is_pinned: row.get(4)?,
+                is_favorite: row.get(5)?,
+                is_archived: row.get(6)?,
+                is_deleted: row.get(7)?,
+                deleted_at: row.get(8)?,
+                color: row.get(9)?,
+                word_count: row.get(10)?,
+                char_count: row.get(11)?,
+                reading_time_minutes: row.get(12)?,
+                is_daily_note: row.get(13)?,
+                daily_date: row.get(14)?,
+                created_at: row.get(15)?,
+                updated_at: row.get(16)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut notes = Vec::new();
     for row in rows {
@@ -484,7 +501,10 @@ pub fn notes_search_notes(app: AppHandle, query: String) -> Result<Vec<NoteItem>
 // ─── Notebooks CRUD ──────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn notes_create_notebook(app: AppHandle, input: CreateNotebookInput) -> Result<NotebookItem, String> {
+pub fn notes_create_notebook(
+    app: AppHandle,
+    input: CreateNotebookInput,
+) -> Result<NotebookItem, String> {
     let conn = db_connection(&app)?;
     let color = input.color.unwrap_or_default();
     let icon = input.icon.unwrap_or_default();
@@ -492,24 +512,27 @@ pub fn notes_create_notebook(app: AppHandle, input: CreateNotebookInput) -> Resu
     conn.execute(
         "INSERT INTO notebooks (name, parent_id, color, icon) VALUES (?1, ?2, ?3, ?4)",
         params![input.name, input.parent_id, color, icon],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
     let mut stmt = conn.prepare(
         "SELECT id, name, parent_id, color, icon, sort_order, created_at FROM notebooks WHERE id = ?1"
     ).map_err(|e| e.to_string())?;
 
-    let nb = stmt.query_row(params![id], |row| {
-        Ok(NotebookItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            parent_id: row.get(2)?,
-            color: row.get(3)?,
-            icon: row.get(4)?,
-            sort_order: row.get(5)?,
-            created_at: row.get(6)?,
+    let nb = stmt
+        .query_row(params![id], |row| {
+            Ok(NotebookItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                color: row.get(3)?,
+                icon: row.get(4)?,
+                sort_order: row.get(5)?,
+                created_at: row.get(6)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     Ok(nb)
 }
@@ -521,17 +544,19 @@ pub fn notes_get_notebooks(app: AppHandle) -> Result<Vec<NotebookItem>, String> 
         "SELECT id, name, parent_id, color, icon, sort_order, created_at FROM notebooks ORDER BY sort_order ASC, name ASC"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map([], |row| {
-        Ok(NotebookItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            parent_id: row.get(2)?,
-            color: row.get(3)?,
-            icon: row.get(4)?,
-            sort_order: row.get(5)?,
-            created_at: row.get(6)?,
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(NotebookItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                color: row.get(3)?,
+                icon: row.get(4)?,
+                sort_order: row.get(5)?,
+                created_at: row.get(6)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -574,7 +599,8 @@ pub fn notes_update_notebook(app: AppHandle, input: UpdateNotebookInput) -> Resu
     let sql = format!("UPDATE notebooks SET {} WHERE id = ?", sets.join(", "));
     values.push(Box::new(input.id));
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+    conn.execute(&sql, params_refs.as_slice())
+        .map_err(|e| e.to_string())?;
 
     Ok("Notebook updated".to_string())
 }
@@ -583,10 +609,19 @@ pub fn notes_update_notebook(app: AppHandle, input: UpdateNotebookInput) -> Resu
 pub fn notes_delete_notebook(app: AppHandle, id: i64) -> Result<String, String> {
     let conn = db_connection(&app)?;
     // Set notes in this notebook to null
-    conn.execute("UPDATE notes SET notebook_id = NULL WHERE notebook_id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE notes SET notebook_id = NULL WHERE notebook_id = ?1",
+        params![id],
+    )
+    .map_err(|e| e.to_string())?;
     // Set child notebooks parent to null
-    conn.execute("UPDATE notebooks SET parent_id = NULL WHERE parent_id = ?1", params![id]).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM notebooks WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE notebooks SET parent_id = NULL WHERE parent_id = ?1",
+        params![id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM notebooks WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok("Notebook deleted".to_string())
 }
 
@@ -600,25 +635,35 @@ pub fn notes_create_tag(app: AppHandle, input: CreateTagInput) -> Result<TagItem
     conn.execute(
         "INSERT INTO tags (name, parent_id, color) VALUES (?1, ?2, ?3)",
         params![input.name, input.parent_id, color],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
-    Ok(TagItem { id, name: input.name, parent_id: input.parent_id, color })
+    Ok(TagItem {
+        id,
+        name: input.name,
+        parent_id: input.parent_id,
+        color,
+    })
 }
 
 #[tauri::command]
 pub fn notes_get_tags(app: AppHandle) -> Result<Vec<TagItem>, String> {
     let conn = db_connection(&app)?;
-    let mut stmt = conn.prepare("SELECT id, name, parent_id, color FROM tags ORDER BY name ASC").map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, parent_id, color FROM tags ORDER BY name ASC")
+        .map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map([], |row| {
-        Ok(TagItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            parent_id: row.get(2)?,
-            color: row.get(3)?,
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(TagItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                color: row.get(3)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -653,7 +698,8 @@ pub fn notes_update_tag(app: AppHandle, input: UpdateTagInput) -> Result<String,
     let sql = format!("UPDATE tags SET {} WHERE id = ?", sets.join(", "));
     values.push(Box::new(input.id));
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+    conn.execute(&sql, params_refs.as_slice())
+        .map_err(|e| e.to_string())?;
 
     Ok("Tag updated".to_string())
 }
@@ -661,8 +707,10 @@ pub fn notes_update_tag(app: AppHandle, input: UpdateTagInput) -> Result<String,
 #[tauri::command]
 pub fn notes_delete_tag(app: AppHandle, id: i64) -> Result<String, String> {
     let conn = db_connection(&app)?;
-    conn.execute("DELETE FROM note_tags WHERE tag_id = ?1", params![id]).map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM tags WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM note_tags WHERE tag_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok("Tag deleted".to_string())
 }
 
@@ -674,17 +722,23 @@ pub fn notes_add_tag_to_note(app: AppHandle, note_id: i64, tag_id: i64) -> Resul
     conn.execute(
         "INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?1, ?2)",
         params![note_id, tag_id],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok("Tag added to note".to_string())
 }
 
 #[tauri::command]
-pub fn notes_remove_tag_from_note(app: AppHandle, note_id: i64, tag_id: i64) -> Result<String, String> {
+pub fn notes_remove_tag_from_note(
+    app: AppHandle,
+    note_id: i64,
+    tag_id: i64,
+) -> Result<String, String> {
     let conn = db_connection(&app)?;
     conn.execute(
         "DELETE FROM note_tags WHERE note_id = ?1 AND tag_id = ?2",
         params![note_id, tag_id],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok("Tag removed from note".to_string())
 }
 
@@ -695,14 +749,16 @@ pub fn notes_get_note_tags(app: AppHandle, note_id: i64) -> Result<Vec<TagItem>,
         "SELECT t.id, t.name, t.parent_id, t.color FROM tags t INNER JOIN note_tags nt ON t.id = nt.tag_id WHERE nt.note_id = ?1 ORDER BY t.name ASC"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map(params![note_id], |row| {
-        Ok(TagItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            parent_id: row.get(2)?,
-            color: row.get(3)?,
+    let rows = stmt
+        .query_map(params![note_id], |row| {
+            Ok(TagItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                color: row.get(3)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -719,7 +775,8 @@ pub fn notes_create_link(app: AppHandle, input: CreateNoteLinkInput) -> Result<S
     conn.execute(
         "INSERT OR IGNORE INTO note_links (source_note_id, target_note_id) VALUES (?1, ?2)",
         params![input.source_note_id, input.target_note_id],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok("Link created".to_string())
 }
 
@@ -730,14 +787,16 @@ pub fn notes_get_links(app: AppHandle, note_id: i64) -> Result<Vec<NoteLinkItem>
         "SELECT id, source_note_id, target_note_id, created_at FROM note_links WHERE source_note_id = ?1 OR target_note_id = ?1"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map(params![note_id], |row| {
-        Ok(NoteLinkItem {
-            id: row.get(0)?,
-            source_note_id: row.get(1)?,
-            target_note_id: row.get(2)?,
-            created_at: row.get(3)?,
+    let rows = stmt
+        .query_map(params![note_id], |row| {
+            Ok(NoteLinkItem {
+                id: row.get(0)?,
+                source_note_id: row.get(1)?,
+                target_note_id: row.get(2)?,
+                created_at: row.get(3)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -749,7 +808,8 @@ pub fn notes_get_links(app: AppHandle, note_id: i64) -> Result<Vec<NoteLinkItem>
 #[tauri::command]
 pub fn notes_delete_link(app: AppHandle, id: i64) -> Result<String, String> {
     let conn = db_connection(&app)?;
-    conn.execute("DELETE FROM note_links WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM note_links WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok("Link deleted".to_string())
 }
 
@@ -760,27 +820,29 @@ pub fn notes_get_backlinks(app: AppHandle, note_id: i64) -> Result<Vec<NoteItem>
         "SELECT n.id, n.title, n.content, n.notebook_id, n.is_pinned, n.is_favorite, n.is_archived, n.is_deleted, n.deleted_at, n.color, n.word_count, n.char_count, n.reading_time_minutes, n.is_daily_note, n.daily_date, n.created_at, n.updated_at FROM notes n INNER JOIN note_links nl ON n.id = nl.source_note_id WHERE nl.target_note_id = ?1 AND n.is_deleted = 0"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map(params![note_id], |row| {
-        Ok(NoteItem {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            content: row.get(2)?,
-            notebook_id: row.get(3)?,
-            is_pinned: row.get(4)?,
-            is_favorite: row.get(5)?,
-            is_archived: row.get(6)?,
-            is_deleted: row.get(7)?,
-            deleted_at: row.get(8)?,
-            color: row.get(9)?,
-            word_count: row.get(10)?,
-            char_count: row.get(11)?,
-            reading_time_minutes: row.get(12)?,
-            is_daily_note: row.get(13)?,
-            daily_date: row.get(14)?,
-            created_at: row.get(15)?,
-            updated_at: row.get(16)?,
+    let rows = stmt
+        .query_map(params![note_id], |row| {
+            Ok(NoteItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                notebook_id: row.get(3)?,
+                is_pinned: row.get(4)?,
+                is_favorite: row.get(5)?,
+                is_archived: row.get(6)?,
+                is_deleted: row.get(7)?,
+                deleted_at: row.get(8)?,
+                color: row.get(9)?,
+                word_count: row.get(10)?,
+                char_count: row.get(11)?,
+                reading_time_minutes: row.get(12)?,
+                is_daily_note: row.get(13)?,
+                daily_date: row.get(14)?,
+                created_at: row.get(15)?,
+                updated_at: row.get(16)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -792,13 +854,17 @@ pub fn notes_get_backlinks(app: AppHandle, note_id: i64) -> Result<Vec<NoteItem>
 // ─── Note Versions ───────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn notes_create_version(app: AppHandle, input: CreateNoteVersionInput) -> Result<String, String> {
+pub fn notes_create_version(
+    app: AppHandle,
+    input: CreateNoteVersionInput,
+) -> Result<String, String> {
     let conn = db_connection(&app)?;
     let wc = input.word_count.unwrap_or(0);
     conn.execute(
         "INSERT INTO note_versions (note_id, title, content, word_count) VALUES (?1, ?2, ?3, ?4)",
         params![input.note_id, input.title, input.content, wc],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     // Keep only last 50 versions per note
     conn.execute(
@@ -816,16 +882,18 @@ pub fn notes_get_versions(app: AppHandle, note_id: i64) -> Result<Vec<NoteVersio
         "SELECT id, note_id, title, content, word_count, created_at FROM note_versions WHERE note_id = ?1 ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map(params![note_id], |row| {
-        Ok(NoteVersionItem {
-            id: row.get(0)?,
-            note_id: row.get(1)?,
-            title: row.get(2)?,
-            content: row.get(3)?,
-            word_count: row.get(4)?,
-            created_at: row.get(5)?,
+    let rows = stmt
+        .query_map(params![note_id], |row| {
+            Ok(NoteVersionItem {
+                id: row.get(0)?,
+                note_id: row.get(1)?,
+                title: row.get(2)?,
+                content: row.get(3)?,
+                word_count: row.get(4)?,
+                created_at: row.get(5)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -837,7 +905,10 @@ pub fn notes_get_versions(app: AppHandle, note_id: i64) -> Result<Vec<NoteVersio
 // ─── Templates CRUD ──────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn notes_create_template(app: AppHandle, input: CreateNoteTemplateInput) -> Result<NoteTemplateItem, String> {
+pub fn notes_create_template(
+    app: AppHandle,
+    input: CreateNoteTemplateInput,
+) -> Result<NoteTemplateItem, String> {
     let conn = db_connection(&app)?;
     let category = input.category.unwrap_or_else(|| "General".to_string());
     let icon = input.icon.unwrap_or_default();
@@ -845,23 +916,26 @@ pub fn notes_create_template(app: AppHandle, input: CreateNoteTemplateInput) -> 
     conn.execute(
         "INSERT INTO note_templates (name, category, content, icon) VALUES (?1, ?2, ?3, ?4)",
         params![input.name, category, input.content, icon],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
     let mut stmt = conn.prepare(
         "SELECT id, name, category, content, icon, created_at FROM note_templates WHERE id = ?1"
     ).map_err(|e| e.to_string())?;
 
-    let item = stmt.query_row(params![id], |row| {
-        Ok(NoteTemplateItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            category: row.get(2)?,
-            content: row.get(3)?,
-            icon: row.get(4)?,
-            created_at: row.get(5)?,
+    let item = stmt
+        .query_row(params![id], |row| {
+            Ok(NoteTemplateItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                category: row.get(2)?,
+                content: row.get(3)?,
+                icon: row.get(4)?,
+                created_at: row.get(5)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     Ok(item)
 }
@@ -873,16 +947,18 @@ pub fn notes_get_templates(app: AppHandle) -> Result<Vec<NoteTemplateItem>, Stri
         "SELECT id, name, category, content, icon, created_at FROM note_templates ORDER BY category ASC, name ASC"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map([], |row| {
-        Ok(NoteTemplateItem {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            category: row.get(2)?,
-            content: row.get(3)?,
-            icon: row.get(4)?,
-            created_at: row.get(5)?,
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(NoteTemplateItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                category: row.get(2)?,
+                content: row.get(3)?,
+                icon: row.get(4)?,
+                created_at: row.get(5)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
@@ -894,7 +970,8 @@ pub fn notes_get_templates(app: AppHandle) -> Result<Vec<NoteTemplateItem>, Stri
 #[tauri::command]
 pub fn notes_delete_template(app: AppHandle, id: i64) -> Result<String, String> {
     let conn = db_connection(&app)?;
-    conn.execute("DELETE FROM note_templates WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM note_templates WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok("Template deleted".to_string())
 }
 
@@ -907,14 +984,16 @@ pub fn notes_get_all_links(app: AppHandle) -> Result<Vec<NoteLinkItem>, String> 
         "SELECT nl.id, nl.source_note_id, nl.target_note_id, nl.created_at FROM note_links nl INNER JOIN notes n1 ON nl.source_note_id = n1.id INNER JOIN notes n2 ON nl.target_note_id = n2.id WHERE n1.is_deleted = 0 AND n2.is_deleted = 0"
     ).map_err(|e| e.to_string())?;
 
-    let rows = stmt.query_map([], |row| {
-        Ok(NoteLinkItem {
-            id: row.get(0)?,
-            source_note_id: row.get(1)?,
-            target_note_id: row.get(2)?,
-            created_at: row.get(3)?,
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(NoteLinkItem {
+                id: row.get(0)?,
+                source_note_id: row.get(1)?,
+                target_note_id: row.get(2)?,
+                created_at: row.get(3)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
     for row in rows {
