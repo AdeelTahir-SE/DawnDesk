@@ -13,6 +13,7 @@ This folder is the source of truth for DawnDesk documentation. Keep it small and
 - [Assets](ASSETS.md): Active image and media assets, where they live, and how to clean them up safely.
 - [Documentation Guide](DOCUMENTATION_GUIDE.md): How to keep docs maintained without creating messy duplicate files.
 - [Feature and Sub-App Format](FEATURE_AND_SUB_APP_FORMAT.md): Required format for adding new sub-apps and features.
+- [Upcoming Roadmap](upcoming-roadmap/README.md): Planned sub-apps and features that are not implemented yet, including AI, RAG, Photo Editor AI, and Video Editor AI.
 
 ## Update Checklist
 
@@ -26,6 +27,7 @@ When adding or changing a feature:
 6. Update `VERSIONING.md` and version fields if the change should ship as a new app version.
 7. Update `ASSETS.md` if any public or bundled asset changed.
 8. Follow `FEATURE_AND_SUB_APP_FORMAT.md` for naming, routing, folder layout, docs, tests, and release checklist.
+9. Use `upcoming-roadmap/` only for planned work that has not shipped yet.
 
 ## Ownership Rule
 
