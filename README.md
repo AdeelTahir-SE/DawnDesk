@@ -82,6 +82,7 @@ The documentation is kept in a small set of living files. When a feature changes
 
 - [Documentation index](docs/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Architecture diagrams](docs/ARCHITECTURE_DIAGRAMS.md)
 - [Features](docs/FEATURES.md)
 - [Development guide](docs/DEVELOPMENT.md)
 - [Testing guide](docs/TESTING.md)

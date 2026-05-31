@@ -5,6 +5,7 @@ This folder is the source of truth for DawnDesk documentation. Keep it small and
 ## Docs Map
 
 - [Architecture](ARCHITECTURE.md): App structure, routing, native commands, storage, and integration boundaries.
+- [Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md): Per-sub-app diagrams for data storage, dependencies, and major flows.
 - [Features](FEATURES.md): Current product areas and what each one does.
 - [Development](DEVELOPMENT.md): Setup, commands, builds, checks, and troubleshooting.
 - [Testing](TESTING.md): Test layers, naming rules, required coverage, and templates for new tests.
@@ -18,7 +19,7 @@ When adding or changing a feature:
 
 1. Update the code.
 2. Update the matching section in `FEATURES.md`.
-3. Update `ARCHITECTURE.md` if routes, state flow, native commands, data models, or storage changed.
+3. Update `ARCHITECTURE.md` and `ARCHITECTURE_DIAGRAMS.md` if routes, state flow, native commands, data models, or storage changed.
 4. Update `DEVELOPMENT.md` if setup, scripts, environment variables, or troubleshooting changed.
 5. Update `TESTING.md` if the feature adds new test patterns, commands, mocks, or coverage rules.
 6. Update `ASSETS.md` if any public or bundled asset changed.
