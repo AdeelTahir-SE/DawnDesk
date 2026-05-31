@@ -86,7 +86,6 @@ type DragState =
 
 type ResizeState =
   | { type: "palette"; originX: number; startWidth: number }
-  | { type: "inspector"; originX: number; startWidth: number }
   | { type: "terminal"; originY: number; startHeight: number };
 
 type PendingConnection = {
@@ -109,6 +108,8 @@ type RunLog = {
   output: DataKind;
   status: Extract<NodeStatus, "success" | "error">;
 };
+
+type WorkflowValue = string | number | boolean | Record<string, unknown> | WorkflowValue[];
 
 type OutputPort = {
   id: string;
@@ -162,6 +163,15 @@ type WorkflowDocument = {
   connections: Connection[];
 };
 
+type NodeSettings = {
+  alwaysOutputData: boolean;
+  executeOnce: boolean;
+  retryOnFail: boolean;
+  displayNote: boolean;
+  onError: string;
+  notes: string;
+};
+
 const nodeWidth = 232;
 const nodeHeight = 124;
 const collapsedPaletteWidth = 72;
@@ -171,8 +181,15 @@ const defaultMetadata: WorkflowMetadata = {
   description: "",
   tags: "",
 };
-const configurableKinds: DataKind[] = ["text", "file", "image", "video", "boolean"];
-const nodeAccentColors = ["", "#facc15", "#22c55e", "#38bdf8", "#f472b6", "#f87171"];
+const defaultNodeSettings: NodeSettings = {
+  alwaysOutputData: false,
+  executeOnce: false,
+  retryOnFail: false,
+  displayNote: false,
+  onError: "Stop Workflow",
+  notes: "",
+};
+const configurableKinds: DataKind[] = ["text", "file", "image", "video", "boolean", "any"];
 const workflowFunctions: Record<string, WorkflowFunction[]> = {
   "Photo Editor": [
     {
@@ -439,6 +456,50 @@ const workflowFunctions: Record<string, WorkflowFunction[]> = {
   ],
 };
 
+function defaultFunctionValue(functionId: string) {
+  return JSON.stringify({ functionId, params: {} });
+}
+
+function simpleWorkflowFunction(id: string, label: string, api: string, description: string): WorkflowFunction {
+  return { id, label, api, description, params: [] };
+}
+
+Object.assign(workflowFunctions, {
+  AI: [
+    simpleWorkflowFunction("ai_tools", "Choose AI capability", "workflow.ai", "Build agents, summarize or search documents, and route AI output forward."),
+  ],
+  "Action in an app": [
+    simpleWorkflowFunction("app_action", "Run app action", "workflow.app_action", "Send work to an app or service such as Google Sheets, Telegram, Notion, or Airtable."),
+  ],
+  Core: [
+    simpleWorkflowFunction("core_action", "Run core action", "workflow.core", "Run code, make HTTP requests, set webhooks, or perform core workflow work."),
+  ],
+  "Human review": [
+    simpleWorkflowFunction("human_review", "Request approval", "workflow.human_review", "Pause for human approval before continuing an automated workflow."),
+  ],
+  "Basic LLM Chain": [
+    simpleWorkflowFunction("basic_llm_chain", "Prompt language model", "ai.chain.llm", "Prompt a large language model and pass the response forward."),
+  ],
+  "Information Extractor": [
+    simpleWorkflowFunction("information_extractor", "Extract information", "ai.extract.structured", "Extract structured fields from unstructured text."),
+  ],
+  "Question and Answer Chain": [
+    simpleWorkflowFunction("qa_chain", "Answer from retrieved context", "ai.chain.qa", "Answer questions using retrieved documents or upstream context."),
+  ],
+  "Sentiment Analysis": [
+    simpleWorkflowFunction("sentiment_analysis", "Analyze sentiment", "ai.analysis.sentiment", "Detect sentiment in incoming text."),
+  ],
+  "Summarization Chain": [
+    simpleWorkflowFunction("summarization_chain", "Summarize text", "ai.chain.summarize", "Condense incoming text into a concise summary."),
+  ],
+  "Text Classifier": [
+    simpleWorkflowFunction("text_classifier", "Classify text", "ai.classify.text", "Sort incoming text into configured categories."),
+  ],
+  Evaluation: [
+    simpleWorkflowFunction("ai_evaluation", "Evaluate output", "ai.evaluation", "Score or inspect AI output before continuing."),
+  ],
+});
+
 const templates: NodeTemplate[] = [
   {
     title: "Input",
@@ -447,6 +508,188 @@ const templates: NodeTemplate[] = [
     input: [],
     output: "text",
     value: "Write a clean caption for this output.",
+  },
+  {
+    title: "Trigger manually",
+    description: "Runs the flow when you click Run. Good for getting started quickly.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "Manual trigger",
+  },
+  {
+    title: "On app event",
+    description: "Runs when something happens in an app like Telegram, Notion, or Airtable.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "App event trigger",
+  },
+  {
+    title: "On a schedule",
+    description: "Runs every day, hour, or custom interval.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "Every day",
+  },
+  {
+    title: "On webhook call",
+    description: "Runs when an HTTP request is received.",
+    kind: "input",
+    input: [],
+    output: "text",
+    value: "POST /workflow/webhook",
+  },
+  {
+    title: "On form submission",
+    description: "Generates a workflow form and passes submitted responses forward.",
+    kind: "input",
+    input: [],
+    output: "text",
+    value: "Form response",
+  },
+  {
+    title: "When executed by another workflow",
+    description: "Runs when called by another workflow.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "Workflow call",
+  },
+  {
+    title: "On chat message",
+    description: "Runs when a user sends a chat message. Useful for AI workflows.",
+    kind: "input",
+    input: [],
+    output: "text",
+    value: "Incoming chat message",
+  },
+  {
+    title: "When running evaluation",
+    description: "Runs a dataset through the workflow to test performance.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "Evaluation dataset",
+  },
+  {
+    title: "Other ways...",
+    description: "Runs on workflow errors, file changes, or other advanced events.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "Advanced trigger",
+  },
+  {
+    title: "Add another trigger",
+    description: "Adds another workflow trigger. Workflows can have multiple triggers.",
+    kind: "input",
+    input: [],
+    output: "any",
+    value: "Additional trigger",
+  },
+  {
+    title: "AI",
+    description: "Build autonomous agents, summarize, or search documents.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("ai_tools"),
+  },
+  {
+    title: "Action in an app",
+    description: "Do something in an app or service like Google Sheets, Telegram, or Notion.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "any",
+    value: defaultFunctionValue("app_action"),
+  },
+  {
+    title: "Data transformation",
+    description: "Manipulate, filter, or convert data.",
+    kind: "logic",
+    input: ["any"],
+    output: "any",
+  },
+  {
+    title: "Flow",
+    description: "Branch, merge, or loop the flow.",
+    kind: "logic",
+    input: ["any"],
+    output: "any",
+  },
+  {
+    title: "Core",
+    description: "Run code, make HTTP requests, set webhooks, and more.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "any",
+    value: defaultFunctionValue("core_action"),
+  },
+  {
+    title: "Human review",
+    description: "Request approval before making tool calls.",
+    kind: "tool",
+    input: ["any"],
+    output: "any",
+    value: defaultFunctionValue("human_review"),
+  },
+  {
+    title: "Basic LLM Chain",
+    description: "A simple chain to prompt a large language model.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("basic_llm_chain"),
+  },
+  {
+    title: "Information Extractor",
+    description: "Extract information from text in a structured format.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("information_extractor"),
+  },
+  {
+    title: "Question and Answer Chain",
+    description: "Answer questions about retrieved documents.",
+    kind: "tool",
+    input: ["text", "file", "any"],
+    output: "text",
+    value: defaultFunctionValue("qa_chain"),
+  },
+  {
+    title: "Sentiment Analysis",
+    description: "Analyze the sentiment of your text.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("sentiment_analysis"),
+  },
+  {
+    title: "Summarization Chain",
+    description: "Transforms text into a concise summary.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("summarization_chain"),
+  },
+  {
+    title: "Text Classifier",
+    description: "Classify text into distinct categories.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("text_classifier"),
+  },
+  {
+    title: "Evaluation",
+    description: "Evaluate AI output or workflow performance.",
+    kind: "tool",
+    input: ["text", "any"],
+    output: "text",
+    value: defaultFunctionValue("ai_evaluation"),
   },
   {
     title: "Photo Editor",
@@ -724,6 +967,29 @@ function StableDiffusionLogo() {
 
 const templateIcons: Record<string, React.ReactNode> = {
   Input: <IconFrame tone="#60a5fa"><FileInput className="h-4 w-4" /></IconFrame>,
+  "Trigger manually": <IconFrame tone="#facc15"><Play className="h-4 w-4" /></IconFrame>,
+  "On app event": <IconFrame tone="#38bdf8"><Bell className="h-4 w-4" /></IconFrame>,
+  "On a schedule": <IconFrame tone="#a78bfa"><Clock3 className="h-4 w-4" /></IconFrame>,
+  "On webhook call": <IconFrame tone="#34d399"><Webhook className="h-4 w-4" /></IconFrame>,
+  "On form submission": <IconFrame tone="#60a5fa"><FileInput className="h-4 w-4" /></IconFrame>,
+  "When executed by another workflow": <IconFrame tone="#facc15"><Workflow className="h-4 w-4" /></IconFrame>,
+  "On chat message": <IconFrame tone="#f472b6"><Terminal className="h-4 w-4" /></IconFrame>,
+  "When running evaluation": <IconFrame tone="#22c55e"><CheckCircle2 className="h-4 w-4" /></IconFrame>,
+  "Other ways...": <IconFrame tone="#94a3b8"><FolderOpen className="h-4 w-4" /></IconFrame>,
+  "Add another trigger": <IconFrame tone="#facc15"><Plus className="h-4 w-4" /></IconFrame>,
+  AI: <IconFrame tone="#facc15"><BrainCircuit className="h-4 w-4" /></IconFrame>,
+  "Action in an app": <IconFrame tone="#38bdf8"><Workflow className="h-4 w-4" /></IconFrame>,
+  "Data transformation": <IconFrame tone="#a78bfa"><Table2 className="h-4 w-4" /></IconFrame>,
+  Flow: <IconFrame tone="#22c55e"><GitBranch className="h-4 w-4" /></IconFrame>,
+  Core: <IconFrame tone="#facc15"><Code2 className="h-4 w-4" /></IconFrame>,
+  "Human review": <IconFrame tone="#34d399"><CheckCircle2 className="h-4 w-4" /></IconFrame>,
+  "Basic LLM Chain": <IconFrame tone="#facc15"><BrainCircuit className="h-4 w-4" /></IconFrame>,
+  "Information Extractor": <IconFrame tone="#38bdf8"><Search className="h-4 w-4" /></IconFrame>,
+  "Question and Answer Chain": <IconFrame tone="#60a5fa"><Workflow className="h-4 w-4" /></IconFrame>,
+  "Sentiment Analysis": <IconFrame tone="#f472b6"><CheckCircle2 className="h-4 w-4" /></IconFrame>,
+  "Summarization Chain": <IconFrame tone="#a78bfa"><ListRestart className="h-4 w-4" /></IconFrame>,
+  "Text Classifier": <IconFrame tone="#34d399"><FilterIcon className="h-4 w-4" /></IconFrame>,
+  Evaluation: <IconFrame tone="#22c55e"><CheckCircle2 className="h-4 w-4" /></IconFrame>,
   "Photo Editor": <IconFrame tone="#f472b6"><ImageIcon className="h-4 w-4" /></IconFrame>,
   "Video Editor": <IconFrame tone="#fb923c"><Video className="h-4 w-4" /></IconFrame>,
   "Dev Tool": <IconFrame tone="#facc15"><Code2 className="h-4 w-4" /></IconFrame>,
@@ -763,12 +1029,12 @@ const kindIcons: Record<NodeKind, React.ReactNode> = {
 };
 
 const kindStyles: Record<DataKind, string> = {
-  any: "border-white/20 bg-white/10 text-white/70",
-  boolean: "border-sky-400/30 bg-sky-400/10 text-sky-200",
-  file: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-  image: "border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200",
-  text: "border-yellow-400/30 bg-yellow-400/10 text-yellow-200",
-  video: "border-orange-400/30 bg-orange-400/10 text-orange-200",
+  any: "border-neutral-200 bg-neutral-100 text-neutral-500",
+  boolean: "border-sky-200 bg-sky-50 text-sky-700",
+  file: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  image: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
+  text: "border-yellow-200 bg-yellow-50 text-yellow-700",
+  video: "border-orange-200 bg-orange-50 text-orange-700",
 };
 
 const statusStyles: Record<NodeStatus, string> = {
@@ -959,6 +1225,13 @@ function serializeRouteConfig(config: RouteConfig) {
   return JSON.stringify(config);
 }
 
+function formatWorkflowValue(value: WorkflowValue | undefined) {
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
+}
+
 function distributePortOffsets(count: number) {
   if (count <= 1) return [nodeHeight / 2];
   const step = nodeHeight / (count + 1);
@@ -994,17 +1267,19 @@ export default function WorkflowBuilder() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false);
   const [paletteWidth, setPaletteWidth] = useState(278);
-  const [inspectorWidth, setInspectorWidth] = useState(340);
   const [terminalHeight, setTerminalHeight] = useState(176);
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
-  const [snapToGrid, setSnapToGrid] = useState(true);
+  const snapToGrid = true;
+  const [configNodeId, setConfigNodeId] = useState("");
+  const [configTab, setConfigTab] = useState<"parameters" | "settings">("parameters");
+  const [nodeSettings, setNodeSettings] = useState<Record<string, NodeSettings>>({});
   const activePointersRef = useRef<Map<number, Point>>(new Map());
   const pinchStateRef = useRef<PinchState | null>(null);
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const configNode = nodes.find((node) => node.id === configNodeId);
   const selectedEdge = connections.find((connection) => connection.id === selectedEdgeId);
   const selectedNodes = nodes.filter((node) => selectedNodeIds.includes(node.id));
-  const hasInspectorSelection = Boolean(selectedNode || selectedEdge);
   const filteredRunLogs = runLogs.filter((log) => {
     const matchesLevel = logFilter === "all" || log.status === logFilter;
     const normalizedQuery = terminalQuery.trim().toLowerCase();
@@ -1045,11 +1320,6 @@ export default function WorkflowBuilder() {
     const onPointerMove = (event: PointerEvent) => {
       if (resizeState.type === "palette") {
         setPaletteWidth(Math.min(420, Math.max(220, resizeState.startWidth + event.clientX - resizeState.originX)));
-        return;
-      }
-
-      if (resizeState.type === "inspector") {
-        setInspectorWidth(Math.min(520, Math.max(280, resizeState.startWidth - (event.clientX - resizeState.originX))));
         return;
       }
 
@@ -1220,6 +1490,92 @@ export default function WorkflowBuilder() {
     setSelectedEdgeId("");
   };
 
+  const openNodeConfiguration = (node: WorkflowNode) => {
+    setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
+    setSelectedEdgeId("");
+    setConfigNodeId(node.id);
+    setConfigTab("parameters");
+  };
+
+  const updateConfigNodeSetting = (nodeId: string, updates: Partial<NodeSettings>) => {
+    setNodeSettings((current) => ({
+      ...current,
+      [nodeId]: {
+        ...defaultNodeSettings,
+        ...(current[nodeId] ?? {}),
+        ...updates,
+      },
+    }));
+  };
+
+  const zoomToFit = (items = nodes) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || items.length === 0) return;
+
+    const minX = Math.min(...items.map((node) => node.position.x));
+    const minY = Math.min(...items.map((node) => node.position.y));
+    const maxX = Math.max(...items.map((node) => node.position.x + nodeWidth));
+    const maxY = Math.max(...items.map((node) => node.position.y + nodeHeight));
+    const graphWidth = Math.max(1, maxX - minX);
+    const graphHeight = Math.max(1, maxY - minY);
+    const padding = 96;
+    const availableWidth = Math.max(1, rect.width - padding * 2);
+    const availableHeight = Math.max(1, rect.height - padding * 2);
+    const nextZoom = Math.min(1.35, Math.max(0.35, Math.min(availableWidth / graphWidth, availableHeight / graphHeight)));
+    const centerX = minX + graphWidth / 2;
+    const centerY = minY + graphHeight / 2;
+
+    setZoom(nextZoom);
+    setPan({
+      x: rect.width / 2 - centerX * nextZoom,
+      y: rect.height / 2 - centerY * nextZoom,
+    });
+  };
+
+  const tidyWorkflow = () => {
+    const kindDepth: Record<NodeKind, number> = { input: 0, tool: 1, logic: 2, output: 3 };
+    const depthById = new Map(nodes.map((node) => [node.id, kindDepth[node.kind]]));
+
+    for (let pass = 0; pass < nodes.length; pass += 1) {
+      connections.forEach((connection) => {
+        const fromDepth = depthById.get(connection.from);
+        const toDepth = depthById.get(connection.to);
+        if (fromDepth === undefined || toDepth === undefined) return;
+        depthById.set(connection.to, Math.max(toDepth, fromDepth + 1));
+      });
+    }
+
+    const columns = new Map<number, WorkflowNode[]>();
+    nodes.forEach((node) => {
+      const depth = depthById.get(node.id) ?? kindDepth[node.kind];
+      columns.set(depth, [...(columns.get(depth) ?? []), node]);
+    });
+
+    columns.forEach((column) => {
+      column.sort((a, b) => a.position.y - b.position.y || a.title.localeCompare(b.title));
+    });
+
+    const orderedDepths = [...columns.keys()].sort((a, b) => a - b);
+    const depthToColumn = new Map(orderedDepths.map((depth, index) => [depth, index]));
+    const nextNodes = nodes.map((node) => {
+      const depth = depthById.get(node.id) ?? kindDepth[node.kind];
+      const column = columns.get(depth) ?? [];
+      const columnIndex = depthToColumn.get(depth) ?? 0;
+      const rowIndex = Math.max(0, column.findIndex((item) => item.id === node.id));
+      return {
+        ...node,
+        position: {
+          x: 120 + columnIndex * 300,
+          y: 110 + rowIndex * 170,
+        },
+      };
+    });
+
+    setNodes(nextNodes);
+    zoomToFit(nextNodes);
+  };
+
   const onNodeDragStart = (event: React.PointerEvent, node: WorkflowNode) => {
     if (node.pinned) {
       setSelectedNodeId(node.id);
@@ -1382,11 +1738,6 @@ export default function WorkflowBuilder() {
   const updateNodeOutputKind = (kind: DataKind) => {
     if (!selectedNode) return;
     setNodes((current) => current.map((node) => (node.id === selectedNode.id ? { ...node, output: kind } : node)));
-  };
-
-  const updateSelectedNode = (updates: Partial<WorkflowNode>) => {
-    if (!selectedNode) return;
-    setNodes((current) => current.map((node) => (node.id === selectedNode.id ? { ...node, ...updates } : node)));
   };
 
   const updateNodeFunction = (functionId: string) => {
@@ -1773,13 +2124,13 @@ export default function WorkflowBuilder() {
 
           {pathBackedInput ? (
             <>
-              <button onClick={chooseInputFile} className="dd-btn-secondary flex w-full items-center justify-center gap-2">
+              <button onClick={chooseInputFile} className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-600 transition-colors hover:text-neutral-950">
                 <FileInput className="h-4 w-4" />
                 Select {node.output === "file" ? "File" : node.output}
               </button>
-              <div className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Current source</p>
-                <p className="mt-2 break-all text-xs leading-relaxed text-white/58">{node.value || "No file selected yet."}</p>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-400">Current source</p>
+                <p className="mt-2 break-all text-xs leading-relaxed text-neutral-600">{node.value || "No file selected yet."}</p>
               </div>
             </>
           ) : node.output === "boolean" ? (
@@ -1801,7 +2152,7 @@ export default function WorkflowBuilder() {
               />
             </label>
           )}
-          <p className="text-xs leading-relaxed text-white/42">This single Input node can be retyped whenever the workflow needs a different source.</p>
+          <p className="text-xs leading-relaxed text-neutral-500">This single Input node can be retyped whenever the workflow needs a different source.</p>
         </div>
       );
     }
@@ -1821,15 +2172,15 @@ export default function WorkflowBuilder() {
               ))}
             </select>
           </label>
-          <button onClick={chooseOutputPath} className="dd-btn-secondary flex w-full items-center justify-center gap-2">
+          <button onClick={chooseOutputPath} className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-600 transition-colors hover:text-neutral-950">
             <Download className="h-4 w-4" />
             Choose Save Path
           </button>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Target path</p>
-            <p className="mt-2 break-all text-xs leading-relaxed text-white/58">{node.value || "No output path selected yet."}</p>
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-400">Target path</p>
+            <p className="mt-2 break-all text-xs leading-relaxed text-neutral-600">{node.value || "No output path selected yet."}</p>
           </div>
-          <p className="text-xs leading-relaxed text-white/42">When the workflow runs, this node writes a DawnDesk output artifact to the selected path.</p>
+          <p className="text-xs leading-relaxed text-neutral-500">When the workflow runs, this node writes a DawnDesk output artifact to the selected path.</p>
         </div>
       );
     }
@@ -1840,12 +2191,12 @@ export default function WorkflowBuilder() {
           {renderConditionBuilder(node)}
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3">
-              <p className="text-xs font-bold uppercase text-green-200">True output</p>
-              <p className="mt-1 text-xs text-white/45">Use this port when the condition passes.</p>
+              <p className="text-xs font-bold uppercase text-green-700">True output</p>
+              <p className="mt-1 text-xs text-neutral-500">Use this port when the condition passes.</p>
             </div>
             <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3">
-              <p className="text-xs font-bold uppercase text-red-200">False output</p>
-              <p className="mt-1 text-xs text-white/45">Use this port when the condition fails.</p>
+              <p className="text-xs font-bold uppercase text-red-700">False output</p>
+              <p className="mt-1 text-xs text-neutral-500">Use this port when the condition fails.</p>
             </div>
           </div>
         </div>
@@ -1877,8 +2228,8 @@ export default function WorkflowBuilder() {
             />
           </label>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg border border-yellow-400/25 bg-yellow-400/10 p-3 text-yellow-100">Item route</div>
-            <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3 text-green-100">Done route</div>
+            <div className="rounded-lg border border-yellow-400/25 bg-yellow-400/10 p-3 text-yellow-700">Item route</div>
+            <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3 text-green-700">Done route</div>
           </div>
         </div>
       );
@@ -1902,7 +2253,7 @@ export default function WorkflowBuilder() {
           <div>
             <div className="mb-2 flex items-center justify-between">
               <span className="dd-form-label">Routes</span>
-              <button type="button" onClick={addSwitchCase} className="dd-btn-secondary px-3 py-1.5 text-xs">
+              <button type="button" onClick={addSwitchCase} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-bold text-neutral-600 transition-colors hover:text-neutral-950">
                 Add route
               </button>
             </div>
@@ -1918,14 +2269,14 @@ export default function WorkflowBuilder() {
                   <button
                     type="button"
                     onClick={() => removeSwitchCase(index)}
-                    className="dd-icon-btn shrink-0"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-950"
                     aria-label="Remove route"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               ))}
-              <div className="rounded-lg border border-neutral-800 bg-neutral-900/70 px-3 py-2 text-xs text-white/48">
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
                 Default route is always available.
               </div>
             </div>
@@ -1939,10 +2290,10 @@ export default function WorkflowBuilder() {
         <div className="space-y-4">
           {renderConditionBuilder(node, node.title === "Filter" ? "Filter" : "Loop")}
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3 text-green-100">
+            <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3 text-green-700">
               {node.title === "Filter" ? "Pass route" : "Loop route"}
             </div>
-            <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-red-100">
+            <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-red-700">
               {node.title === "Filter" ? "Fail route" : "Done route"}
             </div>
           </div>
@@ -2000,15 +2351,15 @@ export default function WorkflowBuilder() {
     if (node.title === "Try / Catch") {
       return (
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3 text-green-100">Success route</div>
-          <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-red-100">Error route</div>
+          <div className="rounded-lg border border-green-400/25 bg-green-400/10 p-3 text-green-700">Success route</div>
+          <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-red-700">Error route</div>
         </div>
       );
     }
 
     if (node.title === "Merge") {
       return (
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3 text-xs leading-relaxed text-white/52">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-500">
           Connect multiple incoming branches to this node. It emits one merged output route.
         </div>
       );
@@ -2035,14 +2386,14 @@ export default function WorkflowBuilder() {
           </label>
 
           {selectedFunction && (
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-300">{selectedFunction.api}</p>
-              <p className="mt-2 text-xs leading-relaxed text-white/52">{selectedFunction.description}</p>
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-700">{selectedFunction.api}</p>
+              <p className="mt-2 text-xs leading-relaxed text-neutral-600">{selectedFunction.description}</p>
             </div>
           )}
 
           {selectedFunction?.params.length === 0 && (
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3 text-xs text-white/48">
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-500">
               This function does not need additional input.
             </div>
           )}
@@ -2050,7 +2401,7 @@ export default function WorkflowBuilder() {
           {selectedFunction?.params.map((param) => {
             const source = config.paramSources?.[param.key] ?? "";
             return (
-              <div key={param.key} className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
+              <div key={param.key} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                 {renderSourceSelect(node, source, (value) => updateNodeFunctionParamSource(param.key, value), `${param.label} source`)}
                 {!source && (
                   <label className="mt-3 block">
@@ -2096,14 +2447,129 @@ export default function WorkflowBuilder() {
     );
   };
 
+  const renderConfigSwitch = (checked: boolean, onChange: (checked: boolean) => void) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative h-5 w-10 rounded-full transition-colors ${checked ? "bg-yellow-400" : "bg-neutral-400"}`}
+    >
+      <span
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+
+  const renderConfigInputPanel = (node: WorkflowNode) => {
+    const incomingConnections = connections.filter((connection) => connection.to === node.id);
+    return (
+      <section className="flex min-h-0 flex-col bg-neutral-950 text-white">
+        <div className="border-b border-neutral-800 px-4 py-4">
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-white/40">Input</p>
+        </div>
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+          {incomingConnections.length > 0 ? (
+            <div className="space-y-2">
+              {incomingConnections.map((connection) => {
+                const relatedNode = nodes.find((item) => item.id === connection.from);
+                return (
+                  <div key={connection.id} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-3 text-sm text-white/80">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-300">
+                      {(connection.fromPort ?? "main").toUpperCase()} output
+                    </p>
+                    <p className="mt-1 truncate">{relatedNode?.title ?? "Connected node"}</p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center text-center">
+              <span className="text-3xl text-white/35">-&gt;</span>
+              <p className="mt-5 text-base font-semibold text-white/70">No input data</p>
+              <button
+                type="button"
+                onClick={dryRunWorkflow}
+                className="mt-5 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-bold text-neutral-950 transition-colors hover:bg-yellow-300"
+              >
+                Execute previous nodes
+              </button>
+              <p className="mt-4 text-sm text-white/40">to view input data</p>
+            </div>
+          )}
+
+          <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900/70 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Accepted input</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(node.input.length ? node.input : ["start"]).map((kind) => (
+                <span key={kind} className="rounded-full border border-neutral-700 bg-neutral-950 px-2 py-1 text-[10px] font-bold uppercase text-white/50">
+                  {kind}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderConfigSettings = (node: WorkflowNode) => {
+    const settings = nodeSettings[node.id] ?? defaultNodeSettings;
+    return (
+      <div className="space-y-5">
+        {[
+          ["Always Output Data", "alwaysOutputData"],
+          ["Execute Once", "executeOnce"],
+          ["Retry On Fail", "retryOnFail"],
+        ].map(([label, key]) => (
+          <label key={key} className="block">
+            <span className="mb-2 block text-sm text-white/70">{label}</span>
+            {renderConfigSwitch(Boolean(settings[key as keyof NodeSettings]), (checked) =>
+              updateConfigNodeSetting(node.id, { [key]: checked } as Partial<NodeSettings>),
+            )}
+          </label>
+        ))}
+
+        <label className="block">
+          <span className="mb-2 block text-sm text-white/70">On Error</span>
+          <select
+            value={settings.onError}
+            onChange={(event) => updateConfigNodeSetting(node.id, { onError: event.target.value })}
+            className="h-10 w-full rounded border border-neutral-800 bg-neutral-900 px-3 text-sm text-white outline-none focus:border-yellow-400/60"
+          >
+            <option>Stop Workflow</option>
+            <option>Continue</option>
+            <option>Continue Using Error Output</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm text-white/70">Notes</span>
+          <textarea
+            value={settings.notes}
+            onChange={(event) => updateConfigNodeSetting(node.id, { notes: event.target.value })}
+            className="min-h-28 w-full resize-none rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-yellow-400/60"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm text-white/70">Display Note in Flow?</span>
+          {renderConfigSwitch(settings.displayNote, (checked) => updateConfigNodeSetting(node.id, { displayNote: checked }))}
+        </label>
+      </div>
+    );
+  };
+
   const workflowSurface = (
     <div
       ref={rootRef}
       data-workflow-root
-      className={`${isFullscreen ? "fixed inset-0 z-[80] flex h-screen w-screen overflow-hidden" : "dd-page"} bg-neutral-950 text-white`}
+      className={`${isFullscreen ? "fixed inset-0 z-[80] flex h-screen w-screen overflow-hidden" : "dd-page"} relative bg-neutral-950 text-white`}
     >
       <aside
-        className="relative flex h-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 transition-[width] duration-200"
+        className="relative flex h-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 text-white transition-[width] duration-200"
         style={{ width: isPaletteCollapsed ? collapsedPaletteWidth : paletteWidth }}
       >
         {!isPaletteCollapsed && (
@@ -2194,19 +2660,36 @@ export default function WorkflowBuilder() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950 px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-yellow-300" />
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-yellow-300">Canvas</p>
-              <p className="truncate text-xs text-white/40">Drag nodes, drag output ports into compatible input ports.</p>
-            </div>
+        <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-neutral-800 bg-neutral-950 px-5 text-white">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <span className="text-white/45">Personal</span>
+            <span className="text-white/25">/</span>
+            <input
+              value={metadata.name}
+              onChange={(event) => setMetadata((current) => ({ ...current, name: event.target.value }))}
+              className="min-w-0 max-w-[260px] truncate bg-transparent font-semibold text-white outline-none"
+              aria-label="Workflow name"
+            />
+            <button
+              type="button"
+              onClick={() => setMetadata((current) => ({ ...current, tags: current.tags ? current.tags : "workflow" }))}
+              className="ml-2 hidden text-xs font-semibold text-white/45 transition-colors hover:text-yellow-300 xl:inline"
+            >
+              + Add tag
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="hidden justify-self-center rounded-md border border-neutral-800 bg-neutral-900 p-1 text-xs font-semibold text-white/45 shadow-sm 2xl:flex">
+            <button type="button" className="rounded bg-neutral-800 px-4 py-1.5 text-yellow-300 shadow-sm">Editor</button>
+            <button type="button" className="rounded px-4 py-1.5 transition-colors hover:text-white">Executions</button>
+            <button type="button" className="rounded px-4 py-1.5 transition-colors hover:text-white">Evaluations</button>
+          </div>
+
+          <div className="flex min-w-0 items-center justify-end gap-2">
+            <span className="hidden rounded border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs font-semibold text-white/45 xl:inline">0 / 1</span>
             <select
               onChange={(event) => applyTemplate(event.target.value)}
-              className="h-9 rounded-lg border border-neutral-800 bg-neutral-900 px-3 text-xs font-bold text-white/70 outline-none"
+              className="hidden h-9 max-w-36 rounded-lg border border-neutral-800 bg-neutral-900 px-3 text-xs font-bold text-white/60 outline-none xl:block"
               defaultValue=""
             >
               <option value="" disabled>Templates</option>
@@ -2214,28 +2697,22 @@ export default function WorkflowBuilder() {
                 <option key={item.title} value={item.title}>{item.title}</option>
               ))}
             </select>
-            <button onClick={saveWorkflow} className="dd-icon-btn" aria-label="Save workflow"><Save className="h-4 w-4" /></button>
-            <button onClick={loadWorkflow} className="dd-icon-btn" aria-label="Load workflow"><FolderOpen className="h-4 w-4" /></button>
-            <button onClick={importWorkflow} className="dd-icon-btn" aria-label="Import workflow"><FileInput className="h-4 w-4" /></button>
-            <button onClick={exportWorkflow} className="dd-icon-btn" aria-label="Export workflow"><FileOutput className="h-4 w-4" /></button>
-            <button onClick={() => setZoom((current) => Math.max(0.55, current - 0.1))} className="dd-icon-btn" aria-label="Zoom out"><ZoomOut className="h-4 w-4" /></button>
-            <span className="w-12 text-center text-xs font-bold text-white/45">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom((current) => Math.min(1.35, current + 0.1))} className="dd-icon-btn" aria-label="Zoom in"><ZoomIn className="h-4 w-4" /></button>
-            <button onClick={dryRunWorkflow} className="dd-btn-secondary px-3 py-2 text-xs">Dry Run</button>
-            <button onClick={runWorkflow} className="dd-btn-primary py-2"><Play className="h-4 w-4" />Run</button>
-            <button onClick={toggleFullscreen} className="dd-icon-btn" aria-label={isFullscreen ? "Exit fullscreen" : "Open fullscreen"}>
+            <button onClick={saveWorkflow} className="hidden h-9 w-9 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white lg:grid" aria-label="Save workflow"><Save className="h-4 w-4" /></button>
+            <button onClick={loadWorkflow} className="hidden h-9 w-9 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white lg:grid" aria-label="Load workflow"><FolderOpen className="h-4 w-4" /></button>
+            <button onClick={importWorkflow} className="hidden h-9 w-9 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white 2xl:grid" aria-label="Import workflow"><FileInput className="h-4 w-4" /></button>
+            <button onClick={exportWorkflow} className="hidden h-9 w-9 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white 2xl:grid" aria-label="Export workflow"><FileOutput className="h-4 w-4" /></button>
+            <button onClick={dryRunWorkflow} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-white/60 transition-colors hover:text-white">Dry Run</button>
+            <button onClick={runWorkflow} className="inline-flex items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-bold text-neutral-950 transition-colors hover:bg-yellow-300"><Play className="h-4 w-4" />Run</button>
+            <button onClick={toggleFullscreen} className="grid h-9 w-9 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white" aria-label={isFullscreen ? "Exit fullscreen" : "Open fullscreen"}>
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </div>
         </header>
 
-        <div
-          className="grid min-h-0 flex-1"
-          style={{ gridTemplateColumns: hasInspectorSelection ? `minmax(0, 1fr) ${inspectorWidth}px` : "minmax(0, 1fr)" }}
-        >
+        <div className="min-h-0 flex-1">
           <section
             ref={canvasRef}
-            className="relative overflow-hidden bg-neutral-950"
+            className="relative h-full overflow-hidden bg-[#080808]"
             onWheel={onWheel}
             onPointerDown={onCanvasPointerDown}
             onPointerMove={onCanvasPointerMove}
@@ -2253,14 +2730,29 @@ export default function WorkflowBuilder() {
               className="absolute inset-0"
               style={{
                 backgroundImage:
-                  "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)",
+                  "radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1px)",
                 backgroundPosition: `${pan.x}px ${pan.y}px`,
-                backgroundSize: `${28 * zoom}px ${28 * zoom}px`,
+                backgroundSize: `${18 * zoom}px ${18 * zoom}px`,
               }}
             />
 
-            <div className="absolute left-4 top-4 z-20 rounded-lg border border-neutral-800 bg-neutral-950/85 px-3 py-2 text-xs text-white/50 backdrop-blur">
+            <div className="absolute left-4 top-4 z-20 rounded-lg border border-neutral-800 bg-neutral-950/85 px-3 py-2 text-xs font-medium text-white/50 shadow-sm backdrop-blur">
               {pendingConnection ? "Drop on a highlighted input port" : "Hold empty canvas and drag to pan"}
+            </div>
+
+            <div className="absolute bottom-4 left-4 z-30 flex items-center gap-2">
+              <button onClick={() => zoomToFit()} className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/60 shadow-sm transition-colors hover:border-neutral-700 hover:bg-neutral-900 hover:text-white" aria-label="Zoom to fit" title="Zoom to fit"><Maximize2 className="h-4 w-4" /></button>
+              <button onClick={() => setZoom((current) => Math.max(0.55, current - 0.1))} className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/60 shadow-sm transition-colors hover:border-neutral-700 hover:bg-neutral-900 hover:text-white" aria-label="Zoom out"><ZoomOut className="h-4 w-4" /></button>
+              <button onClick={() => setZoom((current) => Math.min(1.35, current + 0.1))} className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/60 shadow-sm transition-colors hover:border-neutral-700 hover:bg-neutral-900 hover:text-white" aria-label="Zoom in"><ZoomIn className="h-4 w-4" /></button>
+              <button onClick={tidyWorkflow} className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/60 shadow-sm transition-colors hover:border-neutral-700 hover:bg-neutral-900 hover:text-white" aria-label="Tidy workflow" title="Tidy workflow"><GitMerge className="h-4 w-4" /></button>
+              <span className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs font-bold text-white/50 shadow-sm">{Math.round(zoom * 100)}%</span>
+            </div>
+
+            <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2">
+              <button onClick={runWorkflow} className="inline-flex items-center gap-2 rounded-lg bg-yellow-400 px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-yellow-500/20 transition-colors hover:bg-yellow-300">
+                <Play className="h-4 w-4" />
+                Execute workflow
+              </button>
             </div>
 
             <svg className="absolute inset-0 z-10 h-full w-full">
@@ -2276,7 +2768,7 @@ export default function WorkflowBuilder() {
                     key={connection.id}
                     d={edgePath(start, end)}
                     fill="none"
-                    stroke={isSelected ? "rgba(250,204,21,1)" : "rgba(250,204,21,0.62)"}
+                    stroke={isSelected ? "rgba(250,204,21,0.95)" : "rgba(212,212,216,0.45)"}
                     strokeWidth={isSelected ? 4 : 2}
                     className="cursor-pointer"
                     onPointerDown={(event) => {
@@ -2323,8 +2815,12 @@ export default function WorkflowBuilder() {
                     transformOrigin: "top left",
                   }}
                   onPointerDown={(event) => onNodeDragStart(event, node)}
-                  className={`absolute z-20 cursor-grab rounded-xl border bg-neutral-900 shadow-xl shadow-black/25 transition-colors active:cursor-grabbing ${
-                    isSelected ? "border-yellow-400/80" : "border-neutral-800 hover:border-white/20"
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    openNodeConfiguration(node);
+                  }}
+                  className={`absolute z-20 cursor-grab rounded-md border bg-neutral-950 shadow-lg shadow-black/30 transition-colors active:cursor-grabbing ${
+                    isSelected ? "border-yellow-400 shadow-lg shadow-yellow-500/15" : "border-neutral-800 hover:border-neutral-600"
                   }`}
                 >
                   {node.input.length > 0 && (
@@ -2333,7 +2829,7 @@ export default function WorkflowBuilder() {
                       onPointerDown={(event) => event.stopPropagation()}
                       onPointerUp={(event) => finishConnection(event, node)}
                       className={`absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-neutral-950 ${
-                        canReceive ? "bg-green-300 shadow-lg shadow-green-300/30" : "bg-neutral-600"
+                        canReceive ? "bg-green-400 shadow-lg shadow-green-300/30" : "bg-neutral-950 ring-1 ring-neutral-600"
                       }`}
                       aria-label={`Connect into ${node.title}`}
                     />
@@ -2350,7 +2846,7 @@ export default function WorkflowBuilder() {
                       title={`${node.title} ${port.label}`}
                     >
                       {node.title === "If / Else" && (
-                        <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 rounded border border-neutral-800 bg-neutral-950 px-1.5 py-0.5 text-[9px] font-bold uppercase text-yellow-200">
+                        <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 rounded border border-neutral-800 bg-neutral-950 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/60 shadow-sm">
                           {port.label}
                         </span>
                       )}
@@ -2361,25 +2857,25 @@ export default function WorkflowBuilder() {
                     <div className="mb-3 flex items-center gap-3">
                       <span className="grid h-5 w-5 place-items-center">
                         {node.status === "success" ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-300" />
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
                         ) : node.status === "error" ? (
-                          <XCircle className="h-5 w-5 text-red-300" />
+                          <XCircle className="h-5 w-5 text-red-500" />
                         ) : (
                           <span className={`h-2.5 w-2.5 rounded-full ${statusStyles[node.status ?? "idle"]}`} />
                         )}
                       </span>
-                      <span className="grid h-8 w-8 place-items-center rounded-lg bg-neutral-950 text-yellow-300">
+                      <span className="grid h-8 w-8 place-items-center rounded-md border border-neutral-800 bg-neutral-900 text-yellow-400">
                         {templateIcons[node.title] ?? kindIcons[node.kind]}
                       </span>
                       <div className="min-w-0">
-                        <h3 className="truncate font-heading text-sm font-bold text-white">{node.title}</h3>
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-white/32">{node.kind}</p>
+                        <h3 className="truncate text-sm font-semibold text-white">{node.title}</h3>
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-white/35">{node.kind}</p>
                       </div>
                     </div>
-                    <p className="line-clamp-2 text-xs leading-relaxed text-white/45">{node.description}</p>
+                    <p className="line-clamp-2 text-xs leading-relaxed text-white/50">{node.description}</p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {node.input.length > 0 && (
-                        <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white/38">
+                        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[10px] font-bold uppercase text-white/35">
                           in {node.input.join("/")}
                         </span>
                       )}
@@ -2394,99 +2890,10 @@ export default function WorkflowBuilder() {
               );
             })}
           </section>
-
-          {hasInspectorSelection && (
-          <aside className="custom-scrollbar relative min-h-0 overflow-y-auto border-l border-neutral-800 bg-neutral-950">
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setResizeState({ type: "inspector", originX: event.clientX, startWidth: inspectorWidth });
-              }}
-              className="absolute -left-1 top-0 z-30 h-full w-2 cursor-col-resize transition-colors hover:bg-yellow-400/25"
-              aria-label="Resize inspector"
-            />
-            <div className="border-b border-neutral-800 p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">
-                    {selectedEdge ? "Connection" : "Inspector"}
-                  </p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-white">
-                    {selectedEdge ? "Selected Edge" : selectedNode?.title}
-                  </h2>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={deleteSelection} className="dd-icon-btn" aria-label="Delete selection">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedNodeId("");
-                      setSelectedNodeIds([]);
-                      setSelectedEdgeId("");
-                    }}
-                    className="dd-icon-btn"
-                    aria-label="Close inspector"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {selectedEdge ? (
-                <div className="space-y-3">
-                  <p className="text-sm leading-relaxed text-white/52">
-                    This connection passes data from one node to another. Delete it if the workflow route should change.
-                  </p>
-                  <div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3 text-xs text-white/52">
-                    <p>
-                      <span className="text-white/35">From:</span>{" "}
-                      {nodes.find((node) => node.id === selectedEdge.from)?.title ?? selectedEdge.from}
-                    </p>
-                    <p className="mt-1">
-                      <span className="text-white/35">Output:</span> {(selectedEdge.fromPort ?? "main").toUpperCase()}
-                    </p>
-                    <p className="mt-1">
-                      <span className="text-white/35">To:</span>{" "}
-                      {nodes.find((node) => node.id === selectedEdge.to)?.title ?? selectedEdge.to}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm leading-relaxed text-white/52">{selectedNode?.description}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {selectedNode?.input.map((kind) => (
-                      <span key={kind} className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${kindStyles[kind]}`}>
-                        in {kind}
-                      </span>
-                    ))}
-                    {selectedNode && (
-                      getOutputPorts(selectedNode).map((port) => (
-                        <span key={port.id} className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${kindStyles[port.kind]}`}>
-                          {port.label} {port.kind}
-                        </span>
-                      ))
-                    )}
-                  </div>
-
-                  {selectedNode && (
-                  <div className="mt-5">
-                    {renderNodeConfiguration(selectedNode)}
-                  </div>
-                  )}
-                </>
-              )}
-            </div>
-
-          </aside>
-          )}
         </div>
 
         <section
-          className="relative flex shrink-0 flex-col border-t border-neutral-800 bg-neutral-950"
+          className="relative flex shrink-0 flex-col border-t border-neutral-800 bg-neutral-950 text-white"
           style={{ height: terminalHeight }}
         >
           <button
@@ -2500,10 +2907,9 @@ export default function WorkflowBuilder() {
             aria-label="Resize terminal"
           />
           <div className="flex h-10 items-center justify-between gap-3 border-b border-neutral-800 px-4">
-            <div className="flex items-center gap-2">
-              <Terminal className="h-4 w-4 text-yellow-300" />
-              <h3 className="font-heading text-sm font-bold text-white">Terminal</h3>
-              <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase text-white/40">
+            <div className="flex h-full items-center gap-5 text-sm font-semibold">
+              <h3 className="h-full border-b-2 border-yellow-400 px-1 pt-2.5 text-white">Logs</h3>
+              <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[10px] font-bold uppercase text-white/40">
                 {filteredRunLogs.length}/{runLogs.length} outputs
               </span>
             </div>
@@ -2523,48 +2929,124 @@ export default function WorkflowBuilder() {
                 <option value="success">Success</option>
                 <option value="error">Error</option>
               </select>
-              <button onClick={exportRunLog} className="dd-icon-btn" aria-label="Export terminal log">
+              <button onClick={exportRunLog} className="grid h-8 w-8 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white" aria-label="Export terminal log">
                 <Download className="h-4 w-4" />
               </button>
-              <button onClick={() => setRunLogs([])} className="dd-icon-btn" aria-label="Clear terminal">
+              <button onClick={() => setRunLogs([])} className="grid h-8 w-8 place-items-center rounded-lg text-white/45 transition-colors hover:bg-neutral-800 hover:text-white" aria-label="Clear terminal">
                 <X className="h-4 w-4" />
               </button>
             </div>
           </div>
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3 font-mono text-xs leading-6">
-            {runLogs.length === 0 ? (
-              <div className="text-white/38">
-                <span className="text-yellow-300">dawndesk.workflow</span> Run the workflow to preview execution output.
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {filteredRunLogs.map((log, index) => (
-                  <div
-                    key={`${log.nodeId}-${log.message}-${index}`}
-                    className={`grid grid-cols-[88px_160px_1fr] gap-3 rounded px-2 ${
-                      log.status === "error" ? "bg-red-400/10 text-red-200" : "bg-green-400/10 text-green-200"
-                    }`}
-                  >
-                    <span className="text-white/32">[{String(index + 1).padStart(2, "0")}]</span>
-                    <span className="truncate">{log.title}</span>
-                    <span className="min-w-0 truncate">
-                      <span
-                        className={`mr-2 rounded border px-1.5 py-0.5 text-[10px] uppercase ${
-                          log.status === "error" ? "border-red-400/30 text-red-100" : "border-green-400/30 text-green-100"
-                        }`}
-                      >
-                        {log.status}
+              {runLogs.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-center font-sans text-sm text-white/40">
+                  Nothing to display yet. Execute the workflow to see execution logs.
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredRunLogs.map((log, index) => (
+                    <div
+                      key={`${log.nodeId}-${log.message}-${index}`}
+                      className={`grid grid-cols-[88px_160px_1fr] gap-3 rounded px-2 py-1 ${
+                        log.status === "error" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
+                      }`}
+                    >
+                      <span className="text-neutral-400">[{String(index + 1).padStart(2, "0")}]</span>
+                      <span className="truncate">{log.title}</span>
+                      <span className="min-w-0 truncate">
+                        <span
+                          className={`mr-2 rounded border px-1.5 py-0.5 text-[10px] uppercase ${
+                            log.status === "error" ? "border-red-200 text-red-700" : "border-green-200 text-green-700"
+                          }`}
+                        >
+                          {log.status}
+                        </span>
+                        <span className="mr-2 rounded border border-neutral-800 px-1.5 py-0.5 text-[10px] uppercase text-white/35">{log.output}</span>
+                        {log.message}
                       </span>
-                      <span className="mr-2 rounded border border-neutral-800 px-1.5 py-0.5 text-[10px] uppercase text-white/35">{log.output}</span>
-                      {log.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+                    </div>
+                  ))}
+                </div>
+              )}
           </div>
         </section>
       </main>
+
+      {configNode && (
+        <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 text-neutral-900 backdrop-blur-sm">
+          <div className="flex h-[min(720px,100%)] w-[min(1080px,100%)] min-w-0 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 shadow-2xl shadow-black/50">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <header className="flex h-11 shrink-0 items-center justify-between border-b border-neutral-800 bg-neutral-950 px-3 text-white">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="grid h-7 w-7 place-items-center rounded-md border border-neutral-800 bg-neutral-900 text-yellow-300">
+                    {templateIcons[configNode.title] ?? kindIcons[configNode.kind]}
+                  </span>
+                  <h2 className="truncate text-sm font-semibold text-white">{configNode.title}</h2>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-white/55">
+                  <button type="button" className="font-medium hover:text-white">Docs</button>
+                  <button
+                    type="button"
+                    onClick={() => setConfigNodeId("")}
+                    className="grid h-7 w-7 place-items-center rounded hover:bg-neutral-800 hover:text-white"
+                    aria-label="Close node configuration"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </header>
+
+              <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+                {renderConfigInputPanel(configNode)}
+
+                <section className="flex min-h-0 flex-col border-l border-neutral-800 bg-neutral-950 text-white">
+                  <div className="flex h-11 shrink-0 items-center justify-between border-b border-neutral-800 px-4">
+                    <div className="flex h-full items-end gap-4">
+                      {(["parameters", "settings"] as const).map((tab) => (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setConfigTab(tab)}
+                          className={`h-full border-b-2 px-1 text-sm font-semibold capitalize ${
+                            configTab === tab
+                              ? "border-yellow-400 text-yellow-300"
+                              : "border-transparent text-white/45 hover:text-white"
+                          }`}
+                        >
+                          {tab}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={runWorkflow}
+                      className="rounded bg-yellow-400 px-4 py-2 text-sm font-bold text-neutral-950 transition-colors hover:bg-yellow-300"
+                    >
+                      Execute step
+                    </button>
+                  </div>
+
+                  <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-neutral-950 px-5 py-5">
+                    {configTab === "parameters" ? (
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-3 py-3 text-xs leading-relaxed text-yellow-100">
+                          Tip: configure this node, connect upstream data, then execute the step to preview output.
+                        </div>
+                        <div className="text-white [&_.bg-green-400\\/10]:bg-green-400/10 [&_.bg-neutral-50]:bg-neutral-900 [&_.bg-red-400\\/10]:bg-red-400/10 [&_.bg-yellow-400\\/10]:bg-yellow-400/10 [&_.border-neutral-200]:border-neutral-800 [&_.dd-form-label]:text-white/65 [&_.dd-input]:border-neutral-800 [&_.dd-input]:bg-neutral-900 [&_.dd-input]:text-white [&_.dd-input]:placeholder:text-white/25 [&_.dd-select]:border-neutral-800 [&_.dd-select]:bg-neutral-900 [&_.dd-select]:text-white [&_.text-green-700]:text-green-300 [&_.text-neutral-500]:text-white/45 [&_.text-neutral-600]:text-white/60 [&_.text-red-700]:text-red-300 [&_.text-yellow-700]:text-yellow-300">
+                          {renderNodeConfiguration(configNode)}
+                        </div>
+                      </div>
+                    ) : (
+                      renderConfigSettings(configNode)
+                    )}
+                  </div>
+                </section>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
