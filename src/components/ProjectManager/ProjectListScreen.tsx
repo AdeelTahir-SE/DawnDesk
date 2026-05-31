@@ -33,14 +33,14 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     try {
       if (!isSupabaseConfigured) {
         setProjects([]);
-        setSyncError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+        setSyncError("Cloud sync is not configured. Add the required environment settings.");
         return;
       }
       setProjects(await listSupabaseProjects());
     } catch (e) {
       const message = formatSupabaseError(e);
       setSyncError(message);
-      logError("Supabase project load failed", message, { source: "project-manager" });
+      logError("Project workspace load failed", message, { source: "project-manager" });
     } finally {
       setLoading(false);
     }
@@ -57,7 +57,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     setSyncError("");
     try {
       if (!isSupabaseConfigured) {
-        throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+        throw new Error("Cloud sync is not configured. Add the required environment settings.");
       }
 
       const project = await createSupabaseProject({
@@ -104,7 +104,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Workspaces</h1>
-            <p className="text-neutral-400 mt-1 max-w-xl">Organize shared projects backed by your Supabase workspace.</p>
+            <p className="text-neutral-400 mt-1 max-w-xl">Organize shared projects in your DawnDesk workspace.</p>
           </div>
         </div>
         
@@ -131,7 +131,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
 
       {syncError && (
         <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Supabase sync needs attention: {syncError}
+          Cloud sync needs attention: {syncError}
         </div>
       )}
 

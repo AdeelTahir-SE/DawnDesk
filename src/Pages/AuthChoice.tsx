@@ -1,18 +1,55 @@
 import { ArrowLeft, ArrowRight, Cloud, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
 export default function AuthChoice() {
   const navigate = useNavigate();
   const [authError, setAuthError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(isSupabaseConfigured);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const redirectIfSignedIn = async () => {
+      if (!supabase || !isSupabaseConfigured) {
+        setIsCheckingSession(false);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
+      if (data.session) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+
+      setIsCheckingSession(false);
+    };
+
+    void redirectIfSignedIn();
+
+    const { data: listener } = supabase?.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        setIsCheckingSession(false);
+      }
+    }) ?? { data: { subscription: null } };
+
+    return () => {
+      isMounted = false;
+      listener.subscription?.unsubscribe();
+    };
+  }, [navigate]);
 
   const handleGoogleSignIn = async () => {
     setAuthError("");
 
     if (!supabase || !isSupabaseConfigured) {
-      setAuthError("Supabase is not configured yet. Add your project URL and anon key to continue.");
+      setAuthError("Cloud sign-in is not configured yet. Add the required environment settings to continue.");
       return;
     }
 
@@ -37,6 +74,14 @@ export default function AuthChoice() {
     );
     navigate("/dashboard");
   };
+
+  if (isCheckingSession) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-neutral-950 text-white">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" />
+      </main>
+    );
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-neutral-950 text-white">
@@ -67,7 +112,7 @@ export default function AuthChoice() {
               Choose how you want to start your workspace.
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-white/62 sm:text-lg">
-              Sign in to prepare cloud sync with Supabase, or keep moving locally as a guest.
+              Sign in to prepare cloud sync, or keep moving locally as a guest.
             </p>
           </div>
 
@@ -111,7 +156,7 @@ export default function AuthChoice() {
                   </span>
                   <span>
                     <span className="block text-sm">{isSigningIn ? "Opening Google..." : "Sign in with Google"}</span>
-                    <span className="block text-xs font-semibold text-neutral-500">Uses Supabase authentication</span>
+                    <span className="block text-xs font-semibold text-neutral-500">Uses secure cloud authentication</span>
                   </span>
                 </span>
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />

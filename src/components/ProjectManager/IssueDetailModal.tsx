@@ -85,7 +85,7 @@ export default function IssueDetailModal({
         <div className="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
           <div>
             <h2 className="text-lg font-bold text-white">{issue ? issue.key : "Create Issue"}</h2>
-            <p className="text-xs text-neutral-400">Saved directly to Supabase</p>
+            <p className="text-xs text-neutral-400">Saved to your shared workspace</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
             <X className="h-5 w-5" />

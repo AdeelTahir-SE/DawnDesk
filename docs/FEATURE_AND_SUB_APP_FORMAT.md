@@ -230,6 +230,7 @@ docs/TESTING.md updated if test strategy changed:
 docs/FEATURES.md updated:
 docs/ARCHITECTURE.md updated if needed:
 docs/DEVELOPMENT.md updated if setup changed:
+Version bump considered using docs/VERSIONING.md:
 Build/checks run:
 Old docs/assets removed:
 ```

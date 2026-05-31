@@ -201,7 +201,7 @@ export default function Strategies({ projectId }: { projectId: string | null }) 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white">Strategy Board</h2>
-          <p className="mt-1 text-sm text-white/50">Attach strategy pages to the board, open one, and keep planning in Supabase.</p>
+          <p className="mt-1 text-sm text-white/50">Attach strategy pages to the board, open one, and keep planning in your shared workspace.</p>
         </div>
         <button
           onClick={openNewStrategyModal}
@@ -409,7 +409,7 @@ function StrategyPageModal({
                 </div>
                 <footer className="mt-10 flex items-center justify-between border-t border-black/10 pt-4 text-[11px] font-black uppercase tracking-[0.16em] text-neutral-500">
                   <span>Strategy page</span>
-                  <span>Supabase</span>
+                  <span>DawnDesk</span>
                 </footer>
               </article>
             </div>

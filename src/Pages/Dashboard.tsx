@@ -175,14 +175,14 @@ export default function Dashboard() {
     {
       label: "Project Workspaces",
       value: workspaceCounts.projects === null ? "Sign in" : String(workspaceCounts.projects),
-      detail: "Supabase project spaces",
+      detail: "Synced project spaces",
       icon: FolderKanban,
       to: "/project-manager",
     },
     {
       label: "Finance Projects",
       value: workspaceCounts.finance === null ? "Sign in" : String(workspaceCounts.finance),
-      detail: "Supabase finance workspaces",
+      detail: "Synced finance workspaces",
       icon: LineChart,
       to: "/finance",
     },
@@ -313,7 +313,7 @@ export default function Dashboard() {
             <p className="mt-1 dd-subtext">Current app state that helps explain what is connected.</p>
 
             <div className="mt-5 space-y-3">
-              <StatusRow icon={<Cloud />} label="Supabase" value={isSupabaseConfigured ? "Configured" : "Missing env"} ok={isSupabaseConfigured} />
+              <StatusRow icon={<Cloud />} label="Cloud Sync" value={isSupabaseConfigured ? "Ready" : "Setup needed"} ok={isSupabaseConfigured} />
               <StatusRow icon={<Monitor />} label="Theme" value={theme === "light" ? "Light" : "Dark"} ok />
               <StatusRow icon={<ShieldCheck />} label="Notifications" value={notificationsEnabled ? "Enabled" : "Disabled"} ok={notificationsEnabled} />
               <StatusRow icon={<FileText />} label="Activity Log" value={`${activities.length} visible`} ok />

@@ -135,7 +135,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     return undefined as T;
   }
 
-  throw new Error(`Unsupported Supabase finance command: ${command}`);
+  throw new Error(`Unsupported finance command: ${command}`);
 }
 
 function normalizeInputForSupabase(command: string, input: Record<string, any>) {

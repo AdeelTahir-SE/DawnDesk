@@ -86,6 +86,7 @@ The documentation is kept in a small set of living files. When a feature changes
 - [Features](docs/FEATURES.md)
 - [Development guide](docs/DEVELOPMENT.md)
 - [Testing guide](docs/TESTING.md)
+- [Versioning guide](docs/VERSIONING.md)
 - [Asset inventory](docs/ASSETS.md)
 - [Documentation maintenance](docs/DOCUMENTATION_GUIDE.md)
 - [Feature and sub-app format](docs/FEATURE_AND_SUB_APP_FORMAT.md)
@@ -117,6 +118,7 @@ docs/                 Living project documentation
 - Add structure, data flow, or native-command changes to `docs/ARCHITECTURE.md`.
 - Add setup, commands, troubleshooting, or environment changes to `docs/DEVELOPMENT.md`.
 - Add or update test expectations in `docs/TESTING.md`.
+- Update `docs/VERSIONING.md` and all app version fields when shipping a new version.
 - Add new images, videos, icons, and cleanup notes to `docs/ASSETS.md`.
 - Follow `docs/FEATURE_AND_SUB_APP_FORMAT.md` when adding a new feature or sub-app.
 

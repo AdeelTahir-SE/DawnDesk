@@ -191,7 +191,7 @@ export default function Settings() {
 
   const handleLogout = async () => {
     if (!supabase || !isSupabaseConfigured) {
-      setAuthError("Supabase is not configured.");
+      setAuthError("Cloud account sign-out is not available right now.");
       return;
     }
 
@@ -203,7 +203,7 @@ export default function Settings() {
       logError("Settings", `Logout failed: ${error.message}`, { source: "settings" });
     } else {
       setAuthEmail(null);
-      logSuccess("Settings", "Signed out of Supabase", { source: "settings" });
+      logSuccess("Settings", "Signed out of cloud account", { source: "settings" });
     }
     setAuthLoading(false);
   };
@@ -362,9 +362,9 @@ function AuthSessionCard({
             <User />
           </span>
           <div>
-            <h3 className="dd-card-title">Supabase Account</h3>
+            <h3 className="dd-card-title">Cloud Account</h3>
             <p className="mt-1 dd-subtext">
-              {email ? `Signed in as ${email}` : "No Supabase account is currently signed in."}
+              {email ? `Signed in as ${email}` : "No cloud account is currently signed in."}
             </p>
           </div>
         </div>

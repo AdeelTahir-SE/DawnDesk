@@ -10,8 +10,9 @@ When you add or change a feature, update the existing docs in this order:
 2. `docs/ARCHITECTURE.md` for route, module, command, storage, or data-flow changes.
 3. `docs/DEVELOPMENT.md` for setup, build, scripts, environment, testing, or troubleshooting changes.
 4. `docs/TESTING.md` for test strategy, required coverage, mocks, fixtures, or command changes.
-5. `docs/ASSETS.md` for new, renamed, or removed images, video, icons, and other static assets.
-6. `docs/FEATURE_AND_SUB_APP_FORMAT.md` for the required feature or sub-app checklist.
+5. `docs/VERSIONING.md` for release version rules, current version, or version bump process changes.
+6. `docs/ASSETS.md` for new, renamed, or removed images, video, icons, and other static assets.
+7. `docs/FEATURE_AND_SUB_APP_FORMAT.md` for the required feature or sub-app checklist.
 
 ## When to Create a New Doc
 
@@ -42,6 +43,7 @@ User-facing docs updated in docs/FEATURES.md:
 Architecture docs updated if needed:
 Development docs updated if needed:
 Testing docs updated if needed:
+Versioning updated if shipping a new app version:
 Asset inventory updated if needed:
 Feature/sub-app format checklist completed:
 Stale docs or assets removed:

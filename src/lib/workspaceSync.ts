@@ -113,7 +113,7 @@ export type PromptHubPromptPage = {
 
 function requireSupabase() {
   if (!supabase || !isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
+    throw new Error("Cloud sync is not configured.");
   }
   return supabase;
 }
@@ -147,7 +147,7 @@ export async function getCurrentUser(): Promise<User> {
   const client = requireSupabase();
   const { data, error } = await client.auth.getUser();
   if (error) throw error;
-  if (!data.user) throw new Error("No Supabase user is signed in.");
+  if (!data.user) throw new Error("No cloud account is signed in.");
   return data.user;
 }
 

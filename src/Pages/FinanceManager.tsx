@@ -247,7 +247,7 @@ export default function FinanceManager() {
     <WelcomeScreen
       appKey="finance"
       title="Advanced Finance Manager"
-      description="Powerful ERP capabilities connected to your Supabase finance workspace."
+      description="Powerful ERP capabilities connected to your shared finance workspace."
     >
       <ConnectionErrorModal
         open={connectionErrorOpen}
@@ -329,7 +329,7 @@ export default function FinanceManager() {
             <div className="dd-sidebar-notice">
               <div className="flex items-center gap-2 text-xs font-bold text-white">
                 {loadingWorkspace ? <Loader2 className="h-4 w-4 animate-spin text-yellow-400" /> : <Cloud className="h-4 w-4 text-yellow-400" />}
-                Supabase finance workspace
+                Cloud finance workspace
               </div>
               <p className="dd-subtext mt-1 leading-relaxed">
                 {financeWorkspace ? `${financeWorkspace.name} - ${financeMembers.length} member${financeMembers.length === 1 ? "" : "s"} connected.` : "Sign-in creates a shared finance workspace."}
@@ -393,7 +393,7 @@ function FinanceWorkspaceHub({
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Finance Projects</h1>
-            <p className="mt-1 max-w-xl text-neutral-400">Choose a Supabase-backed finance workspace or create a new one.</p>
+            <p className="mt-1 max-w-xl text-neutral-400">Choose a shared finance workspace or create a new one.</p>
           </div>
         </div>
         <button onClick={onCreateClick} className="dd-btn-primary">
@@ -417,7 +417,7 @@ function FinanceWorkspaceHub({
           <div className="flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-800 bg-neutral-900/20 text-center">
             <Database className="mb-4 h-12 w-12 text-neutral-600" />
             <h3 className="mb-1 text-lg font-medium text-white">No finance projects found</h3>
-            <p className="max-w-md text-neutral-400">Create your first finance project to start saving finance data in Supabase.</p>
+            <p className="max-w-md text-neutral-400">Create your first finance project to start saving finance data securely.</p>
             <button onClick={onCreateClick} className="dd-btn-primary mt-6">
               <Plus className="h-4 w-4" />
               Create Finance Project
@@ -440,7 +440,7 @@ function FinanceWorkspaceHub({
                 </div>
                 <div className="flex-1">
                   <h3 className="mb-2 line-clamp-1 text-lg font-semibold text-white transition-colors group-hover:text-yellow-400">{workspace.name}</h3>
-                  <p className="line-clamp-2 text-sm leading-relaxed text-neutral-400">Supabase finance project</p>
+                  <p className="line-clamp-2 text-sm leading-relaxed text-neutral-400">Shared finance project</p>
                 </div>
                 <div className="mt-6 border-t border-neutral-800/60 pt-4 text-xs font-medium text-neutral-500">
                   {new Date(workspace.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
@@ -496,7 +496,7 @@ function FinanceMembersSettings({
           <div>
             <p className="dd-label-muted">Finance Project Settings</p>
             <h3 className="mt-1 text-xl font-bold text-white">{workspace.name}</h3>
-            <p className="mt-2 text-sm text-neutral-400">Invite teammates and manage finance workspace access in Supabase.</p>
+            <p className="mt-2 text-sm text-neutral-400">Invite teammates and manage finance workspace access.</p>
           </div>
           <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs font-semibold text-neutral-400">
             {workspace.id}
@@ -594,7 +594,7 @@ function FinanceWorkspaceCreateModal({
         <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/50 px-6 py-5">
           <div>
             <h2 className="text-lg font-semibold text-white">Create Finance Project</h2>
-            <p className="mt-0.5 text-sm text-neutral-400">Create a shared Supabase finance workspace.</p>
+            <p className="mt-0.5 text-sm text-neutral-400">Create a shared finance workspace.</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white">
             <X className="h-5 w-5" />

@@ -53,7 +53,7 @@ export default function RequireGoogleAuth({ moduleName, children }: RequireGoogl
     setAuthError("");
 
     if (!supabase || !isSupabaseConfigured) {
-      setAuthError("Supabase is not configured yet. Add your project URL and anon key first.");
+      setAuthError("Cloud sign-in is not configured yet. Add the required environment settings first.");
       return;
     }
 
@@ -104,8 +104,7 @@ export default function RequireGoogleAuth({ moduleName, children }: RequireGoogl
           Unlock {moduleName}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-white/58">
-          {moduleName} is connected to your protected DawnDesk workspace. Sign in with Google through
-          Supabase to continue.
+          {moduleName} is connected to your protected DawnDesk workspace. Sign in with Google to continue.
         </p>
 
         <button

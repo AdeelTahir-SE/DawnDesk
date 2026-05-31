@@ -143,9 +143,9 @@ export default function ProjectSectionComments({
               <div className="grid flex-1 place-items-center p-6 text-center">
                 <div className="max-w-md rounded-xl border border-dashed border-neutral-800 bg-neutral-900/40 p-6">
                   <MessageCircle className="mx-auto h-8 w-8 text-yellow-300" />
-                  <h3 className="mt-3 text-lg font-bold text-white">Supabase project required</h3>
+                  <h3 className="mt-3 text-lg font-bold text-white">Shared project required</h3>
                   <p className="mt-2 text-sm leading-relaxed text-white/50">
-                    Link this workspace to Supabase from Project Settings before shared comments can be saved.
+                    Connect this workspace from Project Settings before shared comments can be saved.
                   </p>
                 </div>
               </div>

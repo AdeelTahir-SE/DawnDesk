@@ -109,7 +109,7 @@ function IntegrationsList({ apps, onToggle }: { apps: IntegrationApp[]; onToggle
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {apps.length === 0 && (
         <div className="md:col-span-2 rounded-xl border border-dashed border-neutral-800 bg-neutral-950/50 p-8 text-center text-sm text-white/40">
-          No integrations configured. Add one to track Supabase connection status.
+          No integrations configured. Add one to track connection status.
         </div>
       )}
       {apps.map((app, i) => (
@@ -140,7 +140,7 @@ function WorkflowsList() {
     <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
       <Zap className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">Automated Workflows</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Workflow execution is not wired to a backend runner yet. Connected app status is stored with this Supabase finance project.</p>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Workflow execution is not wired to a background runner yet. Connected app status is stored with this finance project.</p>
     </div>
   );
 }

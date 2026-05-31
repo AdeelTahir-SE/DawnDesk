@@ -50,7 +50,7 @@ export default function ProjectManager() {
   }, []);
 
   return (
-    <WelcomeScreen appKey="project-manager" title="Project Manager" description="Manage your projects and tasks in Supabase.">
+    <WelcomeScreen appKey="project-manager" title="Project Manager" description="Manage shared projects, tasks, and teammates.">
       <ConnectionErrorModal
         open={connectionErrorOpen}
         message={getConnectionErrorMessage()}
@@ -227,7 +227,7 @@ function ProjectMembersSettings({ project }: { project: SupabaseProject }) {
           <div>
             <p className="dd-label-muted">Project Settings</p>
             <h3 className="mt-1 text-xl font-bold text-white">{project.name}</h3>
-            <p className="mt-2 text-sm text-neutral-400">Invite teammates and manage project access in Supabase.</p>
+            <p className="mt-2 text-sm text-neutral-400">Invite teammates and manage project access.</p>
           </div>
           <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs font-semibold text-neutral-400">
             {project.id}

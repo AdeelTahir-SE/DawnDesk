@@ -126,10 +126,10 @@ const getPromptHubErrorMessage = (error: unknown) => {
     lower.includes("network request failed") ||
     lower.includes("internet connection")
   ) {
-    return "Internet connection error. Prompt Hub could not reach Supabase. Please check your connection and try again.";
+    return "Internet connection error. Prompt Hub could not reach the cloud workspace. Please check your connection and try again.";
   }
   if (lower.includes("supabase is not configured")) {
-    return "Supabase is not configured. Add your Supabase credentials before opening Prompt Hub.";
+    return "Cloud sync is not configured. Add the required environment settings before opening Prompt Hub.";
   }
   return raw.split("\n")[0] || "Prompt Hub request failed. Please try again.";
 };
@@ -223,7 +223,7 @@ export default function PromptManager() {
 
   const loadHubPrompts = useCallback(async ({ reset = false, useCache = false } = {}) => {
     if (!isSupabaseConfigured) {
-      setHubError("Connect Supabase to browse the public Prompt Hub.");
+      setHubError("Connect cloud sync to browse the public Prompt Hub.");
       setHubConnectionBlocked(true);
       setHubConnectionModalOpen(true);
       return;
@@ -382,7 +382,7 @@ export default function PromptManager() {
 
   const handlePublishPrompt = async (prompt: Prompt) => {
     if (!isSupabaseConfigured) {
-      logWarning("Prompt hub unavailable", "Connect Supabase before publishing prompts.", { source: "prompts" });
+      logWarning("Prompt hub unavailable", "Connect cloud sync before publishing prompts.", { source: "prompts" });
       setHubConnectionBlocked(true);
       setHubConnectionModalOpen(true);
       return;
@@ -536,7 +536,7 @@ export default function PromptManager() {
 
   if (activeView === "hub") {
     return (
-      <WelcomeScreen appKey="prompts" title="Prompt Manager" description="Browse and publish Supabase prompts.">
+      <WelcomeScreen appKey="prompts" title="Prompt Manager" description="Browse, save, and publish prompt templates.">
         <div className="prompt-hub-shell flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f5f3ee] text-neutral-950">
           <aside className="prompt-hub-sidebar custom-scrollbar flex w-60 shrink-0 flex-col overflow-y-auto border-r border-neutral-800 bg-neutral-900/60 px-3 py-4 shadow-none">
             <div className="prompt-hub-sidebar-header mb-6 flex items-center gap-3 px-1.5">
@@ -638,7 +638,7 @@ export default function PromptManager() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-neutral-950">Publish prompts</p>
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">Share from your local library to Supabase.</p>
+                  <p className="mt-1 text-xs leading-5 text-neutral-500">Share from your local library to Prompt Hub.</p>
                 </div>
                 <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 bg-white">
                   <Gift className="h-4 w-4 text-neutral-700" />
@@ -708,7 +708,7 @@ export default function PromptManager() {
             <div className="px-5 py-5">
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-neutral-400">Supabase Prompt Hub</p>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-neutral-400">DawnDesk Prompt Hub</p>
                   <h2 className="mt-1 text-3xl font-black tracking-tight text-neutral-950">
                     {hubMode === "dashboard" ? "Your Prompt Hub dashboard" : "Explore community prompts"}
                   </h2>

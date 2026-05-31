@@ -141,9 +141,9 @@ export default function FinanceSectionComments({
               <div className="grid flex-1 place-items-center p-6 text-center">
                 <div className="max-w-md rounded-xl border border-dashed border-neutral-800 bg-neutral-900/40 p-6">
                   <MessageCircle className="mx-auto h-8 w-8 text-yellow-300" />
-                  <h3 className="mt-3 text-lg font-bold text-white">Supabase finance workspace required</h3>
+                  <h3 className="mt-3 text-lg font-bold text-white">Finance workspace required</h3>
                   <p className="mt-2 text-sm leading-relaxed text-white/50">
-                    Sign in and let DawnDesk create your Supabase finance workspace before shared comments can be saved.
+                    Sign in and choose a finance workspace before shared comments can be saved.
                   </p>
                 </div>
               </div>

@@ -49,7 +49,7 @@ export default function SettingsView() {
   const handleSave = async () => {
     try {
       await invoke("save_finance_preference", { key: "settings", value: settings });
-      logSuccess("Finance settings saved", "Finance Manager preferences were updated in Supabase.", { source: "finance" });
+      logSuccess("Finance settings saved", "Finance Manager preferences were updated.", { source: "finance" });
     } catch (error) {
       logError("Finance settings save failed", String(error), { source: "finance" });
     }

@@ -212,7 +212,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
 
   const handleLinkSupabase = async () => {
     if (!isSupabaseConfigured) {
-      setSyncError("Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setSyncError("Cloud sync is not configured yet. Add the required environment settings.");
       return;
     }
 
@@ -401,7 +401,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
 
       {syncError && (
         <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Supabase sync needs attention: {syncError}
+          Cloud sync needs attention: {syncError}
         </div>
       )}
 
@@ -563,7 +563,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Supabase Project Members
+                  <Users className="w-4 h-4" /> Project Members
                 </h3>
                 <p className="text-xs text-white/40 mt-1">
                   Projects can include multiple users with Owner, Editor, or Viewer access.
@@ -576,7 +576,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
                   className="dd-btn-primary"
                 >
                   {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-                  Link to Supabase
+                  Connect Workspace
                 </button>
               )}
             </div>
@@ -641,7 +641,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
               </>
             ) : (
               <div className="mt-6 rounded-xl border border-dashed border-neutral-800 bg-neutral-950/40 p-6 text-sm leading-relaxed text-white/50">
-                Link this project to Supabase to invite teammates and make it available across signed-in DawnDesk installs.
+                Connect this project to invite teammates and make it available across signed-in DawnDesk installs.
               </div>
             )}
           </div>
