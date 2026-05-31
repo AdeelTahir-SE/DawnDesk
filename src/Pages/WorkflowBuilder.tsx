@@ -31,7 +31,6 @@ import {
   Split,
   Table2,
   Terminal,
-  Trash2,
   Variable,
   Video,
   Webhook,
@@ -1223,13 +1222,6 @@ function parseRouteConfig(value?: string): RouteConfig {
 
 function serializeRouteConfig(config: RouteConfig) {
   return JSON.stringify(config);
-}
-
-function formatWorkflowValue(value: WorkflowValue | undefined) {
-  if (value === undefined) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return JSON.stringify(value, null, 2);
 }
 
 function distributePortOffsets(count: number) {
