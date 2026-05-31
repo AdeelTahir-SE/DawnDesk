@@ -197,6 +197,20 @@ Migration filename format:
 YYYYMMDDHHMMSS_feature_name_change.sql
 ```
 
+## Required Testing Pattern
+
+Every new feature or sub-app needs at least one test at the right layer. Follow `docs/TESTING.md`.
+
+Minimum expectations:
+
+- Shared utility or engine logic gets a unit test.
+- React UI gets a render or interaction test.
+- Route-level features get a smoke test.
+- Tauri commands get Rust tests when behavior is native.
+- Critical user journeys get an end-to-end test.
+
+Add test notes to `docs/TESTING.md` only when the feature introduces a new testing pattern, mock, fixture, or command.
+
 ## Required Completion Checklist
 
 Copy this checklist into the PR, commit notes, or task notes:
@@ -211,6 +225,8 @@ Engine folder added only if needed:
 Tauri commands registered if needed:
 Supabase migration added if needed:
 Assets added to docs/ASSETS.md:
+Tests added or updated:
+docs/TESTING.md updated if test strategy changed:
 docs/FEATURES.md updated:
 docs/ARCHITECTURE.md updated if needed:
 docs/DEVELOPMENT.md updated if setup changed:
