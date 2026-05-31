@@ -1,16 +1,46 @@
 export interface LocalProject {
-  id: number;
+  id: string;
   name: string;
   key: string;
   description: string | null;
   color_tag: string;
   created_at: string;
   project_type: string | null;
+  supabase_project_id?: string | null;
+}
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string | null;
+  invited_email: string | null;
+  role: "Owner" | "Editor" | "Viewer";
+  status: "active" | "pending";
+  created_at: string;
+  display_name?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface ProjectSectionComment {
+  id: string;
+  project_id: string;
+  sub_app: "project" | "finance";
+  comment_section: string;
+  parent_id: string | null;
+  actual_comment: string;
+  author_id: string;
+  mentioned_user_ids: string[];
+  created_at: string;
+  updated_at: string;
+  author_display_name?: string | null;
+  author_email?: string | null;
+  author_avatar_url?: string | null;
 }
 
 export interface LocalSprint {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   status: string; // 'planned', 'active', 'closed'
   start_date: string | null;
@@ -18,10 +48,10 @@ export interface LocalSprint {
 }
 
 export interface LocalIssue {
-  id: number;
-  project_id: number;
-  sprint_id: number | null;
-  parent_id: number | null;
+  id: string;
+  project_id: string;
+  sprint_id: string | null;
+  parent_id: string | null;
   issue_type: string; // 'Epic', 'Story', 'Task', 'Bug', 'Subtask'
   key: string; // e.g. PROJ-1
   title: string;
@@ -40,23 +70,23 @@ export interface LocalIssue {
 }
 
 export interface LocalComment {
-  id: number;
-  issue_id: number;
+  id: string;
+  issue_id: string;
   content: string;
   created_at: string;
 }
 
 export interface LocalVersion {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   release_date: string | null;
   released: boolean;
 }
 
 export interface LocalIssueHistory {
-  id: number;
-  issue_id: number;
+  id: string;
+  issue_id: string;
   field_name: string;
   old_value: string | null;
   new_value: string | null;
@@ -64,8 +94,8 @@ export interface LocalIssueHistory {
 }
 
 export interface LocalWorkflowStatus {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   category: string;
   position: number;
@@ -73,22 +103,22 @@ export interface LocalWorkflowStatus {
 }
 
 export interface LocalSavedFilter {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   jql_query: string;
 }
 
 export interface LocalLabel {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   color: string;
 }
 
 export interface LocalStrategy {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   category: string;
   markdown: string;
@@ -97,23 +127,23 @@ export interface LocalStrategy {
 }
 
 export interface LocalIssueLink {
-  id: number;
+  id: string;
   link_type: string; // e.g. 'Blocks', 'Duplicates', 'Relates To'
-  source_issue_id: number;
-  target_issue_id: number;
+  source_issue_id: string;
+  target_issue_id: string;
 }
 
 export interface LocalWorklog {
-  id: number;
-  issue_id: number;
+  id: string;
+  issue_id: string;
   minutes: number;
   description: string | null;
   created_at: string;
 }
 
 export interface LocalAutomationRule {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   trigger_type: string;
   conditions_json: string;
@@ -122,21 +152,21 @@ export interface LocalAutomationRule {
 }
 
 export interface LocalCustomField {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   field_type: string;
 }
 
 export interface LocalCustomFieldValue {
-  issue_id: number;
-  field_id: number;
+  issue_id: string;
+  field_id: string;
   value: string;
 }
 
 export interface LocalAttachment {
-  id: number;
-  issue_id: number;
+  id: string;
+  issue_id: string;
   file_name: string;
   local_path: string;
   created_at: string;

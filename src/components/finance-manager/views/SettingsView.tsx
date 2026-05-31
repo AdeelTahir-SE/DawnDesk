@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Save, Shield, Bell, Moon, Globe, Download, Database } from "lucide-react";
 import { exportTextFile } from "../../../utils/exportFile";
 import { useAppLogger } from "../../../utils/LoggerContext";
@@ -15,29 +15,44 @@ type TransactionItem = {
   status: string;
 };
 
+const defaultFinanceSettings = {
+  currency: "USD",
+  weekStart: "monday",
+  theme: "dark",
+  notifications: true,
+  pinLock: false,
+};
+
 export default function SettingsView() {
   const { logSuccess, logError } = useAppLogger();
-  const [settings, setSettings] = useState({
-    currency: "USD",
-    weekStart: "monday",
-    theme: "dark",
-    notifications: true,
-    pinLock: false
-  });
+  const [settings, setSettings] = useState(defaultFinanceSettings);
   const [exportStatus, setExportStatus] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem('finance_settings');
-    if (saved) {
-      try {
-        setSettings(JSON.parse(saved));
-      } catch (e) {}
-    }
+    let isMounted = true;
+    invoke<typeof defaultFinanceSettings>("get_finance_preference", {
+      key: "settings",
+      defaultValue: defaultFinanceSettings,
+    })
+      .then((savedSettings) => {
+        if (isMounted) setSettings({ ...defaultFinanceSettings, ...savedSettings });
+      })
+      .catch((error) => {
+        logError("Finance settings load failed", String(error), { source: "finance" });
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleSave = () => {
-    localStorage.setItem('finance_settings', JSON.stringify(settings));
-    logSuccess("Finance settings saved", "Finance Manager preferences were updated.", { source: "finance" });
+  const handleSave = async () => {
+    try {
+      await invoke("save_finance_preference", { key: "settings", value: settings });
+      logSuccess("Finance settings saved", "Finance Manager preferences were updated in Supabase.", { source: "finance" });
+    } catch (error) {
+      logError("Finance settings save failed", String(error), { source: "finance" });
+    }
   };
 
   const exportTransactionsCsv = async () => {

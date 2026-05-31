@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Download, Loader2, Play, Save, Search, Trash2 } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
 import type { LocalIssue, LocalSavedFilter, LocalSprint } from "./types";
+import { listProjectIssues, listProjectSprints } from "../../lib/workspaceSync";
 
 const PRIORITIES = ["All", "Highest", "High", "Medium", "Low", "Lowest"];
 const TYPES = ["All", "Epic", "Story", "Task", "Bug", "Subtask"];
@@ -28,7 +28,7 @@ function csvEscape(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-export default function SearchAndFilters({ projectId }: { projectId: number | null }) {
+export default function SearchAndFilters({ projectId }: { projectId: string | null }) {
   const { logSuccess, logError, logWarning } = useAppLogger();
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
@@ -47,14 +47,13 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
     if (!projectId) return;
     setLoading(true);
     try {
-      const [issueData, sprintData, filterData] = await Promise.all([
-        invoke<LocalIssue[]>("get_issues", { projectId }),
-        invoke<LocalSprint[]>("get_sprints", { projectId }),
-        invoke<LocalSavedFilter[]>("get_saved_filters", { projectId }),
+      const [issueData, sprintData] = await Promise.all([
+        listProjectIssues(projectId),
+        listProjectSprints(projectId),
       ]);
       setIssues(issueData);
       setSprints(sprintData);
-      setSavedFilters(filterData);
+      setSavedFilters([]);
     } catch (err) {
       console.error("Failed to load search data:", err);
     }
@@ -89,7 +88,7 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
     if (!projectId) return;
     setLoading(true);
     try {
-      const data = await invoke<LocalIssue[]>("jql_search", { projectId, jql });
+      const data = filteredIssues;
       setIssues(data);
       logSuccess("Project search complete", `${data.length} issue${data.length === 1 ? "" : "s"} found.`, { source: "project-manager" });
     } catch (err) {
@@ -107,11 +106,15 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
       type !== "All" ? `issue_type = "${type}"` : "",
     ].filter(Boolean).join(" AND ");
     try {
-      await invoke("create_saved_filter", {
-        projectId,
-        name: filterName.trim(),
-        jqlQuery: filterQuery || "1=1",
-      });
+      setSavedFilters((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          project_id: projectId,
+          name: filterName.trim(),
+          jql_query: filterQuery || "1=1",
+        },
+      ]);
       logSuccess("Project filter saved", filterName.trim(), { source: "project-manager" });
       setFilterName("");
       await fetchData();
@@ -257,8 +260,7 @@ export default function SearchAndFilters({ projectId }: { projectId: number | nu
                   <button
                     onClick={async () => {
                       try {
-                        await invoke("delete_saved_filter", { id: filter.id });
-                        await fetchData();
+                        setSavedFilters((current) => current.filter((item) => item.id !== filter.id));
                         logWarning("Project filter deleted", filter.name, { source: "project-manager" });
                       } catch (err) {
                         console.error("Failed to delete filter:", err);

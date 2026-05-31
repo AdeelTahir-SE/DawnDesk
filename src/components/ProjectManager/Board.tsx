@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { LocalIssue, LocalSprint, LocalWorkflowStatus, LocalAutomationRule } from "./types";
+import { LocalIssue, LocalSprint, LocalWorkflowStatus } from "./types";
 import {
   Loader2,
   Plus,
@@ -32,6 +31,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  listProjectIssues,
+  listProjectSprints,
+  listProjectWorkflowStatuses,
+  updateProjectIssue,
+} from "../../lib/workspaceSync";
 
 const COLUMNS = ["To Do", "In Progress", "In Review", "Done"] as const;
 
@@ -269,7 +274,7 @@ function Column({
   );
 }
 
-export default function Board({ projectId }: { projectId: number | null }) {
+export default function Board({ projectId }: { projectId: string | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
   const [workflowStatuses, setWorkflowStatuses] = useState<LocalWorkflowStatus[]>([]);
@@ -310,9 +315,9 @@ export default function Board({ projectId }: { projectId: number | null }) {
     setLoading(true);
     try {
       const [issuesRes, sprintsRes, statusesRes] = await Promise.all([
-        invoke<LocalIssue[]>("get_issues", { projectId }),
-        invoke<LocalSprint[]>("get_sprints", { projectId }),
-        invoke<LocalWorkflowStatus[]>("get_workflow_statuses", { projectId }),
+        listProjectIssues(projectId),
+        listProjectSprints(projectId),
+        listProjectWorkflowStatuses(projectId),
       ]);
       setIssues(issuesRes);
       setSprints(sprintsRes);
@@ -330,8 +335,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
   const executeAutomationRules = async (issue: LocalIssue, newStatus: string) => {
     if (!projectId) return;
     try {
-      const rules = await invoke<LocalAutomationRule[]>("get_automation_rules", { projectId });
-      const statusRules = rules.filter(r => r.trigger_type === "Status Changed" && r.is_active);
+      const statusRules: Array<{ trigger_type: string; is_active: boolean; conditions_json: string; actions_json: string }> = [];
       
       let currentIssue = { ...issue, status: newStatus };
       let updated = false;
@@ -357,7 +361,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
 
       if (updated) {
         currentIssue.updated_at = new Date().toISOString();
-        await invoke("update_issue", { input: currentIssue });
+        await updateProjectIssue(currentIssue);
         setIssues((prev) =>
           prev.map((i) => (i.id === currentIssue.id ? currentIssue : i))
         );
@@ -372,8 +376,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
     newStatus: string
   ) => {
     try {
-      await invoke("update_issue", {
-        input: {
+      await updateProjectIssue({
           id: issue.id,
           sprint_id: issue.sprint_id,
           issue_type: issue.issue_type,
@@ -388,7 +391,6 @@ export default function Board({ projectId }: { projectId: number | null }) {
           pinned: issue.pinned,
           due_date: issue.due_date,
           updated_at: new Date().toISOString(),
-        },
       });
       setIssues((prev) =>
         prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
@@ -422,7 +424,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
     const { active, over } = event;
     if (!over) return;
 
-    const activeIssueId = active.id as number;
+    const activeIssueId = String(active.id);
     const overId = over.id;
 
     const activeIssue = issues.find((i) => i.id === activeIssueId);
@@ -444,8 +446,7 @@ export default function Board({ projectId }: { projectId: number | null }) {
       );
 
       try {
-        await invoke("update_issue", {
-          input: {
+        await updateProjectIssue({
             id: activeIssue.id,
             sprint_id: activeIssue.sprint_id,
             issue_type: activeIssue.issue_type,
@@ -460,7 +461,6 @@ export default function Board({ projectId }: { projectId: number | null }) {
             pinned: activeIssue.pinned,
             due_date: activeIssue.due_date,
             updated_at: new Date().toISOString(),
-          },
         });
         
         await executeAutomationRules(activeIssue, newStatus);

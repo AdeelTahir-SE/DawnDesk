@@ -1,17 +1,23 @@
 import { useState, useEffect, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Plus, Layout, Loader2, Folder, X, Search, Calendar } from "lucide-react";
+import { Plus, Layout, Loader2, Folder, X, Search, Cloud, Users } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
-import { LocalProject } from "./types";
+import { isSupabaseConfigured } from "../../lib/supabaseClient";
+import {
+  createSupabaseProject,
+  formatSupabaseError,
+  listSupabaseProjects,
+  type SupabaseProject,
+} from "../../lib/workspaceSync";
 
 interface ProjectListScreenProps {
-  onProjectSelect: (projectId: number) => void;
+  onProjectSelect: (project: SupabaseProject) => void;
 }
 
 export default function ProjectListScreen({ onProjectSelect }: ProjectListScreenProps) {
   const { logSuccess, logError } = useAppLogger();
-  const [projects, setProjects] = useState<LocalProject[]>([]);
+  const [projects, setProjects] = useState<SupabaseProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncError, setSyncError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Create Project Modal
@@ -23,13 +29,21 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
 
   const loadData = async () => {
     setLoading(true);
+    setSyncError("");
     try {
-      const projs = await invoke<LocalProject[]>("get_projects");
-      setProjects(projs);
+      if (!isSupabaseConfigured) {
+        setProjects([]);
+        setSyncError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+        return;
+      }
+      setProjects(await listSupabaseProjects());
     } catch (e) {
-      console.error(e);
+      const message = formatSupabaseError(e);
+      setSyncError(message);
+      logError("Supabase project load failed", message, { source: "project-manager" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -40,32 +54,31 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     e.preventDefault();
     if (!newProjName.trim()) return;
     setCreating(true);
+    setSyncError("");
     try {
-      await invoke("create_project", { 
-        input: {
-          name: newProjName.trim(),
-          key: newProjName.trim().substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || "PROJ",
-          description: newProjDesc.trim() || null,
-          color_tag: "#facc15",
-          created_at: new Date().toISOString(),
-          project_type: newProjType
-        }
+      if (!isSupabaseConfigured) {
+        throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      }
+
+      const project = await createSupabaseProject({
+        name: newProjName.trim(),
+        key: newProjName.trim().substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || "PROJ",
+        description: newProjDesc.trim() || null,
+        color_tag: "#facc15",
+        project_type: newProjType,
+        created_at: new Date().toISOString(),
       });
       setIsModalOpen(false);
       setNewProjName("");
       setNewProjDesc("");
       setNewProjType("Scrum");
       await loadData();
-      
-      // Select the newest project
-      const projs = await invoke<LocalProject[]>("get_projects");
-      if (projs.length > 0) {
-        onProjectSelect(projs[0].id);
-      }
+      onProjectSelect(project);
       logSuccess("Project created", newProjName.trim(), { source: "project-manager" });
     } catch (e) {
-      console.error(e);
-      logError("Project creation failed", String(e), { source: "project-manager" });
+      const message = formatSupabaseError(e);
+      setSyncError(message);
+      logError("Project creation failed", message, { source: "project-manager" });
     }
     setCreating(false);
   };
@@ -91,7 +104,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Workspaces</h1>
-            <p className="text-neutral-400 mt-1 max-w-xl">Organize your projects and access your local development environments.</p>
+            <p className="text-neutral-400 mt-1 max-w-xl">Organize shared projects backed by your Supabase workspace.</p>
           </div>
         </div>
         
@@ -115,6 +128,12 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
           </button>
         </div>
       </section>
+
+      {syncError && (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Supabase sync needs attention: {syncError}
+        </div>
+      )}
 
       {/* Projects Grid */}
       <section className="flex-1 overflow-auto pb-8 custom-scrollbar">
@@ -145,7 +164,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
             {filteredProjects.map(p => (
               <button 
                 key={p.id}
-                onClick={() => onProjectSelect(p.id)}
+                onClick={() => onProjectSelect(p)}
                 className="group text-left border border-neutral-800 bg-neutral-900/40 hover:bg-neutral-800/60 rounded-2xl p-6 transition-all h-full min-h-[200px] flex flex-col relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
               >
                 <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: p.color_tag || '#4ade80' }} />
@@ -167,10 +186,11 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
                 </div>
                 
                 <div className="flex items-center gap-2 mt-6 pt-4 border-t border-neutral-800/60">
-                  <Calendar className="w-3.5 h-3.5 text-neutral-500" />
+                  <Cloud className="w-3.5 h-3.5 text-yellow-400" />
                   <span className="text-xs text-neutral-500 font-medium">
-                    {new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    Synced team project
                   </span>
+                  <Users className="ml-auto w-3.5 h-3.5 text-neutral-500" />
                 </div>
               </button>
             ))}

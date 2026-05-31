@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Landmark, RefreshCw, MoreHorizontal, Link, ArrowRightLeft, Plus, Loader2, X, Activity } from "lucide-react";
 
 export type AccountItem = {

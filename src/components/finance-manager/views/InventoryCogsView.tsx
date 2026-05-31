@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Plus, Package, Search, BarChart, Loader2, X, RefreshCw } from "lucide-react";
 
 export type InventoryItem = {

@@ -588,3 +588,227 @@ html.light input::placeholder,
 html.light textarea::placeholder {
   color: rgba(23, 23, 23, 0.42);
 }
+
+html:not(.light) .prompt-hub-shell {
+  background: #080808 !important;
+  color: #f5f5f5 !important;
+}
+
+html:not(.light) .prompt-hub-sidebar,
+html:not(.light) .prompt-hub-topbar,
+html:not(.light) .prompt-hub-card,
+html:not(.light) .prompt-hub-dock,
+html:not(.light) .prompt-hub-detail-panel {
+  background-color: #111111 !important;
+  border-color: #262626 !important;
+}
+
+html:not(.light) .prompt-hub-topbar {
+  background-color: rgba(8, 8, 8, 0.92) !important;
+}
+
+html:not(.light) .prompt-hub-card {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35) !important;
+}
+
+html:not(.light) .prompt-hub-sidebar {
+  background-color: rgba(23, 23, 23, 0.72) !important;
+  border-color: #262626 !important;
+}
+
+html:not(.light) .prompt-hub-sidebar-header {
+  border-bottom: 1px solid rgba(38, 38, 38, 0.72);
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
+  padding: 0.25rem 0.25rem 1rem;
+}
+
+html:not(.light) .prompt-hub-sidebar .prompt-hub-nav-item,
+html:not(.light) .prompt-hub-sidebar .prompt-hub-filter {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+  color: rgba(255, 255, 255, 0.64) !important;
+}
+
+html:not(.light) .prompt-hub-nav-item:hover,
+html:not(.light) .prompt-hub-filter:hover,
+html:not(.light) .prompt-hub-chip:hover,
+html:not(.light) .prompt-hub-sort:hover,
+html:not(.light) .prompt-hub-dock button:hover {
+  background-color: #1f1f1f !important;
+}
+
+html:not(.light) .prompt-hub-sidebar .prompt-hub-nav-active,
+html:not(.light) .prompt-hub-sidebar .prompt-hub-filter-active {
+  background-color: rgba(250, 204, 21, 0.11) !important;
+  box-shadow: inset 3px 0 0 #facc15 !important;
+  color: #facc15 !important;
+}
+
+html:not(.light) .prompt-hub-sidebar .prompt-hub-nav-active svg,
+html:not(.light) .prompt-hub-sidebar .prompt-hub-filter-active svg,
+html:not(.light) .prompt-hub-sidebar .prompt-hub-nav-active .prompt-hub-nav-label {
+  color: #facc15 !important;
+}
+
+html:not(.light) .prompt-hub-sidebar p[class*="uppercase"] {
+  color: rgba(255, 255, 255, 0.42) !important;
+}
+
+html:not(.light) .prompt-hub-chip[class*="bg-white"],
+html:not(.light) .prompt-hub-sort[class*="bg-neutral-100"] {
+  background-color: #facc15 !important;
+  color: #111111 !important;
+  border-color: #facc15 !important;
+}
+
+html:not(.light) .prompt-hub-filter[class*="bg-yellow-100"] {
+  background-color: rgba(250, 204, 21, 0.14) !important;
+  color: #facc15 !important;
+}
+
+.prompt-hub-card-meta {
+  position: static;
+  align-content: flex-start;
+}
+
+.prompt-hub-card-pill,
+.prompt-hub-output-pill {
+  position: static;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+html:not(.light) .prompt-hub-shell .prompt-hub-output-pill {
+  background: linear-gradient(180deg, #fde047 0%, #facc15 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.45) !important;
+  box-shadow: 0 8px 18px rgba(250, 204, 21, 0.14) !important;
+  color: #111111 !important;
+}
+
+html:not(.light) .prompt-hub-shell .prompt-hub-output-pill * {
+  color: #111111 !important;
+}
+
+html:not(.light) .prompt-hub-shell .prompt-hub-detail-save-pill {
+  background-color: #facc15 !important;
+  color: #111111 !important;
+}
+
+html:not(.light) .prompt-hub-shell .prompt-hub-detail-save-pill * {
+  color: #111111 !important;
+}
+
+html:not(.light) .prompt-hub-shell .prompt-hub-save-count {
+  background-color: #facc15 !important;
+  color: #111111 !important;
+}
+
+html:not(.light) .prompt-hub-shell .prompt-hub-save-count [class*="text-neutral"] {
+  color: #111111 !important;
+}
+
+html:not(.light) .prompt-hub-dashboard-stat,
+html:not(.light) .prompt-hub-dashboard-panel {
+  background-color: #171717 !important;
+  border-color: #2a2a2a !important;
+  box-shadow: none !important;
+}
+
+html:not(.light) .prompt-hub-dashboard-stat {
+  background:
+    linear-gradient(180deg, rgba(250, 204, 21, 0.045), transparent 58%),
+    #171717 !important;
+}
+
+html:not(.light) .prompt-hub-published-row {
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+html:not(.light) .prompt-hub-published-row:hover {
+  background-color: rgba(250, 204, 21, 0.035) !important;
+}
+
+html:not(.light) .prompt-hub-delete-button {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(248, 113, 113, 0.24) !important;
+  color: #fca5a5 !important;
+}
+
+html:not(.light) .prompt-hub-delete-button:hover {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+}
+
+html:not(.light) .prompt-hub-publish-card {
+  background:
+    linear-gradient(180deg, rgba(250, 204, 21, 0.06), rgba(250, 204, 21, 0.02)),
+    #141414 !important;
+  border-color: rgba(250, 204, 21, 0.28) !important;
+  box-shadow: none !important;
+}
+
+html:not(.light) .prompt-hub-publish-card button {
+  background-color: #facc15 !important;
+  color: #111111 !important;
+  border-color: #facc15 !important;
+}
+
+html:not(.light) .prompt-hub-publish-card button:hover {
+  background-color: #fde047 !important;
+}
+
+html:not(.light) .prompt-hub-profile {
+  border-color: rgba(38, 38, 38, 0.8) !important;
+}
+
+html:not(.light) .prompt-hub-detail-copy {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(17, 17, 17, 0.96)) !important;
+  border-color: rgba(250, 204, 21, 0.36) !important;
+}
+
+html:not(.light) .prompt-hub-detail {
+  background-color: rgba(0, 0, 0, 0.82) !important;
+}
+
+html:not(.light) .prompt-hub-shell [class*="text-neutral-950"],
+html:not(.light) .prompt-hub-shell [class*="text-neutral-900"],
+html:not(.light) .prompt-hub-shell [class*="text-neutral-800"] {
+  color: #f8f8f8 !important;
+}
+
+html:not(.light) .prompt-hub-shell [class*="text-neutral-700"],
+html:not(.light) .prompt-hub-shell [class*="text-neutral-600"] {
+  color: rgba(245, 245, 245, 0.72) !important;
+}
+
+html:not(.light) .prompt-hub-shell [class*="text-neutral-500"],
+html:not(.light) .prompt-hub-shell [class*="text-neutral-400"] {
+  color: rgba(245, 245, 245, 0.48) !important;
+}
+
+html:not(.light) .prompt-hub-shell [class*="bg-neutral-100"],
+html:not(.light) .prompt-hub-shell [class*="bg-white"] {
+  background-color: #1a1a1a !important;
+}
+
+html:not(.light) .prompt-hub-shell input {
+  background-color: #151515 !important;
+  border-color: #2a2a2a !important;
+  color: #f8f8f8 !important;
+}
+
+html:not(.light) .prompt-hub-shell input::placeholder {
+  color: rgba(245, 245, 245, 0.42) !important;
+}
+
+html:not(.light) .prompt-hub-shell [class*="border-neutral-200"],
+html:not(.light) .prompt-hub-shell [class*="border-neutral-100"] {
+  border-color: #262626 !important;
+}
+
+html:not(.light) .prompt-hub-chip[class*="bg-white"],
+html:not(.light) .prompt-hub-sort[class*="bg-neutral-100"],
+html:not(.light) .prompt-hub-publish-card button {
+  background-color: #facc15 !important;
+  color: #111111 !important;
+  border-color: #facc15 !important;
+}

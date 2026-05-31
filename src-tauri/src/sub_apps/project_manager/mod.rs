@@ -36,7 +36,8 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
             key TEXT NOT NULL,
             description TEXT,
             color_tag TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            supabase_project_id TEXT UNIQUE
         );
         CREATE TABLE IF NOT EXISTS sprints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,6 +190,7 @@ fn db_connection(app: &AppHandle) -> Result<Connection, String> {
     let _ = conn.execute("ALTER TABLE issues ADD COLUMN pinned BOOLEAN DEFAULT 0", []);
     let _ = conn.execute("ALTER TABLE issues ADD COLUMN archived BOOLEAN DEFAULT 0", []);
     let _ = conn.execute("ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'Scrum'", []);
+    let _ = conn.execute("ALTER TABLE projects ADD COLUMN supabase_project_id TEXT", []);
     let _ = conn.execute("ALTER TABLE workflow_statuses ADD COLUMN wip_limit INTEGER", []);
 
     Ok(conn)
@@ -289,6 +291,7 @@ pub struct Project {
     pub color_tag: String,
     pub created_at: String,
     pub project_type: Option<String>,
+    pub supabase_project_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -299,6 +302,7 @@ pub struct CreateProjectInput {
     pub color_tag: String,
     pub created_at: String,
     pub project_type: Option<String>,
+    pub supabase_project_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -309,6 +313,7 @@ pub struct UpdateProjectInput {
     pub description: Option<String>,
     pub color_tag: String,
     pub project_type: Option<String>,
+    pub supabase_project_id: Option<String>,
 }
 
 #[tauri::command]
@@ -316,8 +321,8 @@ pub fn create_project(app: AppHandle, input: CreateProjectInput) -> Result<Strin
     let conn = db_connection(&app)?;
     let p_type = input.project_type.unwrap_or_else(|| "Scrum".to_string());
     conn.execute(
-        "INSERT INTO projects (name, key, description, color_tag, created_at, project_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![input.name, input.key, input.description, input.color_tag, input.created_at, p_type],
+        "INSERT INTO projects (name, key, description, color_tag, created_at, project_type, supabase_project_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![input.name, input.key, input.description, input.color_tag, input.created_at, p_type, input.supabase_project_id],
     )
     .map_err(|e| e.to_string())?;
     let project_id = conn.last_insert_rowid();
@@ -329,7 +334,7 @@ pub fn create_project(app: AppHandle, input: CreateProjectInput) -> Result<Strin
 #[tauri::command]
 pub fn get_projects(app: AppHandle) -> Result<Vec<Project>, String> {
     let conn = db_connection(&app)?;
-    let mut stmt = conn.prepare("SELECT id, name, key, description, color_tag, created_at, project_type FROM projects ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, name, key, description, color_tag, created_at, project_type, supabase_project_id FROM projects ORDER BY id DESC").map_err(|e| e.to_string())?;
 
     let rows = stmt.query_map([], |row| {
         Ok(Project {
@@ -340,6 +345,7 @@ pub fn get_projects(app: AppHandle) -> Result<Vec<Project>, String> {
             color_tag: row.get(4)?,
             created_at: row.get(5)?,
             project_type: row.get(6)?,
+            supabase_project_id: row.get(7)?,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -356,8 +362,8 @@ pub fn update_project(app: AppHandle, input: UpdateProjectInput) -> Result<Strin
     let conn = db_connection(&app)?;
     let p_type = input.project_type.unwrap_or_else(|| "Scrum".to_string());
     conn.execute(
-        "UPDATE projects SET name = ?1, key = ?2, description = ?3, color_tag = ?4, project_type = ?5 WHERE id = ?6",
-        params![input.name, input.key, input.description, input.color_tag, p_type, input.id],
+        "UPDATE projects SET name = ?1, key = ?2, description = ?3, color_tag = ?4, project_type = ?5, supabase_project_id = COALESCE(?6, supabase_project_id) WHERE id = ?7",
+        params![input.name, input.key, input.description, input.color_tag, p_type, input.supabase_project_id, input.id],
     )
     .map_err(|e| e.to_string())?;
     Ok("Project updated".to_string())

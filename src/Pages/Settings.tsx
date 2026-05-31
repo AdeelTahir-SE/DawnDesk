@@ -1,53 +1,60 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Bell,
   Check,
   Cpu,
-  Database,
-  HardDrive,
   Info,
-  KeyRound,
   Monitor,
   Moon,
   Save,
   Settings as SettingsIcon,
   Shield,
+  LogOut,
   Sliders,
-  Sparkles,
   User,
 } from "lucide-react";
 import { LOGGER_SOURCES, useAppLogger, type LogLevel, type LoggerSource } from "../utils/LoggerContext";
+import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
 const TABS = [
   { id: "general", label: "General", icon: <Sliders className="h-4 w-4" /> },
   { id: "loggers", label: "Operation Toasts", icon: <Bell className="h-4 w-4" /> },
   { id: "appearance", label: "Appearance", icon: <Monitor className="h-4 w-4" /> },
-  { id: "ai", label: "AI Settings", icon: <Sparkles className="h-4 w-4" /> },
   { id: "privacy", label: "Privacy", icon: <Shield className="h-4 w-4" /> },
   { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
 
 const defaultSettings = {
   theme: "dark",
-  density: "comfortable",
   autoLaunch: false,
   hardwareAcceleration: true,
-  dataCollection: false,
-  aiModel: "gpt-4o",
-  aiContextLimit: "8192",
   notifications: true,
-  localVault: true,
 };
+
+function applyDawnDeskTheme(theme: string) {
+  const resolvedTheme = theme === "light" ? "light" : "dark";
+  const isLight = resolvedTheme === "light";
+  document.documentElement.classList.toggle("light", isLight);
+  document.documentElement.classList.toggle("dark", !isLight);
+  localStorage.setItem("dawndesk_theme", resolvedTheme);
+  window.dispatchEvent(new CustomEvent("dawndesk_theme_changed", { detail: { theme: resolvedTheme } }));
+  return resolvedTheme;
+}
 
 export default function Settings() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState(defaultSettings);
   const [saved, setSaved] = useState(false);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [nativeSettingsNote, setNativeSettingsNote] = useState("");
   const logger = useAppLogger();
-  const { logSuccess } = logger;
+  const { logSuccess, logError } = logger;
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -57,31 +64,148 @@ export default function Settings() {
   }, [searchParams]);
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem("dawndesk_theme") || defaultSettings.theme;
     const savedSettings = localStorage.getItem("dawndesk_global_settings");
     if (savedSettings) {
       try {
-        setSettings({ ...defaultSettings, ...JSON.parse(savedSettings) });
+        const nextSettings = { ...defaultSettings, ...JSON.parse(savedSettings), theme: savedTheme };
+        setSettings(nextSettings);
+        logger.updateLoggerSettings({
+          toastsEnabled: nextSettings.notifications,
+          channels: { ...logger.settings.channels, operation: nextSettings.notifications },
+        });
       } catch (e) {
         console.error(e);
       }
+    } else {
+      setSettings((current) => ({ ...current, theme: savedTheme }));
     }
+    void Promise.all([
+      invoke<boolean>("get_auto_launch"),
+      invoke<boolean>("get_hardware_acceleration"),
+    ])
+      .then(([autoLaunch, hardwareAcceleration]) => {
+        setSettings((current) => {
+          const nextSettings = { ...current, autoLaunch, hardwareAcceleration };
+          localStorage.setItem("dawndesk_global_settings", JSON.stringify(nextSettings));
+          return nextSettings;
+        });
+      })
+      .catch((error) => {
+        console.warn("Native settings are not available in this environment.", error);
+      });
   }, []);
 
-  const updateSetting = (key: keyof typeof defaultSettings, value: boolean | string) => {
-    const nextSettings = { ...settings, [key]: value };
+  useEffect(() => {
+    let isMounted = true;
+    const loadSession = async () => {
+      if (!supabase || !isSupabaseConfigured) return;
+      const { data } = await supabase.auth.getSession();
+      if (isMounted) {
+        setAuthEmail(data.session?.user.email ?? null);
+      }
+    };
+    loadSession();
+
+    const subscription = supabase?.auth.onAuthStateChange((_event, session) => {
+      setAuthEmail(session?.user.email ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.data.subscription.unsubscribe();
+    };
+  }, []);
+
+  const persistSettings = (nextSettings: typeof defaultSettings) => {
     setSettings(nextSettings);
     localStorage.setItem("dawndesk_global_settings", JSON.stringify(nextSettings));
-    if (key === "notifications" && typeof value === "boolean") {
-      logger.updateLoggerSettings({ toastsEnabled: value });
-    }
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1400);
+  };
+
+  const updateSetting = async (key: keyof typeof defaultSettings, value: boolean | string) => {
+    const nextSettings = { ...settings, [key]: value };
+    persistSettings(nextSettings);
+
+    if (key === "notifications" && typeof value === "boolean") {
+      logger.updateLoggerSettings({
+        toastsEnabled: value,
+        channels: { ...logger.settings.channels, operation: value },
+      });
+      logSuccess("Settings", value ? "Operation notifications enabled" : "Operation notifications disabled", { source: "settings" });
+      return;
+    }
+
+    if (key === "theme" && typeof value === "string") {
+      const resolvedTheme = applyDawnDeskTheme(value);
+      persistSettings({ ...nextSettings, theme: resolvedTheme });
+      logSuccess("Settings", `${resolvedTheme === "light" ? "Light" : "Dark"} theme applied`, { source: "settings" });
+      return;
+    }
+
+    if (key === "autoLaunch" && typeof value === "boolean") {
+      try {
+        await invoke("set_auto_launch", { enabled: value });
+        logSuccess("Settings", value ? "DawnDesk will launch on startup" : "DawnDesk startup launch disabled", { source: "settings" });
+      } catch (error) {
+        setNativeSettingsNote(String(error));
+        persistSettings({ ...nextSettings, autoLaunch: !value });
+        logError("Settings", `Could not update launch on startup: ${String(error)}`, { source: "settings" });
+      }
+      return;
+    }
+
+    if (key === "hardwareAcceleration" && typeof value === "boolean") {
+      try {
+        await invoke("set_hardware_acceleration", { enabled: value });
+        setNativeSettingsNote("Hardware acceleration changes apply after restarting DawnDesk.");
+        logSuccess("Settings", value ? "Hardware acceleration enabled after restart" : "Hardware acceleration disabled after restart", { source: "settings" });
+      } catch (error) {
+        setNativeSettingsNote(String(error));
+        persistSettings({ ...nextSettings, hardwareAcceleration: !value });
+        logError("Settings", `Could not update hardware acceleration: ${String(error)}`, { source: "settings" });
+      }
+      return;
+    }
+
     logSuccess("Settings", `${key} updated`, { source: "settings" });
   };
 
   const markSaved = () => {
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1400);
+  };
+
+  useEffect(() => {
+    const refreshTheme = () => {
+      setSettings((current) => ({ ...current, theme: localStorage.getItem("dawndesk_theme") || "dark" }));
+    };
+    window.addEventListener("storage", refreshTheme);
+    window.addEventListener("dawndesk_theme_changed", refreshTheme);
+    return () => {
+      window.removeEventListener("storage", refreshTheme);
+      window.removeEventListener("dawndesk_theme_changed", refreshTheme);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    if (!supabase || !isSupabaseConfigured) {
+      setAuthError("Supabase is not configured.");
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAuthError(error.message);
+      logError("Settings", `Logout failed: ${error.message}`, { source: "settings" });
+    } else {
+      setAuthEmail(null);
+      logSuccess("Settings", "Signed out of Supabase", { source: "settings" });
+    }
+    setAuthLoading(false);
   };
 
   return (
@@ -144,23 +268,18 @@ export default function Settings() {
           </section>
 
           {activeTab === "general" && (
-            <SettingsGrid>
-              <SettingToggle icon={<Bell />} title="Notifications" text="Allow DawnDesk to surface important app alerts." checked={settings.notifications} onChange={(value) => updateSetting("notifications", value)} />
-              <SettingToggle icon={<User />} title="Launch on Startup" text="Open DawnDesk automatically when you sign in." checked={settings.autoLaunch} onChange={(value) => updateSetting("autoLaunch", value)} />
-              <SettingToggle icon={<Cpu />} title="Hardware Acceleration" text="Use GPU rendering for smoother panels and animations." checked={settings.hardwareAcceleration} onChange={(value) => updateSetting("hardwareAcceleration", value)} />
-              <SettingSelect
-                icon={<Sliders />}
-                title="Interface Density"
-                text="Choose how compact tool screens should feel."
-                value={settings.density}
-                onChange={(value) => updateSetting("density", value)}
-                options={[
-                  ["comfortable", "Comfortable"],
-                  ["compact", "Compact"],
-                  ["spacious", "Spacious"],
-                ]}
-              />
-            </SettingsGrid>
+            <div className="space-y-5">
+              <SettingsGrid>
+                <SettingToggle icon={<Bell />} title="Notifications" text="Allow DawnDesk to surface important app alerts." checked={settings.notifications} onChange={(value) => void updateSetting("notifications", value)} />
+                <SettingToggle icon={<User />} title="Launch on Startup" text="Open DawnDesk automatically when you sign in." checked={settings.autoLaunch} onChange={(value) => void updateSetting("autoLaunch", value)} />
+                <SettingToggle icon={<Cpu />} title="Hardware Acceleration" text="Use GPU rendering for smoother panels and animations. Changes apply after restart." checked={settings.hardwareAcceleration} onChange={(value) => void updateSetting("hardwareAcceleration", value)} />
+              </SettingsGrid>
+              {nativeSettingsNote && (
+                <div className="rounded-xl border border-yellow-400/25 bg-yellow-400/10 px-4 py-3 text-sm font-semibold text-yellow-100">
+                  {nativeSettingsNote}
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === "loggers" && (
@@ -172,72 +291,26 @@ export default function Settings() {
               <SettingSelect
                 icon={<Moon />}
                 title="Theme"
-                text="DawnDesk is optimized for a dark local workspace."
+                text="Switch DawnDesk between the same dark and light themes used by the top bar button."
                 value={settings.theme}
-                onChange={(value) => updateSetting("theme", value)}
+                onChange={(value) => void updateSetting("theme", value)}
                 options={[
                   ["dark", "Dark"],
-                  ["system", "Follow system"],
+                  ["light", "Light"],
                 ]}
               />
               <PreviewPanel />
             </SettingsGrid>
           )}
 
-          {activeTab === "ai" && (
-            <SettingsGrid>
-              <SettingSelect
-                icon={<Sparkles />}
-                title="Default Model"
-                text="Used by AI-assisted tools unless a sub-app overrides it."
-                value={settings.aiModel}
-                onChange={(value) => updateSetting("aiModel", value)}
-                options={[
-                  ["gpt-4o", "GPT-4o"],
-                  ["claude-3-5-sonnet", "Claude 3.5 Sonnet"],
-                  ["gemini-1.5-pro", "Gemini 1.5 Pro"],
-                  ["llama-3-70b", "Llama 3 70B"],
-                ]}
-              />
-              <SettingSelect
-                icon={<Database />}
-                title="Context Limit"
-                text="Higher context is useful for long documents and codebases."
-                value={settings.aiContextLimit}
-                onChange={(value) => updateSetting("aiContextLimit", value)}
-                options={[
-                  ["4096", "4,096 tokens"],
-                  ["8192", "8,192 tokens"],
-                  ["32768", "32,768 tokens"],
-                  ["128000", "128,000+ tokens"],
-                ]}
-              />
-            </SettingsGrid>
-          )}
-
           {activeTab === "privacy" && (
             <SettingsGrid>
-              <SettingToggle icon={<Shield />} title="Anonymous Telemetry" text="Send crash diagnostics and no personal content." checked={settings.dataCollection} onChange={(value) => updateSetting("dataCollection", value)} />
-              <SettingToggle icon={<KeyRound />} title="Local Vault Mode" text="Keep sensitive workspace data on this machine." checked={settings.localVault} onChange={(value) => updateSetting("localVault", value)} />
-              <div className="rounded-2xl border border-red-500/25 bg-red-500/5 p-6">
-                <div className="flex items-center gap-3 text-red-500">
-                  <HardDrive className="h-5 w-5" />
-                  <h3 className="dd-section-title !text-red-500">Data Management</h3>
-                </div>
-                <p className="mt-3 dd-body">
-                  Clear cached app preferences and workspace layout settings. Finance and project databases are stored separately.
-                </p>
-            <button
-              onClick={() => {
-                localStorage.removeItem("dawndesk_global_settings");
-                setSettings(defaultSettings);
-                logSuccess("Settings", "App preferences reset", { source: "settings" });
-              }}
-                  className="mt-5 dd-btn-danger"
-                >
-                  Reset App Preferences
-                </button>
-              </div>
+              <AuthSessionCard
+                email={authEmail}
+                loading={authLoading}
+                error={authError}
+                onLogout={handleLogout}
+              />
             </SettingsGrid>
           )}
 
@@ -268,6 +341,49 @@ export default function Settings() {
 
 function SettingsGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">{children}</div>;
+}
+
+function AuthSessionCard({
+  email,
+  loading,
+  error,
+  onLogout,
+}: {
+  email: string | null;
+  loading: boolean;
+  error: string;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="dd-card">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex gap-4">
+          <span className="dd-icon-box">
+            <User />
+          </span>
+          <div>
+            <h3 className="dd-card-title">Supabase Account</h3>
+            <p className="mt-1 dd-subtext">
+              {email ? `Signed in as ${email}` : "No Supabase account is currently signed in."}
+            </p>
+          </div>
+        </div>
+      </div>
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+      <button
+        onClick={onLogout}
+        disabled={loading || !email}
+        className="mt-5 inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? <Save className="h-4 w-4 animate-pulse" /> : <LogOut className="h-4 w-4" />}
+        Log Out
+      </button>
+    </div>
+  );
 }
 
 const LOG_LEVEL_LABELS: Record<LogLevel, string> = {

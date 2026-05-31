@@ -1,13 +1,118 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod sub_apps;
 
+use serde::{Deserialize, Serialize};
+use std::{env, fs, path::PathBuf};
+
+const STARTUP_SCRIPT_NAME: &str = "DawnDesk.cmd";
+const NATIVE_SETTINGS_FILE: &str = "native-settings.json";
+
+#[derive(Default, Deserialize, Serialize)]
+struct NativeSettings {
+    hardware_acceleration: Option<bool>,
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+fn app_config_dir() -> Result<PathBuf, String> {
+    let base = env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("XDG_CONFIG_HOME").map(PathBuf::from))
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .ok_or_else(|| "Could not resolve app config directory.".to_string())?;
+    Ok(base.join("dawndesk"))
+}
+
+fn native_settings_path() -> Result<PathBuf, String> {
+    Ok(app_config_dir()?.join(NATIVE_SETTINGS_FILE))
+}
+
+fn read_native_settings() -> NativeSettings {
+    let Ok(path) = native_settings_path() else {
+        return NativeSettings::default();
+    };
+    let Ok(contents) = fs::read_to_string(path) else {
+        return NativeSettings::default();
+    };
+    serde_json::from_str(&contents).unwrap_or_default()
+}
+
+fn write_native_settings(settings: &NativeSettings) -> Result<(), String> {
+    let path = native_settings_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let contents = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
+    fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+fn startup_script_path() -> Result<PathBuf, String> {
+    let appdata = env::var_os("APPDATA").ok_or_else(|| "Windows APPDATA directory is not available.".to_string())?;
+    Ok(PathBuf::from(appdata)
+        .join("Microsoft")
+        .join("Windows")
+        .join("Start Menu")
+        .join("Programs")
+        .join("Startup")
+        .join(STARTUP_SCRIPT_NAME))
+}
+
+#[tauri::command]
+fn get_auto_launch() -> Result<bool, String> {
+    Ok(startup_script_path()?.exists())
+}
+
+#[tauri::command]
+fn set_auto_launch(enabled: bool) -> Result<bool, String> {
+    let path = startup_script_path()?;
+    if enabled {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let exe = env::current_exe().map_err(|error| error.to_string())?;
+        let script = format!("@echo off\r\nstart \"\" \"{}\"\r\n", exe.display());
+        fs::write(&path, script).map_err(|error| error.to_string())?;
+    } else if path.exists() {
+        fs::remove_file(&path).map_err(|error| error.to_string())?;
+    }
+    Ok(enabled)
+}
+
+#[tauri::command]
+fn get_hardware_acceleration() -> Result<bool, String> {
+    Ok(read_native_settings().hardware_acceleration.unwrap_or(true))
+}
+
+#[tauri::command]
+fn set_hardware_acceleration(enabled: bool) -> Result<bool, String> {
+    let mut settings = read_native_settings();
+    settings.hardware_acceleration = Some(enabled);
+    write_native_settings(&settings)?;
+    Ok(enabled)
+}
+
+fn apply_hardware_acceleration_from_settings() {
+    if read_native_settings().hardware_acceleration.unwrap_or(true) {
+        return;
+    }
+
+    let mut args = env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+    if !args.contains("--disable-gpu") {
+        if !args.trim().is_empty() {
+            args.push(' ');
+        }
+        args.push_str("--disable-gpu --disable-software-rasterizer");
+        env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    apply_hardware_acceleration_from_settings();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -15,6 +120,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            get_auto_launch,
+            set_auto_launch,
+            get_hardware_acceleration,
+            set_hardware_acceleration,
             sub_apps::project_manager::create_project,
             sub_apps::project_manager::get_projects,
             sub_apps::project_manager::update_project,

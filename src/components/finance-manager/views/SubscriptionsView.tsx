@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Plus, Repeat, CalendarDays, X } from "lucide-react";
 
 interface Subscription {

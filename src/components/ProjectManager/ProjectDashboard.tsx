@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   AlertTriangle,
   CalendarClock,
@@ -14,6 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { LocalIssue, LocalSprint } from "./types";
+import { listProjectIssues, listProjectSprints } from "../../lib/workspaceSync";
 
 function isOpen(issue: LocalIssue) {
   return issue.status !== "Done";
@@ -26,7 +26,7 @@ function formatDate(date: string) {
   });
 }
 
-export default function ProjectDashboard({ projectId }: { projectId: number }) {
+export default function ProjectDashboard({ projectId }: { projectId: string }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +36,8 @@ export default function ProjectDashboard({ projectId }: { projectId: number }) {
       setLoading(true);
       try {
         const [issueData, sprintData] = await Promise.all([
-          invoke<LocalIssue[]>("get_issues", { projectId }),
-          invoke<LocalSprint[]>("get_sprints", { projectId }),
+          listProjectIssues(projectId),
+          listProjectSprints(projectId),
         ]);
         setIssues(issueData);
         setSprints(sprintData);

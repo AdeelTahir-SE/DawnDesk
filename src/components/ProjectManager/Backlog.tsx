@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { LocalIssue, LocalSprint } from "./types";
 import {
   Loader2,
@@ -35,6 +34,13 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  createProjectSprint,
+  listProjectIssues,
+  listProjectSprints,
+  updateProjectIssue,
+  updateProjectSprint,
+} from "../../lib/workspaceSync";
 
 const PRIORITY_COLORS: Record<string, string> = {
   Highest: "bg-red-400",
@@ -79,8 +85,8 @@ function SprintAssignDropdown({
   onAssign,
 }: {
   sprints: LocalSprint[];
-  currentSprintId: number | null;
-  onAssign: (sprintId: number | null) => void;
+  currentSprintId: string | null;
+  onAssign: (sprintId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -160,7 +166,7 @@ function DroppableContainer({ id, children, className }: { id: string; children:
   return <div ref={setNodeRef} className={className}>{children}</div>;
 }
 
-export default function Backlog({ projectId }: { projectId: number | null }) {
+export default function Backlog({ projectId }: { projectId: string | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -191,8 +197,8 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     setLoading(true);
     try {
       const [issuesRes, sprintsRes] = await Promise.all([
-        invoke<LocalIssue[]>("get_issues", { projectId }),
-        invoke<LocalSprint[]>("get_sprints", { projectId }),
+        listProjectIssues(projectId),
+        listProjectSprints(projectId),
       ]);
       setIssues(issuesRes);
       setSprints(sprintsRes);
@@ -243,14 +249,12 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     if (!projectId || !newSprintName.trim()) return;
     setCreatingSprint(true);
     try {
-      await invoke("create_sprint", {
-        input: {
-          project_id: projectId,
-          name: newSprintName.trim(),
-          status: "planned",
-          start_date: newSprintStart || null,
-          end_date: newSprintEnd || null,
-        },
+      await createProjectSprint({
+        project_id: projectId,
+        name: newSprintName.trim(),
+        status: "planned",
+        start_date: newSprintStart || null,
+        end_date: newSprintEnd || null,
       });
       setNewSprintName("");
       setNewSprintStart("");
@@ -268,12 +272,12 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     newStatus: string
   ) => {
     try {
-      await invoke("update_sprint", {
+      await updateProjectSprint({
         id: sprint.id,
         name: sprint.name,
         status: newStatus,
-        startDate: sprint.start_date,
-        endDate: sprint.end_date,
+        start_date: sprint.start_date,
+        end_date: sprint.end_date,
       });
       await fetchData();
     } catch (err) {
@@ -283,11 +287,10 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
 
   const handleAssignSprint = async (
     issue: LocalIssue,
-    sprintId: number | null
+    sprintId: string | null
   ) => {
     try {
-      await invoke("update_issue", {
-        input: {
+      await updateProjectIssue({
           id: issue.id,
           sprint_id: sprintId,
           issue_type: issue.issue_type,
@@ -302,7 +305,6 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
           updated_at: new Date().toISOString(),
           rank: issue.rank,
           pinned: issue.pinned,
-        },
       });
       setIssues((prev) =>
         prev.map((i) =>
@@ -359,7 +361,7 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     const { active, over } = event;
     if (!over) return;
 
-    const activeIssueId = active.id as number;
+    const activeIssueId = String(active.id);
     const overId = over.id;
 
     const activeIssue = issues.find((i) => i.id === activeIssueId);
@@ -388,7 +390,7 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
     const newSprintId =
       targetContainer === "backlog"
         ? null
-        : parseInt(targetContainer.replace("sprint-", ""));
+        : targetContainer.replace("sprint-", "");
 
     const list =
       newSprintId === null
@@ -425,8 +427,7 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
       );
 
       try {
-        await invoke("update_issue", {
-          input: {
+        await updateProjectIssue({
             id: activeIssue.id,
             sprint_id: newSprintId,
             issue_type: activeIssue.issue_type,
@@ -441,7 +442,6 @@ export default function Backlog({ projectId }: { projectId: number | null }) {
             updated_at: new Date().toISOString(),
             rank: newRank,
             pinned: activeIssue.pinned,
-          },
         });
       } catch (err) {
         console.error("Failed to move issue:", err);
@@ -809,7 +809,7 @@ function SortableIssueRow({
   issue: LocalIssue;
   sprints: LocalSprint[];
   onClick: () => void;
-  onAssignSprint: (sprintId: number | null) => void;
+  onAssignSprint: (sprintId: string | null) => void;
   showAssign?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =

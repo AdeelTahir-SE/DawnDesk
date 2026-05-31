@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
-import { Edit3, Eye, FileText, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { Edit3, FilePlus2, FileText, Loader2, Pin, Plus, Save, Trash2, X } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
 import type { LocalStrategy } from "./types";
+import { deleteProjectStrategy, listProjectStrategies, saveProjectStrategy } from "../../lib/workspaceSync";
 
 const EMPTY_MARKETING_STRATEGY = `# Marketing Strategy
 
@@ -27,7 +28,7 @@ const EMPTY_MARKETING_STRATEGY = `# Marketing Strategy
 `;
 
 type StrategyDraft = {
-  id: number | null;
+  id: string | null;
   name: string;
   category: string;
   markdown: string;
@@ -48,36 +49,43 @@ function formatUpdatedAt(value: string): string {
   return date.toLocaleDateString("default", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function Strategies({ projectId }: { projectId: number | null }) {
+function markdownSnippet(markdown: string) {
+  return markdown
+    .replace(/^#+\s*/gm, "")
+    .replace(/[-*]\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 150);
+}
+
+export default function Strategies({ projectId }: { projectId: string | null }) {
   const { logSuccess, logError, logWarning } = useAppLogger();
   const [strategies, setStrategies] = useState<LocalStrategy[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<StrategyDraft>(newDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"write" | "preview">("write");
+  const [mode, setMode] = useState<"write" | "preview">("preview");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const selectedStrategy = useMemo(
     () => strategies.find((strategy) => strategy.id === selectedId) ?? null,
     [strategies, selectedId]
   );
 
-  const loadStrategies = async (nextSelectedId?: number | null) => {
+  const loadStrategies = async (nextSelectedId?: string | null) => {
     if (projectId === null) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await invoke<LocalStrategy[]>("get_strategies", { projectId });
+      const data = await listProjectStrategies(projectId);
       setStrategies(data);
       const nextId = nextSelectedId === undefined ? selectedId : nextSelectedId;
       const fallbackId = data[0]?.id ?? null;
       const resolvedId = nextId && data.some((strategy) => strategy.id === nextId) ? nextId : fallbackId;
       setSelectedId(resolvedId);
-      if (resolvedId === null) {
-        setDraft(newDraft());
-      }
     } catch (e) {
       console.error("Failed to load strategies:", e);
       setError("Could not load strategies.");
@@ -91,55 +99,56 @@ export default function Strategies({ projectId }: { projectId: number | null }) 
   }, [projectId]);
 
   useEffect(() => {
-    if (selectedStrategy) {
-      setDraft({
-        id: selectedStrategy.id,
-        name: selectedStrategy.name,
-        category: selectedStrategy.category,
-        markdown: selectedStrategy.markdown,
-      });
-    }
-  }, [selectedStrategy]);
+    if (!selectedStrategy || isModalOpen) return;
+    setDraft({
+      id: selectedStrategy.id,
+      name: selectedStrategy.name,
+      category: selectedStrategy.category,
+      markdown: selectedStrategy.markdown,
+    });
+  }, [selectedStrategy, isModalOpen]);
 
-  const handleNewStrategy = () => {
+  const openNewStrategyModal = () => {
     setSelectedId(null);
     setDraft(newDraft());
     setError(null);
     setMode("write");
+    setIsModalOpen(true);
+  };
+
+  const openStrategyModal = (strategy: LocalStrategy) => {
+    setSelectedId(strategy.id);
+    setDraft({
+      id: strategy.id,
+      name: strategy.name,
+      category: strategy.category,
+      markdown: strategy.markdown,
+    });
+    setError(null);
+    setMode("preview");
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
   };
 
   const handleSave = async () => {
     if (projectId === null || !draft.name.trim() || !draft.markdown.trim()) return;
     setSaving(true);
     setError(null);
-    const now = new Date().toISOString();
 
     try {
-      if (draft.id === null) {
-        await invoke("create_strategy", {
-          input: {
-            project_id: projectId,
-            name: draft.name.trim(),
-            category: draft.category.trim() || "Marketing",
-            markdown: draft.markdown,
-            created_at: now,
-          },
-        });
-        await loadStrategies(null);
-        logSuccess("Strategy created", draft.name.trim(), { source: "project-manager" });
-      } else {
-        await invoke("update_strategy", {
-          input: {
-            id: draft.id,
-            name: draft.name.trim(),
-            category: draft.category.trim() || "Marketing",
-            markdown: draft.markdown,
-            updated_at: now,
-          },
-        });
-        await loadStrategies(draft.id);
-        logSuccess("Strategy updated", draft.name.trim(), { source: "project-manager" });
-      }
+      const wasExisting = draft.id !== null;
+      await saveProjectStrategy(projectId, {
+        id: draft.id,
+        name: draft.name.trim(),
+        category: draft.category.trim() || "Marketing",
+        markdown: draft.markdown,
+      });
+      await loadStrategies(draft.id ?? undefined);
+      logSuccess(wasExisting ? "Strategy updated" : "Strategy created", draft.name.trim(), { source: "project-manager" });
+      setIsModalOpen(false);
     } catch (e) {
       console.error("Failed to save strategy:", e);
       setError("Could not save this strategy.");
@@ -151,17 +160,18 @@ export default function Strategies({ projectId }: { projectId: number | null }) 
 
   const handleDelete = async () => {
     if (draft.id === null) {
-      handleNewStrategy();
+      closeModal();
       return;
     }
-    if (!window.confirm("Delete this strategy? This cannot be undone.")) return;
+    if (!window.confirm("Delete this strategy page? This cannot be undone.")) return;
 
     setDeleting(true);
     setError(null);
     try {
-      await invoke("delete_strategy", { id: draft.id });
+      await deleteProjectStrategy(draft.id);
       await loadStrategies(null);
       logWarning("Strategy deleted", draft.name.trim(), { source: "project-manager" });
+      setIsModalOpen(false);
     } catch (e) {
       console.error("Failed to delete strategy:", e);
       setError("Could not delete this strategy.");
@@ -188,17 +198,17 @@ export default function Strategies({ projectId }: { projectId: number | null }) 
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-5 animate-fadeIn">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Strategies</h2>
-          <p className="mt-1 text-sm text-white/50">Plan strategy in Markdown with a focused editor and clean preview.</p>
+          <h2 className="text-2xl font-bold text-white">Strategy Board</h2>
+          <p className="mt-1 text-sm text-white/50">Attach strategy pages to the board, open one, and keep planning in Supabase.</p>
         </div>
         <button
-          onClick={handleNewStrategy}
+          onClick={openNewStrategyModal}
           className="flex items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-xs font-bold text-black hover:bg-yellow-300"
         >
           <Plus className="h-4 w-4" />
-          New Strategy
+          Add Page
         </button>
       </div>
 
@@ -208,111 +218,148 @@ export default function Strategies({ projectId }: { projectId: number | null }) 
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="min-h-[180px] rounded-xl border border-neutral-800 bg-neutral-900/40 p-3 xl:min-h-0">
-          <div className="mb-3 flex items-center justify-between px-1">
-            <p className="text-xs font-bold uppercase tracking-wider text-white/40">Saved Strategies</p>
-            <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-[11px] font-bold text-white/45">{strategies.length}</span>
+      <section className="custom-scrollbar relative min-h-[640px] flex-1 overflow-y-auto rounded-2xl border border-neutral-800 bg-[radial-gradient(circle_at_20%_18%,rgba(250,204,21,0.10),transparent_28%),linear-gradient(135deg,#202020,#111111_46%,#1b1b1b)] p-5 shadow-inner">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:36px_36px]" />
+        <div className="relative mb-5 flex items-center justify-between border-b border-white/10 pb-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-yellow-200/70">Soft Board</p>
+            <h3 className="mt-1 text-lg font-bold text-white">Pinned Strategy Pages</h3>
           </div>
-          <div className="custom-scrollbar flex h-full flex-col gap-2 overflow-y-auto pr-1">
-            {strategies.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-neutral-800 p-6 text-center">
-                <div>
-                  <FileText className="mx-auto mb-3 h-9 w-9 text-white/20" />
-                  <p className="text-sm font-semibold text-white/60">No strategies yet</p>
-                  <p className="mt-1 text-xs text-white/35">Start with the marketing strategy draft.</p>
+          <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-bold text-white/55">
+            {strategies.length} page{strategies.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <div className="relative grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <button
+            onClick={openNewStrategyModal}
+            className="group flex min-h-[260px] flex-col items-center justify-center rounded-sm border-2 border-dashed border-yellow-300/35 bg-yellow-300/5 p-6 text-center transition-colors hover:border-yellow-300/70 hover:bg-yellow-300/10"
+          >
+            <FilePlus2 className="mb-3 h-10 w-10 text-yellow-300/70 transition-transform group-hover:scale-105" />
+            <p className="text-sm font-bold text-white">Add new strategy page</p>
+            <p className="mt-2 max-w-44 text-xs leading-5 text-white/45">Create a fresh page and pin it to this board.</p>
+          </button>
+
+          {strategies.map((strategy, index) => {
+            const rotation = ["-rotate-1", "rotate-1", "rotate-0", "rotate-2", "-rotate-2"][index % 5];
+            const paperColor = [
+              "bg-[#fff7d1] text-neutral-950",
+              "bg-[#f2f7ff] text-neutral-950",
+              "bg-[#f4ffe8] text-neutral-950",
+              "bg-[#fff0f4] text-neutral-950",
+            ][index % 4];
+
+            return (
+              <button
+                key={strategy.id}
+                onClick={() => openStrategyModal(strategy)}
+                className={`group relative min-h-[260px] rounded-sm p-5 text-left shadow-2xl shadow-black/35 ring-1 ring-black/10 transition-all hover:-translate-y-1 hover:rotate-0 ${paperColor} ${rotation}`}
+              >
+                <span className="absolute left-1/2 top-3 grid h-7 w-7 -translate-x-1/2 place-items-center rounded-full bg-red-500 text-white shadow-md shadow-black/25">
+                  <Pin className="h-3.5 w-3.5 fill-current" />
+                </span>
+                <div className="mt-6">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-neutral-500">{strategy.category}</p>
+                  <h4 className="mt-2 line-clamp-2 text-xl font-black leading-tight">{strategy.name}</h4>
+                  <p className="mt-4 line-clamp-5 text-sm leading-6 text-neutral-700">
+                    {markdownSnippet(strategy.markdown) || "Open this page to write strategy notes."}
+                  </p>
                 </div>
-              </div>
-            ) : (
-              strategies.map((strategy) => (
-                <button
-                  key={strategy.id}
-                  onClick={() => setSelectedId(strategy.id)}
-                  className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                    selectedId === strategy.id
-                      ? "border-yellow-400/60 bg-yellow-400/10"
-                      : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-white">{strategy.name}</p>
-                      <p className="mt-1 text-xs text-white/40">{strategy.category}</p>
-                    </div>
-                    <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold uppercase text-white/45">
-                      MD
-                    </span>
-                  </div>
-                  <p className="mt-3 text-[11px] text-white/35">Updated {formatUpdatedAt(strategy.updated_at)}</p>
-                </button>
-              ))
-            )}
+                <div className="absolute bottom-4 left-5 right-5 flex items-center justify-between border-t border-black/10 pt-3 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                  <span>Updated</span>
+                  <span>{formatUpdatedAt(strategy.updated_at)}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {strategies.length === 0 && (
+          <div className="relative mt-5 rounded-xl border border-white/10 bg-black/20 p-6 text-center">
+            <FileText className="mx-auto mb-3 h-9 w-9 text-white/25" />
+            <p className="text-sm font-semibold text-white/65">No strategy pages are pinned yet.</p>
+            <p className="mt-1 text-xs text-white/40">Use Add Page to create the first one.</p>
           </div>
-        </aside>
+        )}
+      </section>
 
-        <section className="flex min-h-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/40">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 px-5 py-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                {mode === "write" ? <Edit3 className="h-4 w-4 text-yellow-400" /> : <Eye className="h-4 w-4 text-yellow-400" />}
-                <h3 className="text-sm font-bold text-white">{draft.id === null ? "New Strategy" : draft.name}</h3>
-              </div>
-              <p className="mt-1 text-xs text-white/40">{draft.category || "Uncategorized"} strategy document</p>
+      {isModalOpen && (
+        <StrategyPageModal
+          draft={draft}
+          mode={mode}
+          saving={saving}
+          deleting={deleting}
+          onDraftChange={setDraft}
+          onModeChange={setMode}
+          onClose={closeModal}
+          onDelete={handleDelete}
+          onSave={handleSave}
+        />
+      )}
+    </div>
+  );
+}
+
+function StrategyPageModal({
+  draft,
+  mode,
+  saving,
+  deleting,
+  onDraftChange,
+  onModeChange,
+  onClose,
+  onDelete,
+  onSave,
+}: {
+  draft: StrategyDraft;
+  mode: "write" | "preview";
+  saving: boolean;
+  deleting: boolean;
+  onDraftChange: React.Dispatch<React.SetStateAction<StrategyDraft>>;
+  onModeChange: (mode: "write" | "preview") => void;
+  onClose: () => void;
+  onDelete: () => void;
+  onSave: () => void;
+}) {
+  const isReadOnlyPreview = draft.id !== null && mode === "preview";
+
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+      <div className="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl shadow-black/60 sm:max-h-[calc(100dvh-2rem)]">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              {mode === "write" ? <Edit3 className="h-4 w-4 text-yellow-400" /> : <Pin className="h-4 w-4 fill-yellow-400 text-yellow-400" />}
+              <h3 className="truncate text-base font-bold text-white">{draft.id === null ? "New Strategy Page" : draft.name}</h3>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-lg border border-neutral-800 bg-neutral-950 p-1">
-                <button
-                  onClick={() => setMode("write")}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${mode === "write" ? "bg-yellow-400 text-black" : "text-white/50 hover:bg-neutral-800 hover:text-white"}`}
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                  Write
-                </button>
-                <button
-                  onClick={() => setMode("preview")}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${mode === "preview" ? "bg-yellow-400 text-black" : "text-white/50 hover:bg-neutral-800 hover:text-white"}`}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  Preview
-                </button>
-              </div>
-
-              {draft.id === null && (
-                <button
-                  onClick={handleNewStrategy}
-                  className="rounded-lg p-2 text-white/40 hover:bg-neutral-800 hover:text-white"
-                  title="Reset draft"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-60"
-              >
-                {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Delete
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !draft.name.trim() || !draft.markdown.trim()}
-                className="flex items-center gap-2 rounded-lg bg-yellow-400 px-3 py-2 text-xs font-bold text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save
-              </button>
-            </div>
+            <p className="mt-1 text-xs text-white/40">{draft.category || "Uncategorized"} page</p>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
-            <div className="grid grid-cols-1 gap-3 border-b border-neutral-800 bg-neutral-950/30 p-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onModeChange(mode === "write" ? "preview" : "write")}
+              className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs font-bold text-white/70 hover:bg-neutral-800 hover:text-white"
+            >
+              {mode === "write" ? "Preview" : "Write"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-2 text-white/40 hover:bg-neutral-800 hover:text-white"
+              title="Close page"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
+          {!isReadOnlyPreview && (
+            <div className="grid grid-cols-1 gap-3 border-b border-neutral-800 bg-neutral-950/30 p-4">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Strategy Name</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Page Title</label>
                 <input
                   value={draft.name}
-                  onChange={(e) => setDraft((current) => ({ ...current, name: e.target.value }))}
+                  onChange={(e) => onDraftChange((current) => ({ ...current, name: e.target.value }))}
                   className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none transition-colors focus:border-yellow-400/60"
                   placeholder="Strategy for Marketing"
                 />
@@ -321,40 +368,74 @@ export default function Strategies({ projectId }: { projectId: number | null }) 
                 <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Category</label>
                 <input
                   value={draft.category}
-                  onChange={(e) => setDraft((current) => ({ ...current, category: e.target.value }))}
+                  onChange={(e) => onDraftChange((current) => ({ ...current, category: e.target.value }))}
                   className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none transition-colors focus:border-yellow-400/60"
                   placeholder="Marketing"
                 />
               </div>
             </div>
+          )}
 
-            {mode === "write" ? (
-              <div className="flex min-h-0 flex-col p-4">
-                <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/50">
-                  <FileText className="h-3.5 w-3.5 text-yellow-400" />
-                  Markdown
-                </label>
-                <textarea
-                  value={draft.markdown}
-                  onChange={(e) => setDraft((current) => ({ ...current, markdown: e.target.value }))}
-                  className="custom-scrollbar min-h-[560px] flex-1 resize-none rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-4 font-mono text-sm leading-7 text-white outline-none transition-colors placeholder-white/35 focus:border-yellow-400/60"
-                  placeholder="# Marketing Strategy"
-                />
-              </div>
-            ) : (
-              <div className="custom-scrollbar min-h-0 overflow-y-auto p-6">
-              <div className="prose prose-invert prose-sm max-w-none prose-headings:text-white prose-a:text-yellow-300 prose-strong:text-white prose-li:marker:text-yellow-400 prose-code:text-yellow-200">
-                {draft.markdown.trim() ? (
-                  <ReactMarkdown>{draft.markdown}</ReactMarkdown>
-                ) : (
-                  <p className="text-sm text-white/40">Markdown preview will appear here.</p>
-                )}
-              </div>
-              </div>
-            )}
-          </div>
-        </section>
+          {mode === "write" ? (
+            <div className="flex min-h-[420px] flex-col p-4">
+              <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/50">
+                <FileText className="h-3.5 w-3.5 text-yellow-400" />
+                Page Notes
+              </label>
+              <textarea
+                value={draft.markdown}
+                onChange={(e) => onDraftChange((current) => ({ ...current, markdown: e.target.value }))}
+                className="custom-scrollbar min-h-[360px] flex-1 resize-none rounded-lg border border-neutral-800 bg-black px-5 py-4 font-mono text-sm leading-7 text-white outline-none transition-colors placeholder-white/35 focus:border-yellow-400/60"
+                placeholder="# Marketing Strategy"
+              />
+            </div>
+          ) : (
+            <div className="bg-[radial-gradient(circle_at_24%_18%,rgba(250,204,21,0.08),transparent_26%),#090909] p-4 sm:p-6">
+              <article className="relative mx-auto min-h-[420px] max-w-3xl rounded-sm bg-[#fff8d8] px-6 py-7 text-neutral-950 shadow-2xl shadow-black/40 sm:px-10 sm:py-10">
+                <span className="absolute left-1/2 top-4 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full bg-red-500 text-white shadow-lg shadow-black/25">
+                  <Pin className="h-4 w-4 fill-current" />
+                </span>
+                <header className="mt-8 border-b border-black/10 pb-5">
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-neutral-500">{draft.category || "Strategy"}</p>
+                  <h1 className="mt-3 max-w-2xl text-3xl font-black leading-tight text-neutral-950">{draft.name}</h1>
+                  <p className="mt-3 text-sm font-medium leading-6 text-neutral-600">Complete strategy plan</p>
+                </header>
+                <div className="prose prose-neutral mt-7 max-w-none prose-headings:font-black prose-headings:text-neutral-950 prose-p:text-neutral-700 prose-li:text-neutral-700 prose-li:marker:text-yellow-700 prose-strong:text-neutral-950 prose-code:text-yellow-800">
+                  {draft.markdown.trim() ? (
+                    <ReactMarkdown>{draft.markdown}</ReactMarkdown>
+                  ) : (
+                    <p className="text-sm text-neutral-500">Page preview will appear here.</p>
+                  )}
+                </div>
+                <footer className="mt-10 flex items-center justify-between border-t border-black/10 pt-4 text-[11px] font-black uppercase tracking-[0.16em] text-neutral-500">
+                  <span>Strategy page</span>
+                  <span>Supabase</span>
+                </footer>
+              </article>
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 flex items-center justify-between gap-3 border-t border-neutral-800 p-4">
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-60"
+          >
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Delete
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving || !draft.name.trim() || !draft.markdown.trim()}
+            className={`${isReadOnlyPreview ? "hidden" : "flex"} items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-xs font-bold text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60`}
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Save Page
+          </button>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

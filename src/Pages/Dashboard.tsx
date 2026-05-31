@@ -1,242 +1,358 @@
 import { Link } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
-import { useState,useEffect } from "react";
-import { ListTodo, Image as ImageIcon, Video, Terminal, FolderKanban, Wrench, Workflow } from "lucide-react";
-import { TodoItem } from "../utils/types";
-import { readTextFile, BaseDirectory, exists } from '@tauri-apps/plugin-fs';
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  Bot,
+  Cloud,
+  FileText,
+  FolderKanban,
+  Image as ImageIcon,
+  LineChart,
+  Monitor,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  StickyNote,
+  Terminal,
+  Video,
+  Workflow,
+  Wrench,
+} from "lucide-react";
+import { readTextFile, BaseDirectory, exists } from "@tauri-apps/plugin-fs";
 import { useAppLogger, LogEntry } from "../utils/LoggerContext";
+import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { listFinanceWorkspaces, listSupabaseProjects } from "../lib/workspaceSync";
 
-type KPI = {
-    label: string;
-    value: string;
-    change: string;
+type DashboardActivity = Pick<LogEntry, "timestamp" | "level" | "source" | "action" | "message">;
+
+type WorkspaceCounts = {
+  projects: number | null;
+  finance: number | null;
 };
 
-const kpis: KPI[] = [
-    { label: "Active Tasks", value: "12", change: "5 high priority" },
-    { label: "Projects Completed", value: "24", change: "+3 this week" },
-    { label: "AI Requests Today", value: "48", change: "100% success rate" },
-    { label: "Active Tools", value: "6", change: "All online" },
+const quickTools = [
+  {
+    title: "Project Manager",
+    text: "Plan issues, sprints, strategies, comments, and members.",
+    to: "/project-manager",
+    icon: FolderKanban,
+  },
+  {
+    title: "Finance Manager",
+    text: "Open shared finance projects, ledgers, AR/AP, audit, and reports.",
+    to: "/finance",
+    icon: LineChart,
+  },
+  {
+    title: "Notes",
+    text: "Capture notes, organize notebooks, and search your knowledge base.",
+    to: "/notes",
+    icon: StickyNote,
+  },
+  {
+    title: "Prompt Manager",
+    text: "Reuse prompts and store model outputs as text, images, or both.",
+    to: "/prompts",
+    icon: Terminal,
+  },
+  {
+    title: "Photo Editor",
+    text: "Edit images with layers, filters, effects, and export tools.",
+    to: "/photo-editor",
+    icon: ImageIcon,
+  },
+  {
+    title: "Workflow Builder",
+    text: "Connect typed nodes into local automations and reusable flows.",
+    to: "/workflow",
+    icon: Workflow,
+  },
 ];
 
-const weeklyUsage = [52, 66, 61, 74, 69, 84, 72];
+function parseLogLine(line: string): DashboardActivity | null {
+  const match = line.match(/^\[(.*?)\] \[(.*?)\] \[(.*?)\] \[(.*?)\] (.*?) - (.*)$/);
+  if (!match) return null;
+  return {
+    timestamp: match[1],
+    source: match[2] as LogEntry["source"],
+    level: match[4].toLowerCase() as LogEntry["level"],
+    action: match[5],
+    message: match[6],
+  };
+}
 
+function readPromptCount() {
+  try {
+    const prompts = JSON.parse(localStorage.getItem("dawndesk_prompts") || "[]");
+    return Array.isArray(prompts) ? prompts.length : 0;
+  } catch {
+    return 0;
+  }
+}
 
-    
+function readTheme() {
+  return localStorage.getItem("dawndesk_theme") || "dark";
+}
+
+function readNotificationsEnabled() {
+  try {
+    const settings = JSON.parse(localStorage.getItem("dawndesk_global_settings") || "{}");
+    return settings.notifications !== false;
+  } catch {
+    return true;
+  }
+}
 
 export default function Dashboard() {
+  const { logs } = useAppLogger();
+  const [fileActivities, setFileActivities] = useState<DashboardActivity[]>([]);
+  const [promptCount, setPromptCount] = useState(0);
+  const [workspaceCounts, setWorkspaceCounts] = useState<WorkspaceCounts>({ projects: null, finance: null });
+  const [theme, setTheme] = useState(readTheme);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(readNotificationsEnabled);
 
-    const [pendingTodos, setPendingTodos] = useState<TodoItem[]>([]);
-    const { logs } = useAppLogger();
-    const [activities, setActivities] = useState<LogEntry[]>([]);
+  const activities = useMemo(() => {
+    const merged = [...logs, ...fileActivities];
+    return merged
+      .filter((item, index, array) => array.findIndex((other) => other.timestamp === item.timestamp && other.action === item.action) === index)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 8);
+  }, [logs, fileActivities]);
 
-    async function loadLogs() {
-        try {
-            const hasLog = await exists('dawndesk_activity.log', { baseDir: BaseDirectory.AppLocalData });
-            if (!hasLog) return;
-            const content = await readTextFile('dawndesk_activity.log', { baseDir: BaseDirectory.AppLocalData });
-            const lines = content.trim().split('\n').filter(l => l.trim() !== '' && l.startsWith('['));
-            const parsed = lines.map(line => {
-                const timestampMatch = line.match(/^\[(.*?)\]/);
-                const levelMatch = line.match(/^\[.*?\] \[(.*?)\]/);
-                
-                const time = timestampMatch ? new Date(timestampMatch[1]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown time';
-                const level = levelMatch ? levelMatch[1].toLowerCase() as any : 'info';
-                
-                const rest = line.replace(/^\[.*?\] \[(.*?)\] /, '');
-                const [action, ...msgParts] = rest.split(' - ');
-                const message = msgParts.join(' - ');
-
-                return { timestamp: timestampMatch ? timestampMatch[1] : '', action, level, message, time };
-            }).reverse().slice(0, 50);
-            
-            // Merge with state logs, avoiding duplicates based on timestamp
-            const fileLogs = parsed as any[];
-            setActivities(fileLogs);
-        } catch (err) {
-            console.error('Failed to load logs in dashboard', err);
-        }
-    }
-
-    async function getPendingTodos(){
+  async function loadLogs() {
     try {
-        const result = await invoke<TodoItem[]>("get_pending_todos");
-        console.log("Pending todos from Rust:", result);
-        setPendingTodos(result);
-    } catch (error) {
-        console.error("Error fetching pending todos:", error);
+      const hasLog = await exists("dawndesk_activity.log", { baseDir: BaseDirectory.AppLocalData });
+      if (!hasLog) return;
+      const content = await readTextFile("dawndesk_activity.log", { baseDir: BaseDirectory.AppLocalData });
+      const parsed = content
+        .trim()
+        .split("\n")
+        .map(parseLogLine)
+        .filter(Boolean) as DashboardActivity[];
+      setFileActivities(parsed.reverse().slice(0, 30));
+    } catch (err) {
+      console.error("Failed to load logs in dashboard", err);
     }
-}
-useEffect(() => {
-    getPendingTodos();
-    loadLogs();
-}, []);
+  }
 
-    return (
-        <div className="p-8 mx-auto w-full max-w-7xl space-y-6">
-            <section className="dd-hero">
-                <p className="dd-label">Dashboard</p>
-                <h1 className="mt-2 dd-page-title">Welcome back to DawnDesk</h1>
-                <p className="mt-2 max-w-2xl dd-body-lg">
-                    Monitor your workflow, jump into tools quickly, and keep track of current activity from one place.
-                </p>
-            </section>
+  async function loadWorkspaceCounts() {
+    if (!isSupabaseConfigured) return;
+    try {
+      const [projects, finance] = await Promise.allSettled([
+        listSupabaseProjects(),
+        listFinanceWorkspaces(),
+      ]);
+      setWorkspaceCounts({
+        projects: projects.status === "fulfilled" ? projects.value.length : null,
+        finance: finance.status === "fulfilled" ? finance.value.length : null,
+      });
+    } catch {
+      setWorkspaceCounts({ projects: null, finance: null });
+    }
+  }
 
-            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {kpis.map((item) => (
-                    <article key={item.label} className="dd-card">
-                        <p className="dd-body">{item.label}</p>
-                        <p className="mt-2 text-2xl font-bold text-white">{item.value}</p>
-                        <p className="mt-2 text-xs font-semibold text-yellow-300">{item.change}</p>
-                    </article>
-                ))}
-            </section>
+  useEffect(() => {
+    setPromptCount(readPromptCount());
+    setTheme(readTheme());
+    setNotificationsEnabled(readNotificationsEnabled());
+    void loadLogs();
+    void loadWorkspaceCounts();
 
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-                <div className="xl:col-span-8 space-y-4">
+    const refreshSettings = () => {
+      setTheme(readTheme());
+      setNotificationsEnabled(readNotificationsEnabled());
+      setPromptCount(readPromptCount());
+    };
+    window.addEventListener("storage", refreshSettings);
+    window.addEventListener("dawndesk_theme_changed", refreshSettings);
+    return () => {
+      window.removeEventListener("storage", refreshSettings);
+      window.removeEventListener("dawndesk_theme_changed", refreshSettings);
+    };
+  }, []);
 
-                            <article className="dd-card">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <h2 className="dd-section-title">Latest Pending Tasks</h2>
-                                                        <p className="mt-1 dd-subtext">Track your newest todo items at a glance</p>
-                                                    </div>
+  const summaryCards = [
+    {
+      label: "Project Workspaces",
+      value: workspaceCounts.projects === null ? "Sign in" : String(workspaceCounts.projects),
+      detail: "Supabase project spaces",
+      icon: FolderKanban,
+      to: "/project-manager",
+    },
+    {
+      label: "Finance Projects",
+      value: workspaceCounts.finance === null ? "Sign in" : String(workspaceCounts.finance),
+      detail: "Supabase finance workspaces",
+      icon: LineChart,
+      to: "/finance",
+    },
+    {
+      label: "Saved Prompts",
+      value: String(promptCount),
+      detail: "Templates and stored outputs",
+      icon: Bot,
+      to: "/prompts",
+    },
+    {
+      label: "Recent Operations",
+      value: String(activities.length),
+      detail: "Latest logged app actions",
+      icon: Activity,
+      to: "/settings?tab=loggers",
+    },
+  ];
 
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="dd-badge">
-                                                            {pendingTodos.length} items
-                                                        </span>
-                                                        <Link
-                                                            to="/todo"
-                                                            className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-semibold text-white/80 transition-colors hover:bg-neutral-800 hover:text-white"
-                                                        >
-                                                            Open Todo
-                                                        </Link>
-                                                    </div>
-                                                </div>
+  return (
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-8">
+      <section className="dd-hero">
+        <p className="dd-label">Dashboard</p>
+        <h1 className="mt-2 dd-page-title">DawnDesk Command Center</h1>
+        <p className="mt-2 max-w-2xl dd-body-lg">
+          Jump into active work, check your connected workspaces, and review recent app activity from one useful place.
+        </p>
+      </section>
 
-                                                <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/60">
-                                                    {pendingTodos && pendingTodos.length > 0 ? (
-                                                        <ul className="divide-y divide-neutral-800">
-                                                            {pendingTodos.map((item) => (
-                                                                <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                                                                    <div className="min-w-0">
-                                                                        <p className="truncate text-sm font-medium text-white/90">{item.title}</p>
-                                                                        <p className="mt-1 dd-subtext">Task #{item.id}</p>
-                                                                    </div>
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((item) => (
+          <Link key={item.label} to={item.to} className="dd-card group transition-colors hover:border-yellow-400/35">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="dd-body">{item.label}</p>
+                <p className="mt-2 text-3xl font-black text-white">{item.value}</p>
+                <p className="mt-2 text-xs font-semibold text-yellow-300">{item.detail}</p>
+              </div>
+              <span className="dd-icon-box-sm text-yellow-400">
+                <item.icon className="h-5 w-5" />
+              </span>
+            </div>
+          </Link>
+        ))}
+      </section>
 
-                                                                    <span
-                                                                        className={`shrink-0 ${
-                                                                            item.completed
-                                                                                ? "dd-chip-success"
-                                                                                : "dd-chip-warning"
-                                                                        }`}
-                                                                    >
-                                                                        {item.completed ? "Completed" : "Pending"}
-                                                                    </span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    ) : (
-                                                        <div className="px-4 py-6 text-sm text-white/60">
-                                                            No pending tasks right now. Create one from the Todo page to keep track of it here.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                        </article>
-                    <article className="dd-card">
-                        <div className="flex items-center justify-between">
-                            <h2 className="dd-section-title">Productivity (7 Days)</h2>
-                            <span className="dd-subtext">Sessions completed</span>
-                        </div>
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="space-y-5 xl:col-span-8">
+          <article className="dd-card">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="dd-section-title">Open A Workspace</h2>
+                <p className="mt-1 dd-subtext">Useful shortcuts for the tools you actually use in DawnDesk.</p>
+              </div>
+              <Link to="/settings" className="dd-btn-secondary">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </div>
 
-                        <div className="mt-5 flex h-40 items-end justify-between gap-2">
-                            {weeklyUsage.map((value, index) => (
-                                <div key={index} className="flex w-full flex-col items-center gap-2">
-                                    <div
-                                        className="w-full rounded-t-md bg-yellow-400/90"
-                                        style={{ height: `${value}%` }}
-                                    />
-                                    <span className="dd-subtext">D{index + 1}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </article>
+            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {quickTools.map((tool) => (
+                <Link key={tool.title} to={tool.to} className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-4 transition-colors hover:border-yellow-400/35 hover:bg-neutral-900">
+                  <div className="flex gap-4">
+                    <span className="dd-icon-box-sm text-yellow-400">
+                      <tool.icon className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">{tool.title}</h3>
+                      <p className="mt-1 text-sm leading-6 text-white/50">{tool.text}</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </article>
 
-                    
+          <article className="dd-card">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="dd-section-title">Recent Activity</h2>
+                <p className="mt-1 dd-subtext">Operation logs from saves, imports, exports, edits, and sync events.</p>
+              </div>
+              <button onClick={() => void loadLogs()} className="dd-btn-secondary">
+                Refresh
+              </button>
+            </div>
+
+            <div className="mt-5 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950/50">
+              {activities.length > 0 ? (
+                <ul className="divide-y divide-neutral-800">
+                  {activities.map((item, index) => (
+                    <li key={`${item.timestamp}-${item.action}-${index}`} className="grid gap-3 px-4 py-3 md:grid-cols-[160px_1fr_auto] md:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-white">{item.action}</p>
+                        <p className="mt-1 text-xs uppercase tracking-wide text-white/35">{item.source}</p>
+                      </div>
+                      <p className="line-clamp-2 text-sm leading-6 text-white/55">{item.message}</p>
+                      <div className="flex items-center gap-2 md:justify-end">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                          item.level === "error"
+                            ? "border-red-500/30 bg-red-500/10 text-red-300"
+                            : item.level === "warning"
+                              ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-200"
+                              : "border-neutral-700 bg-neutral-900 text-white/45"
+                        }`}>
+                          {item.level}
+                        </span>
+                        <span className="text-xs text-white/35">
+                          {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Now"}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-white/45">
+                  No recent activity yet. Use a DawnDesk tool and logged operations will appear here.
                 </div>
-
-                <div className="xl:col-span-4 space-y-4">
-                    
-
-                    <article className="dd-card">
-                        <h2 className="dd-section-title">Quick Tools</h2>
-                        <p className="mt-1 dd-subtext">Jump straight into your active tools</p>
-                        <div className="mt-4 grid grid-cols-2 gap-3">
-                            <Link to="/todo" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <ListTodo className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Tasks</span>
-                            </Link>
-                            <Link to="/photo-editor" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <ImageIcon className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Photo Editor</span>
-                            </Link>
-                            <Link to="/video-editor" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <Video className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Video Editor</span>
-                            </Link>
-                            <Link to="/prompts" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <Terminal className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Prompts</span>
-                            </Link>
-                            <Link to="/project-manager" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <FolderKanban className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Projects</span>
-                            </Link>
-                            <Link to="/dev-tools" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <Wrench className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Dev Tools</span>
-                            </Link>
-                            <Link to="/workflow" className="flex flex-col items-center justify-center p-3 rounded-lg border border-neutral-800 bg-neutral-950/40 hover:bg-neutral-800/50 transition-colors text-center group">
-                                <Workflow className="h-6 w-6 text-white/75 group-hover:text-white transition-all" />
-                                <span className="mt-2 text-xs font-semibold text-white/80 group-hover:text-yellow-300">Workflow</span>
-                            </Link>
-                        </div>
-                    </article>
-                    <article className="dd-card">
-                        <div className="flex items-center justify-between">
-                            <h2 className="dd-section-title">Recent Activity</h2>
-                            <button 
-                                onClick={loadLogs}
-                                className="text-xs text-yellow-300 hover:text-yellow-400"
-                            >
-                                Refresh
-                            </button>
-                        </div>
-                        <ul className="mt-4 space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                            {[...logs, ...activities].filter((v,i,a) => a.findIndex(t=>(t.timestamp === v.timestamp)) === i).length > 0 ? 
-                                [...logs, ...activities].filter((v,i,a) => a.findIndex(t=>(t.timestamp === v.timestamp)) === i).slice(0,50).map((item, index) => (
-                                <li key={index} className="flex flex-col rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-white/85 truncate font-medium">{item.action}</span>
-                                        <span className="dd-subtext shrink-0 text-[10px] uppercase text-yellow-500/70">{item.level}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between mt-1">
-                                        <span className="text-xs text-white/60 truncate">{item.message}</span>
-                                        <span className="dd-subtext shrink-0 ml-2">
-                                            {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
-                                        </span>
-                                    </div>
-                                </li>
-                            )) : (
-                                <div className="text-sm text-white/50 text-center py-4">No recent activity</div>
-                            )}
-                        </ul>
-                    </article>  
-
-                   
-                </div>
-            </section>
+              )}
+            </div>
+          </article>
         </div>
-    );
+
+        <aside className="space-y-5 xl:col-span-4">
+          <article className="dd-card">
+            <h2 className="dd-section-title">System & Sync</h2>
+            <p className="mt-1 dd-subtext">Current app state that helps explain what is connected.</p>
+
+            <div className="mt-5 space-y-3">
+              <StatusRow icon={<Cloud />} label="Supabase" value={isSupabaseConfigured ? "Configured" : "Missing env"} ok={isSupabaseConfigured} />
+              <StatusRow icon={<Monitor />} label="Theme" value={theme === "light" ? "Light" : "Dark"} ok />
+              <StatusRow icon={<ShieldCheck />} label="Notifications" value={notificationsEnabled ? "Enabled" : "Disabled"} ok={notificationsEnabled} />
+              <StatusRow icon={<FileText />} label="Activity Log" value={`${activities.length} visible`} ok />
+            </div>
+          </article>
+
+          <article className="dd-card">
+            <h2 className="dd-section-title">Creative Tools</h2>
+            <p className="mt-1 dd-subtext">Fast access to creation and utility surfaces.</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <MiniTool to="/video-editor" icon={<Video />} label="Video" />
+              <MiniTool to="/photo-editor" icon={<ImageIcon />} label="Photo" />
+              <MiniTool to="/dev-tools" icon={<Wrench />} label="Dev Tools" />
+              <MiniTool to="/prompts" icon={<Sparkles />} label="Prompts" />
+            </div>
+          </article>
+        </aside>
+      </section>
+    </div>
+  );
+}
+
+function StatusRow({ icon, label, value, ok }: { icon: React.ReactNode; label: string; value: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950/45 px-3 py-3">
+      <div className="flex items-center gap-3">
+        <span className={ok ? "text-yellow-400" : "text-red-300"}>{icon}</span>
+        <span className="text-sm font-bold text-white/80">{label}</span>
+      </div>
+      <span className={ok ? "text-xs font-semibold text-white/45" : "text-xs font-semibold text-red-300"}>{value}</span>
+    </div>
+  );
+}
+
+function MiniTool({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
+  return (
+    <Link to={to} className="flex flex-col items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950/40 p-3 text-center transition-colors hover:bg-neutral-800/50">
+      <span className="text-white/75">{icon}</span>
+      <span className="mt-2 text-xs font-semibold text-white/80">{label}</span>
+    </Link>
+  );
 }

@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Save, Trash2, ShieldAlert, Loader2, Plus, X, Tag, Settings2, GitMerge, Bot, Database } from "lucide-react";
-import { LocalProject } from "./types";
+import { Save, Trash2, ShieldAlert, Loader2, Plus, X, Tag, Settings2, GitMerge, Bot, Database, Users, Mail } from "lucide-react";
+import { LocalProject, ProjectMember } from "./types";
+import { isSupabaseConfigured } from "../../lib/supabaseClient";
+import {
+  createSupabaseProject,
+  deleteSupabaseProject,
+  inviteProjectMember,
+  listProjectMembers,
+  removeProjectMember,
+  updateSupabaseProject,
+} from "../../lib/workspaceSync";
 
 interface Label {
   id: number;
@@ -62,7 +71,7 @@ export default function ProjectSettings(props: ProjectSettingsProps) {
 function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: ProjectSettingsProps & { project: LocalProject }) {
   if (!project) return null;
 
-  const [activeTab, setActiveTab] = useState<"general" | "workflows" | "automations" | "customFields">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "members" | "workflows" | "automations" | "customFields">("general");
 
   const [name, setName] = useState(project.name);
   const [projKey, setProjKey] = useState(project.key);
@@ -70,12 +79,19 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
   const [projectType, setProjectType] = useState<"Scrum" | "Kanban">((project.project_type as "Scrum" | "Kanban") || "Scrum");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState("");
 
   // Labels
   const [labels, setLabels] = useState<Label[]>([]);
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0]);
   const [showLabelForm, setShowLabelForm] = useState(false);
+
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<ProjectMember["role"]>("Editor");
+  const [inviting, setInviting] = useState(false);
 
   // Workflows
   const [workflows, setWorkflows] = useState<WorkflowStatus[]>([]);
@@ -109,6 +125,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
       setLabels(lbls);
       setWorkflows(wfs);
       setAutomations(autos);
+      await fetchMembers(project.supabase_project_id ?? null);
 
       try {
         const cfs = await invoke<CustomField[]>("get_custom_fields", { projectId: project.id });
@@ -124,6 +141,20 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
   useEffect(() => {
     fetchData();
   }, [project.id]);
+
+  const fetchMembers = async (supabaseProjectId = project.supabase_project_id ?? null) => {
+    if (!supabaseProjectId || !isSupabaseConfigured) {
+      setMembers([]);
+      return;
+    }
+
+    try {
+      const data = await listProjectMembers(supabaseProjectId);
+      setMembers(data);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   useEffect(() => {
     if (workflows.length > 0 && !newAutoCondition) {
@@ -143,16 +174,21 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
           key: projKey.trim().toUpperCase() || project.key,
           description: desc.trim() || null,
           color_tag: project.color_tag,
-          project_type: projectType
+          project_type: projectType,
+          supabase_project_id: project.supabase_project_id ?? null
         }
       });
-      onProjectUpdated({
+      const updatedProject = {
         ...project,
         name: name.trim(),
         key: projKey.trim().toUpperCase() || project.key,
         description: desc.trim() || null,
         project_type: projectType,
-      });
+      };
+      if (updatedProject.supabase_project_id) {
+        await updateSupabaseProject(updatedProject);
+      }
+      onProjectUpdated(updatedProject);
     } catch (error) {
       console.error(error);
     }
@@ -163,11 +199,63 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
     if (!window.confirm("Are you sure you want to delete this project and ALL its issues? This cannot be undone.")) return;
     setDeleting(true);
     try {
+      if (project.supabase_project_id && isSupabaseConfigured) {
+        await deleteSupabaseProject(project.supabase_project_id);
+      }
       await invoke("delete_project", { id: project.id });
       onProjectDeleted();
     } catch (error) {
       console.error(error);
       setDeleting(false);
+    }
+  };
+
+  const handleLinkSupabase = async () => {
+    if (!isSupabaseConfigured) {
+      setSyncError("Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    setSyncing(true);
+    setSyncError("");
+    try {
+      const remoteProject = await createSupabaseProject(project);
+      const updatedProject = { ...project, supabase_project_id: remoteProject.id };
+      await invoke("update_project", { input: updatedProject });
+      onProjectUpdated(updatedProject);
+      await fetchMembers(remoteProject.id);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error));
+    }
+    setSyncing(false);
+  };
+
+  const handleInviteMember = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!project.supabase_project_id || !inviteEmail.trim()) return;
+
+    setInviting(true);
+    setSyncError("");
+    try {
+      await inviteProjectMember(project.supabase_project_id, inviteEmail, inviteRole);
+      setInviteEmail("");
+      setInviteRole("Editor");
+      await fetchMembers();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error));
+    }
+    setInviting(false);
+  };
+
+  const handleRemoveMember = async (member: ProjectMember) => {
+    if (member.role === "Owner") return;
+    if (!window.confirm("Remove this member from the project?")) return;
+
+    try {
+      await removeProjectMember(member.id);
+      await fetchMembers();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -291,6 +379,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
       <div className="flex gap-4 border-b border-neutral-800 pb-px">
         {[
           { id: "general", label: "General", icon: Settings2 },
+          { id: "members", label: "Members", icon: Users },
           { id: "workflows", label: "Workflows", icon: GitMerge },
           { id: "automations", label: "Automations", icon: Bot },
           { id: "customFields", label: "Custom Fields", icon: Database },
@@ -309,6 +398,12 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
           </button>
         ))}
       </div>
+
+      {syncError && (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Supabase sync needs attention: {syncError}
+        </div>
+      )}
 
       {activeTab === "general" && (
         <div className="flex flex-col gap-8 animate-fadeIn">
@@ -458,6 +553,97 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete Project
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "members" && (
+        <div className="flex flex-col gap-6 animate-fadeIn">
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-6 sm:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                  <Users className="w-4 h-4" /> Supabase Project Members
+                </h3>
+                <p className="text-xs text-white/40 mt-1">
+                  Projects can include multiple users with Owner, Editor, or Viewer access.
+                </p>
+              </div>
+              {!project.supabase_project_id && (
+                <button
+                  onClick={handleLinkSupabase}
+                  disabled={syncing}
+                  className="dd-btn-primary"
+                >
+                  {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+                  Link to Supabase
+                </button>
+              )}
+            </div>
+
+            {project.supabase_project_id ? (
+              <>
+                <form onSubmit={handleInviteMember} className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 sm:grid-cols-[1fr_160px_auto]">
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="teammate@example.com"
+                      className="w-full rounded-lg border border-neutral-800 bg-neutral-950 py-2.5 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-yellow-400/60"
+                      required
+                    />
+                  </div>
+                  <select
+                    value={inviteRole}
+                    onChange={(event) => setInviteRole(event.target.value as ProjectMember["role"])}
+                    className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-yellow-400/60"
+                  >
+                    <option value="Editor">Editor</option>
+                    <option value="Viewer">Viewer</option>
+                  </select>
+                  <button type="submit" disabled={inviting} className="dd-btn-primary">
+                    {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Invite
+                  </button>
+                </form>
+
+                <div className="mt-6 space-y-2">
+                  {members.length === 0 ? (
+                    <p className="text-center text-sm text-white/40 py-6">No members loaded yet.</p>
+                  ) : members.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-950/50 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">
+                          {member.display_name || member.email || member.invited_email || "Pending member"}
+                        </p>
+                        <p className="text-xs text-white/40">
+                          {member.email || member.invited_email || "No email"} - {member.status}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1 text-xs font-bold text-white/60">
+                          {member.role}
+                        </span>
+                        {member.role !== "Owner" && (
+                          <button
+                            onClick={() => handleRemoveMember(member)}
+                            className="rounded-lg p-2 text-white/35 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mt-6 rounded-xl border border-dashed border-neutral-800 bg-neutral-950/40 p-6 text-sm leading-relaxed text-white/50">
+                Link this project to Supabase to invite teammates and make it available across signed-in DawnDesk installs.
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Plus, Download, Send, FileText, CheckCircle2, CircleDashed, Clock, X, Trash2 } from "lucide-react";
 import { exportTextFile } from "../../../utils/exportFile";
 import { useAppLogger } from "../../../utils/LoggerContext";

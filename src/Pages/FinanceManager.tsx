@@ -1,24 +1,43 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import ConnectionErrorModal from "../components/ConnectionErrorModal";
 import WelcomeScreen from "../components/WelcomeScreen";
 import {
+  ArrowLeft,
   ArrowDownRight,
   ArrowUpRight,
-  Bell,
   BookOpen,
   Building,
   ClipboardCheck,
+  Cloud,
+  Database,
   FileBarChart,
   Landmark,
+  Loader2,
   Package,
   PieChart,
   Plug,
+  Plus,
   ReceiptText,
   Search,
-  ShieldCheck,
   ShoppingCart,
+  UserPlus,
+  Users,
   Wallet,
+  X,
 } from "lucide-react";
-
+import { isSupabaseConfigured } from "../lib/supabaseClient";
+import {
+  createFinanceWorkspace,
+  formatSupabaseError,
+  inviteFinanceMember,
+  listFinanceMembers,
+  listFinanceWorkspaces,
+  removeFinanceMember,
+  type FinanceMember,
+  type FinanceWorkspace,
+} from "../lib/workspaceSync";
+import { setActiveFinanceWorkspaceId } from "../lib/financeSupabaseInvoke";
+import { CONNECTION_ERROR_EVENT, getConnectionErrorMessage } from "../lib/connectionErrors";
 import DashboardView from "../components/finance-manager/views/DashboardView";
 import GeneralLedgerView from "../components/finance-manager/views/GeneralLedgerView";
 import AccountsReceivableView from "../components/finance-manager/views/AccountsReceivableView";
@@ -32,6 +51,7 @@ import ProcurementView from "../components/finance-manager/views/ProcurementView
 import InventoryCogsView from "../components/finance-manager/views/InventoryCogsView";
 import IntegrationsAutomationView from "../components/finance-manager/views/IntegrationsAutomationView";
 import ComplianceAuditView from "../components/finance-manager/views/ComplianceAuditView";
+import FinanceSectionComments from "../components/finance-manager/FinanceSectionComments";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: <PieChart className="w-5 h-5" /> },
@@ -47,15 +67,133 @@ const NAV_ITEMS = [
   { id: "inventory", label: "Inventory & COGS", icon: <Package className="w-5 h-5" /> },
   { id: "integrations", label: "Integrations", icon: <Plug className="w-5 h-5" /> },
   { id: "compliance", label: "Compliance & Audit", icon: <ClipboardCheck className="w-5 h-5" /> },
+  { id: "members", label: "Members", icon: <Users className="w-5 h-5" /> },
 ];
 
 export default function FinanceManager() {
   const [activeView, setActiveView] = useState("dashboard");
   const [navSearch, setNavSearch] = useState("");
+  const [financeWorkspace, setFinanceWorkspace] = useState<FinanceWorkspace | null>(null);
+  const [financeWorkspaces, setFinanceWorkspaces] = useState<FinanceWorkspace[]>([]);
+  const [financeMembers, setFinanceMembers] = useState<FinanceMember[]>([]);
+  const [financeSyncError, setFinanceSyncError] = useState("");
+  const [loadingWorkspace, setLoadingWorkspace] = useState(true);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<FinanceMember["role"]>("Accountant");
+  const [inviting, setInviting] = useState(false);
+  const [connectionErrorOpen, setConnectionErrorOpen] = useState(false);
   const activeItem = NAV_ITEMS.find((item) => item.id === activeView) ?? NAV_ITEMS[0];
   const filteredNavItems = NAV_ITEMS.filter((item) =>
     item.label.toLowerCase().includes(navSearch.trim().toLowerCase())
   );
+
+  const refreshFinanceWorkspace = async () => {
+    if (!isSupabaseConfigured) {
+      setLoadingWorkspace(false);
+      return;
+    }
+
+    setFinanceSyncError("");
+    setLoadingWorkspace(true);
+    try {
+      const workspaces = await listFinanceWorkspaces();
+      setFinanceWorkspaces(workspaces);
+      if (financeWorkspace && workspaces.some((workspace) => workspace.id === financeWorkspace.id)) {
+        setFinanceMembers(await listFinanceMembers(financeWorkspace.id));
+      } else {
+        setFinanceWorkspace(null);
+        setFinanceMembers([]);
+      }
+    } catch (error) {
+      setFinanceSyncError(formatSupabaseError(error));
+    }
+    setLoadingWorkspace(false);
+  };
+
+  useEffect(() => {
+    refreshFinanceWorkspace();
+  }, []);
+
+  useEffect(() => {
+    const handleConnectionError = () => {
+      setConnectionErrorOpen(true);
+    };
+
+    window.addEventListener(CONNECTION_ERROR_EVENT, handleConnectionError);
+    return () => window.removeEventListener(CONNECTION_ERROR_EVENT, handleConnectionError);
+  }, []);
+
+  useEffect(() => {
+    setActiveFinanceWorkspaceId(financeWorkspace?.id ?? null);
+  }, [financeWorkspace?.id]);
+
+  const handleInviteFinanceMember = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!financeWorkspace || !inviteEmail.trim()) return;
+
+    setInviting(true);
+    setFinanceSyncError("");
+    try {
+      await inviteFinanceMember(financeWorkspace.id, inviteEmail, inviteRole);
+      setInviteEmail("");
+      setInviteRole("Accountant");
+      const members = await listFinanceMembers(financeWorkspace.id);
+      setFinanceMembers(members);
+    } catch (error) {
+      setFinanceSyncError(formatSupabaseError(error));
+    }
+    setInviting(false);
+  };
+
+  const handleCreateFinanceWorkspace = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newWorkspaceName.trim()) return;
+    setCreatingWorkspace(true);
+    setFinanceSyncError("");
+    try {
+      const workspace = await createFinanceWorkspace(newWorkspaceName);
+      const workspaces = await listFinanceWorkspaces();
+      setFinanceWorkspaces(workspaces);
+      setFinanceWorkspace(workspace);
+      setFinanceMembers(await listFinanceMembers(workspace.id));
+      setNewWorkspaceName("");
+      setIsWorkspaceModalOpen(false);
+      setActiveView("dashboard");
+    } catch (error) {
+      setFinanceSyncError(formatSupabaseError(error));
+    }
+    setCreatingWorkspace(false);
+  };
+
+  const handleSelectWorkspace = async (workspaceId: string) => {
+    const workspace = financeWorkspaces.find((item) => item.id === workspaceId);
+    if (!workspace) return;
+    setFinanceWorkspace(workspace);
+    setFinanceSyncError("");
+    try {
+      setFinanceMembers(await listFinanceMembers(workspace.id));
+    } catch (error) {
+      setFinanceSyncError(formatSupabaseError(error));
+    }
+  };
+
+  const handleRemoveFinanceMember = async (member: FinanceMember) => {
+    if (member.role === "Owner") return;
+    if (!window.confirm("Remove this user from the finance workspace?")) return;
+
+    try {
+      await removeFinanceMember(member.id);
+      if (financeWorkspace) {
+        const members = await listFinanceMembers(financeWorkspace.id);
+        setFinanceMembers(members);
+      }
+    } catch (error) {
+      setFinanceSyncError(formatSupabaseError(error));
+    }
+  };
 
   const renderView = () => {
     switch (activeView) {
@@ -85,6 +223,21 @@ export default function FinanceManager() {
         return <IntegrationsAutomationView />;
       case "compliance":
         return <ComplianceAuditView />;
+      case "members":
+        return (
+          <FinanceMembersSettings
+            workspace={financeWorkspace}
+            members={financeMembers}
+            error={financeSyncError}
+            inviteEmail={inviteEmail}
+            inviteRole={inviteRole}
+            inviting={inviting}
+            onInviteEmailChange={setInviteEmail}
+            onInviteRoleChange={setInviteRole}
+            onInvite={handleInviteFinanceMember}
+            onRemove={handleRemoveFinanceMember}
+          />
+        );
       default:
         return <DashboardView />;
     }
@@ -94,8 +247,34 @@ export default function FinanceManager() {
     <WelcomeScreen
       appKey="finance"
       title="Advanced Finance Manager"
-      description="Powerful enterprise resource planning (ERP) capabilities - securely offline."
+      description="Powerful ERP capabilities connected to your Supabase finance workspace."
     >
+      <ConnectionErrorModal
+        open={connectionErrorOpen}
+        message={getConnectionErrorMessage()}
+        onClose={() => setConnectionErrorOpen(false)}
+      />
+      {financeWorkspace === null ? (
+        <>
+          <FinanceWorkspaceHub
+            workspaces={financeWorkspaces}
+            loading={loadingWorkspace}
+            error={financeSyncError}
+            onSelect={handleSelectWorkspace}
+            onCreateClick={() => setIsWorkspaceModalOpen(true)}
+          />
+          {isWorkspaceModalOpen && (
+            <FinanceWorkspaceCreateModal
+              name={newWorkspaceName}
+              creating={creatingWorkspace}
+              error={financeSyncError}
+              onNameChange={setNewWorkspaceName}
+              onClose={() => setIsWorkspaceModalOpen(false)}
+              onSubmit={handleCreateFinanceWorkspace}
+            />
+          )}
+        </>
+      ) : (
       <div className="dd-page">
         <aside className="dd-sidebar">
           <div className="dd-sidebar-header">
@@ -108,6 +287,13 @@ export default function FinanceManager() {
                 <p className="dd-subtext">Enterprise ERP Workspace</p>
               </div>
             </div>
+            <button
+              onClick={() => { setFinanceWorkspace(null); setFinanceMembers([]); }}
+              className="mt-5 flex items-center gap-2 text-xs font-bold text-white/60 transition-colors hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Finance projects
+            </button>
             <div className="dd-search mt-5">
               <Search className="h-4 w-4" />
               <input
@@ -142,18 +328,18 @@ export default function FinanceManager() {
           <div className="space-y-3 border-t border-neutral-800 p-4">
             <div className="dd-sidebar-notice">
               <div className="flex items-center gap-2 text-xs font-bold text-white">
-                <ShieldCheck className="h-4 w-4 text-green-400" />
-                Local-first vault
+                {loadingWorkspace ? <Loader2 className="h-4 w-4 animate-spin text-yellow-400" /> : <Cloud className="h-4 w-4 text-yellow-400" />}
+                Supabase finance workspace
               </div>
               <p className="dd-subtext mt-1 leading-relaxed">
-                Ledger, accounts, and reports stay on this device.
+                {financeWorkspace ? `${financeWorkspace.name} - ${financeMembers.length} member${financeMembers.length === 1 ? "" : "s"} connected.` : "Sign-in creates a shared finance workspace."}
               </p>
             </div>
-            <button onClick={() => setActiveView("compliance")} className="dd-nav-item">
-              <Bell className="h-5 w-5" />
-              Alerts
-              <span className="ml-auto rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-bold text-black">3</span>
-            </button>
+            {financeSyncError && (
+              <p className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs leading-relaxed text-red-200">
+                {financeSyncError}
+              </p>
+            )}
           </div>
         </aside>
 
@@ -168,6 +354,11 @@ export default function FinanceManager() {
                 <h2 className="dd-card-title">{activeItem.label}</h2>
               </div>
             </div>
+            <FinanceSectionComments
+              workspaceId={financeWorkspace?.id}
+              section={activeView}
+              sectionLabel={activeItem.label}
+            />
           </header>
 
           <div className="custom-scrollbar absolute inset-0 overflow-y-auto">
@@ -175,6 +366,268 @@ export default function FinanceManager() {
           </div>
         </main>
       </div>
+      )}
     </WelcomeScreen>
+  );
+}
+
+function FinanceWorkspaceHub({
+  workspaces,
+  loading,
+  error,
+  onSelect,
+  onCreateClick,
+}: {
+  workspaces: FinanceWorkspace[];
+  loading: boolean;
+  error: string;
+  onSelect: (workspaceId: string) => void;
+  onCreateClick: () => void;
+}) {
+  return (
+    <div className="mx-auto flex h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-8 p-4 sm:p-8">
+      <section className="flex flex-col justify-between gap-6 border-b border-neutral-800 pb-6 md:flex-row md:items-end">
+        <div className="flex items-center gap-5">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-neutral-700/50 bg-gradient-to-br from-neutral-800 to-neutral-900 shadow-inner">
+            <Wallet className="h-8 w-8 text-neutral-300" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Finance Projects</h1>
+            <p className="mt-1 max-w-xl text-neutral-400">Choose a Supabase-backed finance workspace or create a new one.</p>
+          </div>
+        </div>
+        <button onClick={onCreateClick} className="dd-btn-primary">
+          <Plus className="h-4 w-4" />
+          New Finance Project
+        </button>
+      </section>
+
+      {error && (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      <section className="custom-scrollbar flex-1 overflow-auto pb-8">
+        {loading ? (
+          <div className="grid h-64 place-items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-neutral-600" />
+          </div>
+        ) : workspaces.length === 0 ? (
+          <div className="flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-800 bg-neutral-900/20 text-center">
+            <Database className="mb-4 h-12 w-12 text-neutral-600" />
+            <h3 className="mb-1 text-lg font-medium text-white">No finance projects found</h3>
+            <p className="max-w-md text-neutral-400">Create your first finance project to start saving finance data in Supabase.</p>
+            <button onClick={onCreateClick} className="dd-btn-primary mt-6">
+              <Plus className="h-4 w-4" />
+              Create Finance Project
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {workspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                onClick={() => onSelect(workspace.id)}
+                className="group relative flex min-h-[190px] flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 text-left transition-all hover:bg-neutral-800/60 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              >
+                <div className="absolute left-0 top-0 h-1 w-full bg-yellow-400" />
+                <div className="mb-4 flex items-start justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-800/80">
+                    <Wallet className="h-5 w-5 text-neutral-300 transition-colors group-hover:text-white" />
+                  </div>
+                  <Cloud className="h-4 w-4 text-yellow-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="mb-2 line-clamp-1 text-lg font-semibold text-white transition-colors group-hover:text-yellow-400">{workspace.name}</h3>
+                  <p className="line-clamp-2 text-sm leading-relaxed text-neutral-400">Supabase finance project</p>
+                </div>
+                <div className="mt-6 border-t border-neutral-800/60 pt-4 text-xs font-medium text-neutral-500">
+                  {new Date(workspace.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function FinanceMembersSettings({
+  workspace,
+  members,
+  error,
+  inviteEmail,
+  inviteRole,
+  inviting,
+  onInviteEmailChange,
+  onInviteRoleChange,
+  onInvite,
+  onRemove,
+}: {
+  workspace: FinanceWorkspace | null;
+  members: FinanceMember[];
+  error: string;
+  inviteEmail: string;
+  inviteRole: FinanceMember["role"];
+  inviting: boolean;
+  onInviteEmailChange: (value: string) => void;
+  onInviteRoleChange: (value: FinanceMember["role"]) => void;
+  onInvite: (event: React.FormEvent) => void;
+  onRemove: (member: FinanceMember) => void;
+}) {
+  if (!workspace) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center p-8">
+        <div className="max-w-md rounded-xl border border-neutral-800 bg-neutral-900/50 p-8 text-center">
+          <Users className="mx-auto mb-4 h-10 w-10 text-yellow-400" />
+          <h3 className="text-lg font-bold text-white">No finance project selected</h3>
+          <p className="mt-2 text-sm text-white/45">Select a finance project before managing members.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 p-6 animate-in fade-in zoom-in-95 duration-300">
+      <section className="rounded-xl border border-neutral-800 bg-neutral-900/45 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="dd-label-muted">Finance Project Settings</p>
+            <h3 className="mt-1 text-xl font-bold text-white">{workspace.name}</h3>
+            <p className="mt-2 text-sm text-neutral-400">Invite teammates and manage finance workspace access in Supabase.</p>
+          </div>
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs font-semibold text-neutral-400">
+            {workspace.id}
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-5 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={onInvite} className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_auto]">
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(event) => onInviteEmailChange(event.target.value)}
+            placeholder="teammate@example.com"
+            className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-yellow-400/60"
+            required
+          />
+          <select
+            value={inviteRole}
+            onChange={(event) => onInviteRoleChange(event.target.value as FinanceMember["role"])}
+            className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+          >
+            <option value="Accountant">Accountant</option>
+            <option value="Viewer">Viewer</option>
+          </select>
+          <button type="submit" disabled={inviting} className="dd-btn-primary">
+            {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            Invite
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-xl border border-neutral-800 bg-neutral-900/45 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h4 className="flex items-center gap-2 text-sm font-bold text-white">
+            <Users className="h-4 w-4 text-yellow-400" />
+            Members
+          </h4>
+          <span className="rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1 text-xs font-bold text-neutral-400">
+            {members.length}
+          </span>
+        </div>
+
+        {members.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-neutral-800 p-8 text-center text-sm text-neutral-400">
+            No members found.
+          </div>
+        ) : (
+          <div className="divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800">
+            {members.map((member) => (
+              <div key={member.id} className="flex items-center justify-between gap-4 bg-neutral-950/50 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-white">{member.display_name || member.email || member.invited_email || "Pending member"}</p>
+                  <p className="mt-1 text-xs uppercase tracking-wide text-neutral-500">{member.role} - {member.status}</p>
+                </div>
+                {member.role !== "Owner" && (
+                  <button
+                    onClick={() => onRemove(member)}
+                    className="rounded-md p-2 text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function FinanceWorkspaceCreateModal({
+  name,
+  creating,
+  error,
+  onNameChange,
+  onClose,
+  onSubmit,
+}: {
+  name: string;
+  creating: boolean;
+  error: string;
+  onNameChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/50 px-6 py-5">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Create Finance Project</h2>
+            <p className="mt-0.5 text-sm text-neutral-400">Create a shared Supabase finance workspace.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-5 p-6">
+          {error && (
+            <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-red-200">
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-neutral-300">Project Name</label>
+            <input
+              value={name}
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder="e.g. Company Finance"
+              className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-neutral-600 focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400"
+              autoFocus
+              required
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-white">
+              Cancel
+            </button>
+            <button type="submit" disabled={creating || !name.trim()} className="dd-btn-primary flex-1">
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Project"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

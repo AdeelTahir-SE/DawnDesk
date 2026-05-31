@@ -10,7 +10,18 @@ export default function Navbar() {
         document.documentElement.classList.toggle("light", isLight);
         document.documentElement.classList.toggle("dark", !isLight);
         localStorage.setItem("dawndesk_theme", theme);
+        window.dispatchEvent(new CustomEvent("dawndesk_theme_changed", { detail: { theme } }));
     }, [theme]);
+
+    useEffect(() => {
+        const refreshTheme = () => setTheme(localStorage.getItem("dawndesk_theme") || "dark");
+        window.addEventListener("storage", refreshTheme);
+        window.addEventListener("dawndesk_theme_changed", refreshTheme);
+        return () => {
+            window.removeEventListener("storage", refreshTheme);
+            window.removeEventListener("dawndesk_theme_changed", refreshTheme);
+        };
+    }, []);
 
     return (
         <header className="fixed top-0 left-0 right-0 h-16 bg-neutral-900 border-b border-neutral-800 z-30">

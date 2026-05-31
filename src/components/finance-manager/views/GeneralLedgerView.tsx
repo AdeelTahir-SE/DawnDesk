@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Plus, Search, BookOpen, CheckCircle2, Settings, Globe, CheckSquare, Loader2, X } from "lucide-react";
 
 export type ChartOfAccount = {

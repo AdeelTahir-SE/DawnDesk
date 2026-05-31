@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Download, FileJson, Plus, ShieldAlert, Key, UserCheck, Loader2, X, Lock } from "lucide-react";
 import { exportTextFile, toJsonExport } from "../../../utils/exportFile";
 

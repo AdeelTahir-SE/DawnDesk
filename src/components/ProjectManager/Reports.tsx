@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Loader2, LineChart, BarChart3, Clock, PieChartIcon, TrendingUp, Activity, Layers } from "lucide-react";
 import {
   PieChart,
@@ -19,6 +18,7 @@ import {
   Legend,
 } from "recharts";
 import type { LocalIssue, LocalSprint } from "./types";
+import { listProjectIssues, listProjectSprints } from "../../lib/workspaceSync";
 
 const STATUS_COLORS: Record<string, string> = {
   "To Do": "#a1a1aa",
@@ -94,7 +94,7 @@ function PieTooltipContent({
   );
 }
 
-export default function Reports({ projectId }: { projectId: number | null }) {
+export default function Reports({ projectId }: { projectId: string | null }) {
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [sprints, setSprints] = useState<LocalSprint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,8 +105,8 @@ export default function Reports({ projectId }: { projectId: number | null }) {
       setLoading(true);
       try {
         const [issuesData, sprintsData] = await Promise.all([
-          invoke<LocalIssue[]>("get_issues", { projectId }),
-          invoke<LocalSprint[]>("get_sprints", { projectId })
+          listProjectIssues(projectId),
+          listProjectSprints(projectId)
         ]);
         setIssues(issuesData);
         setSprints(sprintsData);
@@ -244,7 +244,7 @@ export default function Reports({ projectId }: { projectId: number | null }) {
 
   // --- Chart 6: Velocity Chart ---
   const velocityData = useMemo(() => {
-    const sprintMap: Record<number, { name: string; completed: number; planned: number }> = {};
+    const sprintMap: Record<string, { name: string; completed: number; planned: number }> = {};
     for (const sprint of sprints) {
       if (sprint.status !== "planned") {
         sprintMap[sprint.id] = { name: sprint.name, completed: 0, planned: 0 };

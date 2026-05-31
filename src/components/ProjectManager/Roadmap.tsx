@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Loader2, Map, Milestone, Plus, Trash2 } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
 import type { LocalIssue, LocalVersion } from "./types";
+import {
+  createProjectVersion,
+  deleteProjectVersion,
+  listProjectIssues,
+  listProjectVersions,
+} from "../../lib/workspaceSync";
 
 const STATUS_BAR_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   "To Do": { bg: "bg-neutral-600", border: "border-neutral-500", text: "text-neutral-300" },
@@ -39,7 +44,7 @@ function formatMonth(date: Date): string {
 }
 
 interface EpicBar {
-  id: number;
+  id: string;
   key: string;
   title: string;
   status: string;
@@ -47,7 +52,7 @@ interface EpicBar {
   end: Date;
 }
 
-export default function Roadmap({ projectId }: { projectId: number | null }) {
+export default function Roadmap({ projectId }: { projectId: string | null }) {
   const { logSuccess, logError, logWarning } = useAppLogger();
   const [issues, setIssues] = useState<LocalIssue[]>([]);
   const [versions, setVersions] = useState<LocalVersion[]>([]);
@@ -61,8 +66,8 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
       setLoading(true);
       try {
         const [issuesData, versionsData] = await Promise.all([
-          invoke<LocalIssue[]>("get_issues", { projectId }),
-          invoke<LocalVersion[]>("get_versions", { projectId })
+          listProjectIssues(projectId),
+          listProjectVersions(projectId)
         ]);
         setIssues(issuesData);
         setVersions(versionsData);
@@ -76,18 +81,14 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
 
   const refreshVersions = async () => {
     if (projectId === null) return;
-    const versionsData = await invoke<LocalVersion[]>("get_versions", { projectId });
+    const versionsData = await listProjectVersions(projectId);
     setVersions(versionsData);
   };
 
   const createVersion = async () => {
     if (projectId === null || !versionName.trim()) return;
     try {
-      await invoke("create_version", {
-        projectId,
-        name: versionName.trim(),
-        releaseDate: releaseDate || null,
-      });
+      await createProjectVersion(projectId, versionName.trim(), releaseDate || null);
       logSuccess("Roadmap version created", versionName.trim(), { source: "project-manager" });
       setVersionName("");
       setReleaseDate("");
@@ -234,7 +235,7 @@ export default function Roadmap({ projectId }: { projectId: number | null }) {
                   <button
                     onClick={async () => {
                       try {
-                        await invoke("delete_version", { id: version.id });
+                        await deleteProjectVersion(version.id);
                         await refreshVersions();
                         logWarning("Roadmap version deleted", version.name, { source: "project-manager" });
                       } catch (err) {

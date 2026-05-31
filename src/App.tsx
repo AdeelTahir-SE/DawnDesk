@@ -19,6 +19,7 @@ import WorkflowBuilder from "./Pages/WorkflowBuilder";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppLogger } from "./utils/LoggerContext";
+import { CONNECTION_ERROR_EVENT, type ConnectionErrorDetail } from "./lib/connectionErrors";
 
 function NavigationLogger() {
   const location = useLocation();
@@ -42,11 +43,30 @@ function ThemeBootstrap() {
   return null;
 }
 
+function ConnectionErrorToastBridge() {
+  const { logError } = useAppLogger();
+
+  useEffect(() => {
+    const handleConnectionError = (event: Event) => {
+      const detail = (event as CustomEvent<ConnectionErrorDetail>).detail;
+      logError("Connection error", detail?.rawMessage || "Internet connection error", {
+        source: detail?.source === "finance" || detail?.source === "project-manager" ? detail.source : undefined,
+      });
+    };
+
+    window.addEventListener(CONNECTION_ERROR_EVENT, handleConnectionError);
+    return () => window.removeEventListener(CONNECTION_ERROR_EVENT, handleConnectionError);
+  }, [logError]);
+
+  return null;
+}
+
 function App() {
   return (
     <>
       <ThemeBootstrap />
       <NavigationLogger />
+      <ConnectionErrorToastBridge />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/auth" element={<AuthChoice />} />

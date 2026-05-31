@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Plus, ArrowRightLeft, CreditCard, Landmark, Wallet, MoreVertical, X } from "lucide-react";
 import { useAppLogger } from "../../../utils/LoggerContext";
 

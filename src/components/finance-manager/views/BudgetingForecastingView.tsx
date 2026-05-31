@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
 import { Plus, PieChart, Building, Loader2, X, TrendingUp } from "lucide-react";
 
 export type BudgetItem = {

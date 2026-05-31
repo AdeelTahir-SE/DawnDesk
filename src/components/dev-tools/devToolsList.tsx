@@ -43,7 +43,7 @@ export const devTools: DevTool[] = [
     },
     {
         id: "markdown-pdf",
-        title: "Markdown → Styled PDF",
+        title: "Markdown to Styled PDF",
         description: "Convert Markdown to a beautiful typeset PDF.",
         category: "V1 - Core Tools",
         icon: <FileText className="text-white/70" />,
@@ -122,7 +122,7 @@ export const devTools: DevTool[] = [
     },
     {
         id: "config-converter",
-        title: "JSON ↔ YAML ↔ TOML",
+        title: "JSON / YAML / TOML",
         description: "Convert between config file formats with validation.",
         category: "V2 - Workflow Tools",
         icon: <RefreshCw className="text-white/70" />,

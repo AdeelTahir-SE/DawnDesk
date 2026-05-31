@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Webhook, Zap, Link, Database, X } from "lucide-react";
+import { invoke } from "../../../lib/financeSupabaseInvoke";
+import { useAppLogger } from "../../../utils/LoggerContext";
 
 type IntegrationApp = {
   name: string;
@@ -9,18 +11,38 @@ type IntegrationApp = {
 };
 
 export default function IntegrationsAutomationView() {
+  const { logError } = useAppLogger();
   const [activeTab, setActiveTab] = useState("integrations");
   const [apps, setApps] = useState<IntegrationApp[]>([]);
   const [showIntegrationModal, setShowIntegrationModal] = useState(false);
+  const [hasLoadedApps, setHasLoadedApps] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("finance_integrations");
-    if (saved) setApps(JSON.parse(saved) as IntegrationApp[]);
-  }, []);
+    let isMounted = true;
+    invoke<IntegrationApp[]>("get_finance_preference", {
+      key: "integrations",
+      defaultValue: [],
+    })
+      .then((savedApps) => {
+        if (!isMounted) return;
+        setApps(savedApps);
+        setHasLoadedApps(true);
+      })
+      .catch((error) => {
+        logError("Finance integrations load failed", String(error), { source: "finance" });
+        if (isMounted) setHasLoadedApps(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [logError]);
 
   useEffect(() => {
-    localStorage.setItem("finance_integrations", JSON.stringify(apps));
-  }, [apps]);
+    if (!hasLoadedApps) return;
+    invoke("save_finance_preference", { key: "integrations", value: apps })
+      .catch((error) => logError("Finance integrations save failed", String(error), { source: "finance" }));
+  }, [apps, hasLoadedApps, logError]);
 
   const toggleApp = (name: string) => {
     setApps((current) =>
@@ -87,7 +109,7 @@ function IntegrationsList({ apps, onToggle }: { apps: IntegrationApp[]; onToggle
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {apps.length === 0 && (
         <div className="md:col-span-2 rounded-xl border border-dashed border-neutral-800 bg-neutral-950/50 p-8 text-center text-sm text-white/40">
-          No integrations configured. Add one to track local connection status.
+          No integrations configured. Add one to track Supabase connection status.
         </div>
       )}
       {apps.map((app, i) => (
@@ -118,7 +140,7 @@ function WorkflowsList() {
     <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
       <Zap className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">Automated Workflows</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Workflow execution is not wired to a backend runner yet. Connected app status is tracked locally until automation storage is added.</p>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Workflow execution is not wired to a backend runner yet. Connected app status is stored with this Supabase finance project.</p>
     </div>
   );
 }
@@ -129,7 +151,7 @@ function APIKeysView() {
     <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
       <Database className="h-10 w-10 text-white/20 mx-auto mb-4" />
       <h3 className="text-lg font-bold text-white">Developer API</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">The finance backend does not expose an external API key issuer yet. This creates a local placeholder identifier only.</p>
+      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">The finance backend does not expose an external API key issuer yet. This creates a placeholder identifier for this screen only.</p>
       <button onClick={() => setKey(`local_${crypto.randomUUID().slice(0, 8)}`)} className="mt-6 rounded-xl bg-neutral-800 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-700">Create Local ID</button>
       {key && <p className="mt-4 font-mono text-sm font-semibold text-green-300">{key}</p>}
     </div>
