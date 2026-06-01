@@ -228,7 +228,7 @@ export interface EditorState {
   historyIndex: number;
   showTransformControls: boolean;
   autoSelect: boolean;
-  activeRightTab: 'adjustments' | 'properties';
+  activeRightTab: 'adjustments' | 'properties' | 'ai';
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -269,7 +269,7 @@ export type EditorAction =
   | { type: 'REORDER_LAYER'; payload: { fromIndex: number; toIndex: number } }
   | { type: 'SET_SHOW_TRANSFORM_CONTROLS'; payload: boolean }
   | { type: 'SET_AUTO_SELECT'; payload: boolean }
-  | { type: 'SET_RIGHT_TAB'; payload: 'adjustments' | 'properties' }
+  | { type: 'SET_RIGHT_TAB'; payload: 'adjustments' | 'properties' | 'ai' }
   | { type: 'UPDATE_DOCUMENT_DATA'; payload: { id: string; imageData: ImageData; width?: number; height?: number } }
   | { type: 'SET_DOCUMENT_DIRTY'; payload: { id: string; dirty: boolean } };
 

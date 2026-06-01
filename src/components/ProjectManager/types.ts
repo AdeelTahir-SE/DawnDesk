@@ -106,6 +106,7 @@ export interface LocalSavedFilter {
   id: string;
   project_id: string;
   name: string;
+  /** Persisted legacy column; displayed as DQL (DawnDesk Query Language) in the app. */
   jql_query: string;
 }
 

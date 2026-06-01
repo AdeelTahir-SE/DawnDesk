@@ -508,6 +508,7 @@ function PhotoEditorInner() {
         onSaveProjectAs={handleSaveProjectAs}
         onExportProjectFile={handleExportProjectFile}
         onOpenProjects={() => navigate('/projects')}
+        onOpenAiPanel={() => dispatch({ type: 'SET_RIGHT_TAB', payload: 'ai' })}
         currentProjectName={currentProjectName}
       />
 

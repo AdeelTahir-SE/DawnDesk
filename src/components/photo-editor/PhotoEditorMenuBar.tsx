@@ -12,7 +12,7 @@ import {
   applySmartSharpen,
   applyVignette,
 } from '../../engine/photo-editor/filters';
-import { FolderOpen, Save, Folder, Library } from 'lucide-react';
+import { FolderOpen, Save, Folder, Library, Sparkles } from 'lucide-react';
 
 interface MenuBarProps {
   onOpenImage: () => void;
@@ -24,6 +24,7 @@ interface MenuBarProps {
   onSendToNotes?: () => void;
   onSendToEmail?: () => void;
   onOpenHelp?: () => void;
+  onOpenAiPanel?: () => void;
   onRotate: (deg: 90 | -90 | 180) => void;
   onFlip: (dir: 'horizontal' | 'vertical') => void;
   onApplyFilter: (name: string, fn: (data: ImageData) => ImageData) => void;
@@ -53,7 +54,7 @@ interface MenuDef {
 
 export default function PhotoEditorMenuBar({
   onOpenImage, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
-  onSaveProject, onSaveProjectAs, onExportProjectFile, onOpenProjects, currentProjectName,
+  onSaveProject, onSaveProjectAs, onExportProjectFile, onOpenProjects, onOpenAiPanel, currentProjectName,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -137,6 +138,14 @@ export default function PhotoEditorMenuBar({
         { label: 'Reduce Noise', action: () => { onApplyFilter('Reduce Noise', applyDenoise); setOpenMenu(null); } },
         { separator: true, label: '' },
         { label: 'Liquify Warp', description: 'Apply an experimental v3 center warp effect.', action: () => { onApplyFilter('Liquify Warp', (d) => applyLiquifyWarp(d, 18)); setOpenMenu(null); } },
+      ],
+    },
+    {
+      label: 'AI',
+      items: [
+        { label: 'AI Image Studio', icon: <Sparkles size={14} />, description: 'Open AI tools for generating images as layers or updating the active layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
+        { label: 'Generate Images as Layers', description: 'Create multiple AI images and insert each result as a separate layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
+        { label: 'Update Active Layer with AI', description: 'Use the AI panel to replace the selected unlocked layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
       ],
     },
     {

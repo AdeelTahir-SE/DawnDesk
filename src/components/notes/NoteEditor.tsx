@@ -4,9 +4,11 @@ import {
   useEffect,
   useCallback,
 } from "react";
-import { StickyNote, Maximize2, Minimize2, AlignCenter } from "lucide-react";
+import { StickyNote, Maximize2, Minimize2, AlignCenter, Loader2, Sparkles, X } from "lucide-react";
 import EditorToolbar from "./EditorToolbar";
 import EditorStatusBar from "./EditorStatusBar";
+import { generateText } from "../../lib/aiTextGeneration";
+import { useAppLogger } from "../../utils/LoggerContext";
 
 interface Note {
   id: number;
@@ -39,6 +41,13 @@ export default function NoteEditor({
   const [title, setTitle] = useState("");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [typewriterMode, setTypewriterMode] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiAction, setAiAction] = useState<"summarize" | "generate" | "rewrite" | "continue">("summarize");
+  const [aiPlacement, setAiPlacement] = useState<"append" | "replace" | "section">("section");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const { logSuccess, logError } = useAppLogger();
 
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -279,6 +288,78 @@ export default function NoteEditor({
     setReadingTime(Math.ceil(w / 200));
   }, []);
 
+  const persistNow = useCallback((nextTitle = title, nextContent?: string) => {
+    if (!note) return;
+    const content = nextContent ?? editorRef.current?.innerHTML ?? "";
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    onSave({ title: nextTitle, content });
+    setLastSaved(new Date());
+  }, [note, onSave, title]);
+
+  const applyAiResult = useCallback((text: string) => {
+    if (!editorRef.current) return;
+    const currentHtml = editorRef.current.innerHTML || "";
+    const resultHtml = textToNoteHtml(text);
+    let nextHtml = resultHtml;
+
+    if (aiPlacement === "append") {
+      nextHtml = `${currentHtml}${currentHtml.trim() ? "<p><br></p>" : ""}${resultHtml}`;
+    } else if (aiPlacement === "section") {
+      const label = aiAction === "summarize"
+        ? "AI Summary"
+        : aiAction === "rewrite"
+          ? "AI Rewrite"
+          : aiAction === "continue"
+            ? "AI Continuation"
+            : "AI Generated Notes";
+      nextHtml = `${currentHtml}${currentHtml.trim() ? "<p><br></p>" : ""}<h2>${label}</h2>${resultHtml}`;
+    }
+
+    editorRef.current.innerHTML = nextHtml;
+    persistNow(title, nextHtml);
+    updateStats();
+  }, [aiAction, aiPlacement, persistNow, title, updateStats]);
+
+  const handleAiGenerate = useCallback(async () => {
+    if (!note || aiLoading) return;
+    const currentText = editorRef.current?.innerText.trim() || "";
+    if (aiAction !== "generate" && !currentText) {
+      setAiError("Write or select a note with content first.");
+      return;
+    }
+
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const actionInstruction = {
+        summarize: "Summarize the note into concise headings and bullets. Preserve important decisions, tasks, dates, and open questions.",
+        generate: "Generate useful note content from the user's brief. Use clear headings, bullets, and short paragraphs.",
+        rewrite: "Rewrite and improve the note for clarity, structure, and readability without changing the meaning.",
+        continue: "Continue the note naturally from where it ends. Keep the same style and structure.",
+      }[aiAction];
+
+      const result = await generateText({
+        system: "You are an assistant inside DawnDesk Notes. Return clean HTML-friendly Markdown only. Do not wrap the answer in code fences.",
+        prompt: [
+          `Action: ${actionInstruction}`,
+          `Note title: ${title || note.title || "Untitled"}`,
+          aiPrompt.trim() ? `User instructions: ${aiPrompt.trim()}` : "",
+          currentText ? `Current note content:\n${currentText}` : "",
+        ].filter(Boolean).join("\n\n"),
+        maxTokens: 1200,
+      });
+      applyAiResult(result.text);
+      setShowAiModal(false);
+      setAiPrompt("");
+      logSuccess("Notes AI complete", `Generated with ${result.model}.`, { source: "notes" });
+    } catch (error) {
+      const message = String(error);
+      setAiError(message);
+      logError("Notes AI failed", message, { source: "notes" });
+    }
+    setAiLoading(false);
+  }, [aiAction, aiLoading, aiPrompt, applyAiResult, logError, logSuccess, note, title]);
+
   useEffect(() => {
     updateStats();
   }, [title, updateStats]);
@@ -313,6 +394,19 @@ export default function NoteEditor({
 
           <div className="flex shrink-0 items-center gap-1">
             {/* Typewriter mode */}
+            <button
+              type="button"
+              onClick={() => {
+                setAiError("");
+                setShowAiModal(true);
+              }}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-yellow-400/25 bg-yellow-400/10 px-2.5 text-xs font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20"
+              title="AI note tools"
+            >
+              <Sparkles className="h-4 w-4" />
+              AI
+            </button>
+
             <button
               type="button"
               onClick={() => setTypewriterMode(!typewriterMode)}
@@ -419,6 +513,154 @@ export default function NoteEditor({
           tags={tags}
         />
       </div>
+
+      {showAiModal && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl shadow-black/70">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-800 p-5">
+              <div className="flex gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-300">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-black text-white">Notes AI</h3>
+                  <p className="mt-1 text-sm leading-6 text-white/50">Summarize, generate, rewrite, or continue this note using the default AI provider from Settings.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !aiLoading && setShowAiModal(false)}
+                disabled={aiLoading}
+                className="rounded-lg p-2 text-white/40 hover:bg-neutral-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Action</span>
+                  <select
+                    value={aiAction}
+                    onChange={(event) => setAiAction(event.target.value as typeof aiAction)}
+                    disabled={aiLoading}
+                    className="mt-2 w-full rounded-lg border border-neutral-800 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                  >
+                    <option value="summarize">Summarize note</option>
+                    <option value="generate">Generate content</option>
+                    <option value="rewrite">Rewrite note</option>
+                    <option value="continue">Continue writing</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Placement</span>
+                  <select
+                    value={aiPlacement}
+                    onChange={(event) => setAiPlacement(event.target.value as typeof aiPlacement)}
+                    disabled={aiLoading}
+                    className="mt-2 w-full rounded-lg border border-neutral-800 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
+                  >
+                    <option value="section">Add as new section</option>
+                    <option value="append">Append to note</option>
+                    <option value="replace">Replace note content</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/50">Instructions</span>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(event) => setAiPrompt(event.target.value)}
+                  disabled={aiLoading}
+                  className="custom-scrollbar mt-2 min-h-[140px] w-full resize-none rounded-xl border border-neutral-800 bg-black px-4 py-3 text-sm leading-7 text-white outline-none placeholder-white/30 focus:border-yellow-400/60 disabled:cursor-wait disabled:opacity-70"
+                  placeholder="Optional: make it more concise, turn it into action items, draft meeting notes, write a research outline..."
+                />
+              </label>
+
+              {aiLoading && (
+                <div className="rounded-xl border border-yellow-400/25 bg-yellow-400/10 px-4 py-3">
+                  <div className="flex items-center gap-3 text-sm font-bold text-yellow-100">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating note content
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-yellow-100/70">Using your configured default text provider and the current note as context.</p>
+                </div>
+              )}
+
+              {aiError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
+                  {aiError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-neutral-800 p-5">
+              <button
+                onClick={() => setShowAiModal(false)}
+                disabled={aiLoading}
+                className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2 text-sm font-bold text-white/60 hover:bg-neutral-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleAiGenerate()}
+                disabled={aiLoading}
+                className="inline-flex items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-black text-black hover:bg-yellow-300 disabled:cursor-wait disabled:opacity-60"
+              >
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {aiLoading ? "Generating" : "Apply AI"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function textToNoteHtml(text: string) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: string[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (listItems.length) {
+      blocks.push(`<ul>${listItems.map((item) => `<li>${item}</li>`).join("")}</ul>`);
+      listItems = [];
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushList();
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushList();
+      blocks.push(`<h${heading[1].length}>${escapeHtml(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      listItems.push(escapeHtml(bullet[1]));
+      continue;
+    }
+    flushList();
+    blocks.push(`<p>${escapeHtml(line)}</p>`);
+  }
+  flushList();
+  return blocks.join("");
 }

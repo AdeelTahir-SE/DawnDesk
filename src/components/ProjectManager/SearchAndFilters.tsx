@@ -35,7 +35,7 @@ export default function SearchAndFilters({ projectId }: { projectId: string | nu
   const [savedFilters, setSavedFilters] = useState<LocalSavedFilter[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [jql, setJql] = useState("");
+  const [dql, setDql] = useState("");
   const [filterName, setFilterName] = useState("");
   const [type, setType] = useState("All");
   const [priority, setPriority] = useState("All");
@@ -84,7 +84,7 @@ export default function SearchAndFilters({ projectId }: { projectId: string | nu
       });
   }, [issues, query, type, priority, status, sprintId, sortBy]);
 
-  const runJql = async () => {
+  const runDql = async () => {
     if (!projectId) return;
     setLoading(true);
     try {
@@ -92,7 +92,7 @@ export default function SearchAndFilters({ projectId }: { projectId: string | nu
       setIssues(data);
       logSuccess("Project search complete", `${data.length} issue${data.length === 1 ? "" : "s"} found.`, { source: "project-manager" });
     } catch (err) {
-      console.error("JQL search failed:", err);
+      console.error("DQL search failed:", err);
       logError("Project search failed", String(err), { source: "project-manager" });
     }
     setLoading(false);
@@ -100,7 +100,7 @@ export default function SearchAndFilters({ projectId }: { projectId: string | nu
 
   const saveFilter = async () => {
     if (!projectId || !filterName.trim()) return;
-    const filterQuery = jql.trim() || [
+    const filterQuery = dql.trim() || [
       status !== "All" ? `status = "${status}"` : "",
       priority !== "All" ? `priority = "${priority}"` : "",
       type !== "All" ? `issue_type = "${type}"` : "",
@@ -203,12 +203,12 @@ export default function SearchAndFilters({ projectId }: { projectId: string | nu
 
         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto]">
           <input
-            value={jql}
-            onChange={(e) => setJql(e.target.value)}
-            placeholder='JQL, e.g. status = "Done" AND priority = "High"'
+            value={dql}
+            onChange={(e) => setDql(e.target.value)}
+            placeholder='DQL (DawnDesk Query Language), e.g. status = "Done" AND priority = "High"'
             className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
           />
-          <button onClick={runJql} className="dd-btn-primary">
+          <button onClick={runDql} className="dd-btn-primary">
             <Play className="h-4 w-4" /> Run
           </button>
           <button onClick={fetchData} className="dd-btn-secondary">Reset</button>
@@ -252,7 +252,7 @@ export default function SearchAndFilters({ projectId }: { projectId: string | nu
               <div key={filter.id} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <button
-                    onClick={() => setJql(filter.jql_query)}
+                    onClick={() => setDql(filter.jql_query)}
                     className="truncate text-left text-sm font-semibold text-white hover:text-yellow-400"
                   >
                     {filter.name}

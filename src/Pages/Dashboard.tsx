@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { readTextFile, BaseDirectory, exists } from "@tauri-apps/plugin-fs";
 import { useAppLogger, LogEntry } from "../utils/LoggerContext";
+import { PROVIDER_LABELS, readAiUsage, subscribeToAiUsage, type AiProvider } from "../lib/aiTextGeneration";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
 import { listFinanceWorkspaces, listSupabaseProjects } from "../lib/workspaceSync";
 
@@ -103,6 +104,12 @@ function readNotificationsEnabled() {
   }
 }
 
+function formatTokenCount(value: number) {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return String(value);
+}
+
 export default function Dashboard() {
   const { logs } = useAppLogger();
   const [fileActivities, setFileActivities] = useState<DashboardActivity[]>([]);
@@ -110,6 +117,7 @@ export default function Dashboard() {
   const [workspaceCounts, setWorkspaceCounts] = useState<WorkspaceCounts>({ projects: null, finance: null });
   const [theme, setTheme] = useState(readTheme);
   const [notificationsEnabled, setNotificationsEnabled] = useState(readNotificationsEnabled);
+  const [aiUsage, setAiUsage] = useState(readAiUsage);
 
   const activities = useMemo(() => {
     const merged = [...logs, ...fileActivities];
@@ -155,6 +163,7 @@ export default function Dashboard() {
     setPromptCount(readPromptCount());
     setTheme(readTheme());
     setNotificationsEnabled(readNotificationsEnabled());
+    setAiUsage(readAiUsage());
     void loadLogs();
     void loadWorkspaceCounts();
 
@@ -162,12 +171,15 @@ export default function Dashboard() {
       setTheme(readTheme());
       setNotificationsEnabled(readNotificationsEnabled());
       setPromptCount(readPromptCount());
+      setAiUsage(readAiUsage());
     };
     window.addEventListener("storage", refreshSettings);
     window.addEventListener("dawndesk_theme_changed", refreshSettings);
+    const unsubscribeAiUsage = subscribeToAiUsage(() => setAiUsage(readAiUsage()));
     return () => {
       window.removeEventListener("storage", refreshSettings);
       window.removeEventListener("dawndesk_theme_changed", refreshSettings);
+      unsubscribeAiUsage();
     };
   }, []);
 
@@ -317,6 +329,32 @@ export default function Dashboard() {
               <StatusRow icon={<Monitor />} label="Theme" value={theme === "light" ? "Light" : "Dark"} ok />
               <StatusRow icon={<ShieldCheck />} label="Notifications" value={notificationsEnabled ? "Enabled" : "Disabled"} ok={notificationsEnabled} />
               <StatusRow icon={<FileText />} label="Activity Log" value={`${activities.length} visible`} ok />
+            </div>
+          </article>
+
+          <article className="dd-card">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="dd-section-title">AI Token Usage</h2>
+                <p className="mt-1 dd-subtext">Tracked from DawnDesk text generation calls.</p>
+              </div>
+              <Link to="/settings?tab=ai" className="dd-btn-secondary px-3 py-2 text-xs">
+                Configure
+              </Link>
+            </div>
+            <div className="mt-4 space-y-3">
+              {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
+                <div key={provider} className="rounded-xl border border-neutral-800 bg-neutral-950/45 px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-white/80">{PROVIDER_LABELS[provider]}</span>
+                    <span className="text-lg font-black text-yellow-300">{formatTokenCount(aiUsage[provider].totalTokens)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs text-white/40">
+                    <span>{aiUsage[provider].requests} request{aiUsage[provider].requests === 1 ? "" : "s"}</span>
+                    <span>{formatTokenCount(aiUsage[provider].promptTokens)} in / {formatTokenCount(aiUsage[provider].completionTokens)} out</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </article>
 

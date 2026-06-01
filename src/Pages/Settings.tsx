@@ -4,23 +4,44 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Bell,
+  Bot,
   Check,
   Cpu,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
   Info,
+  KeyRound,
+  Loader2,
   Monitor,
   Moon,
+  RefreshCw,
   Save,
   Settings as SettingsIcon,
   Shield,
   LogOut,
   Sliders,
   User,
+  Video,
 } from "lucide-react";
 import { LOGGER_SOURCES, useAppLogger, type LogLevel, type LoggerSource } from "../utils/LoggerContext";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import {
+  getAiSettings,
+  IMAGE_MODEL_OPTIONS,
+  listOllamaModels,
+  MODEL_OPTIONS,
+  PROVIDER_LABELS,
+  saveAiSettings,
+  verifyAiProvider,
+  VIDEO_MODEL_OPTIONS,
+  type AiProvider,
+  type AiSettings,
+} from "../lib/aiTextGeneration";
 
 const TABS = [
   { id: "general", label: "General", icon: <Sliders className="h-4 w-4" /> },
+  { id: "ai", label: "AI Providers", icon: <Bot className="h-4 w-4" /> },
   { id: "loggers", label: "Operation Toasts", icon: <Bell className="h-4 w-4" /> },
   { id: "appearance", label: "Appearance", icon: <Monitor className="h-4 w-4" /> },
   { id: "privacy", label: "Privacy", icon: <Shield className="h-4 w-4" /> },
@@ -304,6 +325,10 @@ export default function Settings() {
             </div>
           )}
 
+          {activeTab === "ai" && (
+            <AiSettingsPanel onSaved={markSaved} />
+          )}
+
           {activeTab === "loggers" && (
             <LoggerSettingsPanel onSaved={markSaved} />
           )}
@@ -364,6 +389,464 @@ export default function Settings() {
 
 function SettingsGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">{children}</div>;
+}
+
+const AI_PROVIDER_HELP: Record<AiProvider, { title: string; keyLabel: string; text: string }> = {
+  openai: {
+    title: "ChatGPT",
+    keyLabel: "OpenAI API Key",
+    text: "Key is stored in DawnDesk system settings.",
+  },
+  anthropic: {
+    title: "Claude",
+    keyLabel: "Anthropic API Key",
+    text: "Key is stored in DawnDesk system settings.",
+  },
+  ollama: {
+    title: "Ollama",
+    keyLabel: "Ollama Cloud API Key",
+    text: "Choose local Ollama or Ollama Cloud. DawnDesk manages the endpoint.",
+  },
+};
+
+function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [verifyingProvider, setVerifyingProvider] = useState<AiProvider | null>(null);
+  const [verifyStatus, setVerifyStatus] = useState<Partial<Record<AiProvider, { ok: boolean; message: string }>>>({});
+  const [verifyingMedia, setVerifyingMedia] = useState<"image" | "video" | null>(null);
+  const [mediaStatus, setMediaStatus] = useState<Partial<Record<"image" | "video", { ok: boolean; message: string }>>>({});
+  const [visibleKeys, setVisibleKeys] = useState<Record<AiProvider, boolean>>({
+    openai: false,
+    anthropic: false,
+    ollama: false,
+  });
+  const { logSuccess, logError } = useAppLogger();
+
+  useEffect(() => {
+    let mounted = true;
+    getAiSettings()
+      .then((settings) => {
+        if (mounted) setAiSettings(settings);
+      })
+      .catch((err) => {
+        if (mounted) setError(String(err));
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const refreshOllamaModels = async (settings = aiSettings) => {
+    try {
+      const models = await listOllamaModels(settings || undefined);
+      setOllamaModels(models);
+    } catch {
+      setOllamaModels([]);
+    }
+  };
+
+  useEffect(() => {
+    void refreshOllamaModels();
+  }, []);
+
+  const updateProvider = (provider: AiProvider, patch: Partial<AiSettings[AiProvider]>) => {
+    setAiSettings((current) => current ? { ...current, [provider]: { ...current[provider], ...patch } } : current);
+  };
+
+  const handleSave = async () => {
+    if (!aiSettings) return;
+    setSaving(true);
+    setError("");
+    try {
+      await saveAiSettings(aiSettings);
+      onSaved();
+      logSuccess("AI settings saved", "Provider keys and model defaults were saved to system settings.", { source: "settings" });
+    } catch (err) {
+      setError(String(err));
+      logError("AI settings save failed", String(err), { source: "settings" });
+    }
+    setSaving(false);
+  };
+
+  const handleVerify = async (provider: AiProvider) => {
+    if (!aiSettings) return;
+    setVerifyingProvider(provider);
+    setVerifyStatus((current) => ({ ...current, [provider]: undefined }));
+    try {
+      const message = await verifyAiProvider(provider, aiSettings);
+      setVerifyStatus((current) => ({ ...current, [provider]: { ok: true, message } }));
+      logSuccess("AI provider verified", message, { source: "settings" });
+      if (provider === "ollama") void refreshOllamaModels(aiSettings);
+    } catch (err) {
+      const message = String(err);
+      setVerifyStatus((current) => ({ ...current, [provider]: { ok: false, message } }));
+      logError("AI provider verify failed", message, { source: "settings" });
+    }
+    setVerifyingProvider(null);
+  };
+
+  const handleVerifyMediaModel = async (kind: "image" | "video") => {
+    if (!aiSettings) return;
+    const model = kind === "image"
+      ? aiSettings.openai.image_model || IMAGE_MODEL_OPTIONS[0].value
+      : aiSettings.openai.video_model || VIDEO_MODEL_OPTIONS[0].value;
+    setVerifyingMedia(kind);
+    setMediaStatus((current) => ({ ...current, [kind]: undefined }));
+    try {
+      await verifyAiProvider("openai", {
+        ...aiSettings,
+        openai: { ...aiSettings.openai, model },
+      });
+      const message = `${kind === "image" ? "Image" : "Video"} generation is configured for ${model}.`;
+      setMediaStatus((current) => ({ ...current, [kind]: { ok: true, message } }));
+      logSuccess("AI media model verified", message, { source: "settings" });
+    } catch (err) {
+      const message = String(err);
+      setMediaStatus((current) => ({ ...current, [kind]: { ok: false, message } }));
+      logError("AI media model verify failed", message, { source: "settings" });
+    }
+    setVerifyingMedia(null);
+  };
+
+  if (loading || !aiSettings) {
+    return (
+      <div className="dd-card">
+        <p className="dd-subtext">Loading AI provider settings...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
+          {error}
+        </div>
+      )}
+
+      <div className="dd-card bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.10),transparent_28%),rgba(23,23,23,0.78)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="dd-label">AI Control Panel</p>
+            <h3 className="mt-2 dd-section-title">Provider Setup</h3>
+            <p className="mt-1 dd-subtext">Save keys once, then choose models in the text, image, and video sections below.</p>
+          </div>
+          <button onClick={handleSave} disabled={saving} className="dd-btn-primary disabled:cursor-wait disabled:opacity-60">
+            {saving ? <Save className="h-4 w-4 animate-pulse" /> : <Save className="h-4 w-4" />}
+            Save AI Settings
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <label className="rounded-xl border border-neutral-800 bg-neutral-950/55 p-3 lg:col-span-1">
+            <span className="flex items-center gap-2 dd-form-label">
+              <Bot className="h-3.5 w-3.5 text-yellow-400" />
+              Default text provider
+            </span>
+            <select
+              value={aiSettings.default_provider || "openai"}
+              onChange={(event) => setAiSettings((current) => current ? { ...current, default_provider: event.target.value as AiProvider } : current)}
+              className="mt-2 dd-select w-full"
+            >
+              {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
+                <option key={provider} value={provider}>{PROVIDER_LABELS[provider]}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/55 p-3 lg:col-span-2">
+            <p className="dd-form-label">Media generation</p>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Image and video generation currently use the ChatGPT/OpenAI key. Their model choices live in their own sections below.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center gap-3">
+          <span className="dd-icon-box-sm"><Bot className="h-4 w-4" /></span>
+          <div>
+            <h3 className="dd-section-title">Text Generation Models</h3>
+            <p className="dd-subtext">Models used for strategy writing and other text workflows.</p>
+          </div>
+        </div>
+        <SettingsGrid>
+        {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => {
+          const helper = AI_PROVIDER_HELP[provider];
+          const isOllamaCloud = aiSettings.ollama.ollama_mode !== "local";
+          const fallbackModels = provider === "ollama"
+            ? MODEL_OPTIONS.ollama.filter((model) => isOllamaCloud ? model.value.includes("gpt-oss") : !model.value.includes("gpt-oss"))
+            : MODEL_OPTIONS[provider];
+          const modelOptions = provider === "ollama" && ollamaModels.length > 0
+            ? ollamaModels.map((model) => ({ value: model, label: model }))
+            : fallbackModels;
+          const selectedModel = aiSettings[provider].model || modelOptions[0]?.value || "";
+          const isVerifying = verifyingProvider === provider;
+          const status = verifyStatus[provider];
+          return (
+            <div key={provider} className={`dd-card transition-colors ${
+              status?.ok
+                ? "border-green-500/25 bg-green-500/5"
+                : status && !status.ok
+                  ? "border-red-500/25 bg-red-500/5"
+                  : ""
+            }`}>
+              <div className="flex gap-4">
+                <span className="dd-icon-box">
+                  {provider === "ollama" ? <Bot /> : <KeyRound />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="dd-card-title">{helper.title}</h3>
+                      <p className="mt-1 dd-subtext">{helper.text}</p>
+                    </div>
+                    {status && (
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                        status.ok
+                          ? "border-green-500/25 bg-green-500/10 text-green-300"
+                          : "border-red-500/25 bg-red-500/10 text-red-200"
+                      }`}>
+                        {status.ok ? "Verified" : "Needs fix"}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    {provider === "ollama" && (
+                      <label className="block">
+                        <span className="dd-form-label">Connection</span>
+                        <select
+                          value={aiSettings.ollama.ollama_mode === "local" ? "local" : "cloud"}
+                          onChange={(event) => {
+                            const mode = event.target.value as "local" | "cloud";
+                            updateProvider("ollama", {
+                              ollama_mode: mode,
+                              model: mode === "cloud" ? "gpt-oss:120b" : "llama3.1",
+                            });
+                            setOllamaModels([]);
+                            setVerifyStatus((current) => ({ ...current, ollama: undefined }));
+                          }}
+                          className="mt-2 dd-select w-full"
+                        >
+                          <option value="cloud">Ollama Cloud</option>
+                          <option value="local">Local Ollama</option>
+                        </select>
+                      </label>
+                    )}
+
+                    {(provider !== "ollama" || isOllamaCloud) && (
+                      <label className="block">
+                        <span className="dd-form-label">{helper.keyLabel}</span>
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type={visibleKeys[provider] ? "text" : "password"}
+                            value={aiSettings[provider].api_key || ""}
+                            onChange={(event) => updateProvider(provider, { api_key: event.target.value })}
+                            className="dd-input min-w-0 flex-1"
+                            placeholder={provider === "ollama" ? "Paste Ollama Cloud API key" : "Paste API key"}
+                          />
+                          <button
+                            type="button"
+                            title={visibleKeys[provider] ? "Hide key" : "Show key"}
+                            onClick={() => setVisibleKeys((current) => ({ ...current, [provider]: !current[provider] }))}
+                            className="dd-icon-btn h-11 w-11 border border-neutral-800 bg-neutral-950"
+                          >
+                            {visibleKeys[provider] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </label>
+                    )}
+
+                    <label className="block">
+                      <span className="dd-form-label">Default Model</span>
+                      <select
+                        value={selectedModel}
+                        onChange={(event) => updateProvider(provider, { model: event.target.value })}
+                        className="mt-2 dd-select w-full"
+                      >
+                        {modelOptions.map((model) => (
+                          <option key={model.value} value={model.value}>{model.label}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleVerify(provider)}
+                        disabled={isVerifying}
+                        className="dd-btn-secondary inline-flex items-center gap-2 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        Verify
+                      </button>
+                      {provider === "ollama" && (
+                        <button
+                          type="button"
+                          onClick={() => void refreshOllamaModels(aiSettings)}
+                          className="dd-icon-btn h-10 w-10 border border-neutral-800 bg-neutral-950"
+                          title={isOllamaCloud ? "Refresh Ollama Cloud models" : "Refresh local Ollama models"}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {status && (
+                      <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                        status.ok
+                          ? "border-green-500/25 bg-green-500/10 text-green-300"
+                          : "border-red-500/25 bg-red-500/10 text-red-200"
+                      }`}>
+                        {status.message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        </SettingsGrid>
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center gap-3">
+          <span className="dd-icon-box-sm"><ImageIcon className="h-4 w-4" /></span>
+          <div>
+            <h3 className="dd-section-title">Image Generation Models</h3>
+            <p className="dd-subtext">Image models for future prompt, project, and creative workflows.</p>
+          </div>
+        </div>
+        <CapabilityModelCard
+          icon={<ImageIcon />}
+          title="OpenAI Image"
+          text="Uses the ChatGPT/OpenAI API key saved above."
+          label="Default image model"
+          value={aiSettings.openai.image_model || IMAGE_MODEL_OPTIONS[0].value}
+          options={IMAGE_MODEL_OPTIONS}
+          verifying={verifyingMedia === "image"}
+          status={mediaStatus.image}
+          onChange={(value) => updateProvider("openai", { image_model: value })}
+          onVerify={() => void handleVerifyMediaModel("image")}
+        />
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center gap-3">
+          <span className="dd-icon-box-sm"><Video className="h-4 w-4" /></span>
+          <div>
+            <h3 className="dd-section-title">Video Generation Models</h3>
+            <p className="dd-subtext">Video models for upcoming generation and media workflows.</p>
+          </div>
+        </div>
+        <CapabilityModelCard
+          icon={<Video />}
+          title="OpenAI Video"
+          text="Uses the ChatGPT/OpenAI API key saved above."
+          label="Default video model"
+          value={aiSettings.openai.video_model || VIDEO_MODEL_OPTIONS[0].value}
+          options={VIDEO_MODEL_OPTIONS}
+          verifying={verifyingMedia === "video"}
+          status={mediaStatus.video}
+          onChange={(value) => updateProvider("openai", { video_model: value })}
+          onVerify={() => void handleVerifyMediaModel("video")}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CapabilityModelCard({
+  icon,
+  title,
+  text,
+  label,
+  value,
+  options,
+  verifying,
+  status,
+  onChange,
+  onVerify,
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  verifying: boolean;
+  status?: { ok: boolean; message: string };
+  onChange: (value: string) => void;
+  onVerify: () => void;
+}) {
+  return (
+    <div className={`dd-card max-w-2xl transition-colors ${
+      status?.ok
+        ? "border-green-500/25 bg-green-500/5"
+        : status && !status.ok
+          ? "border-red-500/25 bg-red-500/5"
+          : ""
+    }`}>
+      <div className="flex gap-4">
+        <span className="dd-icon-box">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="dd-card-title">{title}</h3>
+              <p className="mt-1 dd-subtext">{text}</p>
+            </div>
+            {status && (
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                status.ok
+                  ? "border-green-500/25 bg-green-500/10 text-green-300"
+                  : "border-red-500/25 bg-red-500/10 text-red-200"
+              }`}>
+                {status.ok ? "Verified" : "Needs fix"}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <label className="block">
+              <span className="dd-form-label">{label}</span>
+              <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 dd-select w-full">
+                {options.map((model) => (
+                  <option key={model.value} value={model.value}>{model.label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={onVerify}
+              disabled={verifying}
+              className="dd-btn-secondary inline-flex items-center gap-2 disabled:cursor-wait disabled:opacity-60"
+            >
+              {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Verify
+            </button>
+            {status && (
+              <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                status.ok
+                  ? "border-green-500/25 bg-green-500/10 text-green-300"
+                  : "border-red-500/25 bg-red-500/10 text-red-200"
+              }`}>
+                {status.message}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AuthSessionCard({
