@@ -1,10 +1,12 @@
 import { ArrowLeft, ArrowRight, Cloud, ShieldCheck, Sparkles, UserRound } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
 export default function AuthChoice() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isSwitchingAccount = searchParams.get("switch") === "account";
   const [authError, setAuthError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(isSupabaseConfigured);
@@ -15,6 +17,12 @@ export default function AuthChoice() {
     const redirectIfSignedIn = async () => {
       if (!supabase || !isSupabaseConfigured) {
         setIsCheckingSession(false);
+        return;
+      }
+
+      if (isSwitchingAccount) {
+        await supabase.auth.signOut();
+        if (isMounted) setIsCheckingSession(false);
         return;
       }
 
@@ -43,7 +51,7 @@ export default function AuthChoice() {
       isMounted = false;
       listener.subscription?.unsubscribe();
     };
-  }, [navigate]);
+  }, [isSwitchingAccount, navigate]);
 
   const handleGoogleSignIn = async () => {
     setAuthError("");
@@ -58,6 +66,9 @@ export default function AuthChoice() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 

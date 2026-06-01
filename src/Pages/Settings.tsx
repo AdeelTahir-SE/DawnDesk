@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Bell,
@@ -46,6 +46,7 @@ function applyDawnDeskTheme(theme: string) {
 
 export default function Settings() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState(defaultSettings);
   const [saved, setSaved] = useState(false);
@@ -208,6 +209,27 @@ export default function Settings() {
     setAuthLoading(false);
   };
 
+  const handleSwitchAccount = async () => {
+    if (!supabase || !isSupabaseConfigured) {
+      setAuthError("Cloud account switching is not available right now.");
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAuthError(error.message);
+      logError("Settings", `Account switch failed: ${error.message}`, { source: "settings" });
+      setAuthLoading(false);
+      return;
+    }
+
+    setAuthEmail(null);
+    setAuthLoading(false);
+    navigate("/auth?switch=account");
+  };
+
   return (
     <div className="dd-page">
       <aside className="dd-sidebar">
@@ -310,6 +332,7 @@ export default function Settings() {
                 loading={authLoading}
                 error={authError}
                 onLogout={handleLogout}
+                onSwitchAccount={handleSwitchAccount}
               />
             </SettingsGrid>
           )}
@@ -323,7 +346,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <h3 className="font-heading text-3xl font-black text-white">DawnDesk</h3>
-                    <p className="mt-1 dd-subtext">Version 0.1.0-alpha</p>
+                    <p className="mt-1 dd-subtext">Version 0.2.0</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -348,11 +371,13 @@ function AuthSessionCard({
   loading,
   error,
   onLogout,
+  onSwitchAccount,
 }: {
   email: string | null;
   loading: boolean;
   error: string;
   onLogout: () => void;
+  onSwitchAccount: () => void;
 }) {
   return (
     <div className="dd-card">
@@ -374,14 +399,24 @@ function AuthSessionCard({
           {error}
         </div>
       )}
-      <button
-        onClick={onLogout}
-        disabled={loading || !email}
-        className="mt-5 inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? <Save className="h-4 w-4 animate-pulse" /> : <LogOut className="h-4 w-4" />}
-        Log Out
-      </button>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          onClick={onSwitchAccount}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-4 py-2 text-sm font-bold text-yellow-200 transition-colors hover:bg-yellow-400/20 disabled:cursor-wait disabled:opacity-50"
+        >
+          {loading ? <Save className="h-4 w-4 animate-pulse" /> : <User className="h-4 w-4" />}
+          {email ? "Switch Account" : "Sign In"}
+        </button>
+        <button
+          onClick={onLogout}
+          disabled={loading || !email}
+          className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? <Save className="h-4 w-4 animate-pulse" /> : <LogOut className="h-4 w-4" />}
+          Log Out
+        </button>
+      </div>
     </div>
   );
 }

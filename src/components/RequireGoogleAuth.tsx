@@ -62,6 +62,9 @@ export default function RequireGoogleAuth({ moduleName, children }: RequireGoogl
       provider: "google",
       options: {
         redirectTo: window.location.href,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 
