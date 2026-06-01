@@ -368,10 +368,15 @@ export async function createProjectSprint(input: {
   status: string;
   start_date: string | null;
   end_date: string | null;
-}) {
+}): Promise<LocalSprint> {
   const client = requireSupabase();
-  const { error } = await client.from("project_sprints").insert(input);
+  const { data, error } = await client
+    .from("project_sprints")
+    .insert(input)
+    .select("id,project_id,name,status,start_date,end_date")
+    .single();
   if (error) throw error;
+  return data as LocalSprint;
 }
 
 export async function updateProjectSprint(input: {
@@ -477,15 +482,20 @@ export async function listProjectVersions(projectId: string): Promise<LocalVersi
   return (data ?? []) as LocalVersion[];
 }
 
-export async function createProjectVersion(projectId: string, name: string, releaseDate: string | null) {
+export async function createProjectVersion(projectId: string, name: string, releaseDate: string | null): Promise<LocalVersion> {
   const client = requireSupabase();
-  const { error } = await client.from("project_versions").insert({
-    project_id: projectId,
-    name,
-    release_date: releaseDate,
-    released: false,
-  });
+  const { data, error } = await client
+    .from("project_versions")
+    .insert({
+      project_id: projectId,
+      name,
+      release_date: releaseDate,
+      released: false,
+    })
+    .select("id,project_id,name,release_date,released")
+    .single();
   if (error) throw error;
+  return data as LocalVersion;
 }
 
 export async function deleteProjectVersion(id: string) {
@@ -665,7 +675,7 @@ export async function createFinanceWorkspace(name: string): Promise<FinanceWorks
   return workspace as FinanceWorkspace;
 }
 
-const FINANCE_TABLES = new Set([
+export const FINANCE_EXPORT_TABLES = [
   "finance_accounts",
   "finance_transactions",
   "finance_budgets",
@@ -687,7 +697,9 @@ const FINANCE_TABLES = new Set([
   "finance_ar_recurring_billing",
   "finance_ar_dunning_campaigns",
   "finance_ar_revrec_schedules",
-]);
+] as const;
+
+const FINANCE_TABLES = new Set<string>(FINANCE_EXPORT_TABLES);
 
 function assertFinanceTable(tableName: string) {
   if (!FINANCE_TABLES.has(tableName)) {

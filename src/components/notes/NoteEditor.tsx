@@ -4,7 +4,7 @@ import {
   useEffect,
   useCallback,
 } from "react";
-import { StickyNote, Maximize2, Minimize2, AlignCenter, Loader2, Sparkles, X } from "lucide-react";
+import { StickyNote, Maximize2, Minimize2, AlignCenter, Bot, Loader2, X } from "lucide-react";
 import EditorToolbar from "./EditorToolbar";
 import EditorStatusBar from "./EditorStatusBar";
 import { generateText } from "../../lib/aiTextGeneration";
@@ -403,7 +403,7 @@ export default function NoteEditor({
               className="flex h-8 items-center gap-1.5 rounded-lg border border-yellow-400/25 bg-yellow-400/10 px-2.5 text-xs font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20"
               title="AI note tools"
             >
-              <Sparkles className="h-4 w-4" />
+              <Bot className="h-4 w-4" />
               AI
             </button>
 
@@ -520,7 +520,7 @@ export default function NoteEditor({
             <div className="flex items-start justify-between gap-4 border-b border-neutral-800 p-5">
               <div className="flex gap-3">
                 <span className="grid h-11 w-11 place-items-center rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-300">
-                  <Sparkles className="h-5 w-5" />
+                  <Bot className="h-5 w-5" />
                 </span>
                 <div>
                   <h3 className="text-base font-black text-white">Notes AI</h3>
@@ -609,7 +609,7 @@ export default function NoteEditor({
                 disabled={aiLoading}
                 className="inline-flex items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-black text-black hover:bg-yellow-300 disabled:cursor-wait disabled:opacity-60"
               >
-                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
                 {aiLoading ? "Generating" : "Apply AI"}
               </button>
             </div>

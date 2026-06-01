@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ImagePlus, Loader2, Layers, Sparkles, Wand2, Image as ImageIcon } from 'lucide-react';
+import { Bot, ImagePlus, Loader2, Layers, Wand2, Image as ImageIcon } from 'lucide-react';
 import { useAppLogger } from '../../utils/LoggerContext';
 import { useEditor } from '../../engine/photo-editor/EditorContext';
 import { getAiSettings, IMAGE_MODEL_OPTIONS } from '../../lib/aiTextGeneration';
@@ -179,7 +179,7 @@ export default function PhotoAiPanel() {
     <div className="pe-ai-panel">
       <div className="pe-ai-panel__header">
         <div className="pe-ai-panel__icon">
-          <Sparkles size={18} />
+          <Bot size={18} />
         </div>
         <div>
           <h3>AI Image Studio</h3>

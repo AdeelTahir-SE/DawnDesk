@@ -1,13 +1,37 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Layout, Loader2, Folder, X, Search, Cloud, Users } from "lucide-react";
+import { Plus, Layout, Loader2, Folder, X, Search, Cloud, Users, Download, Upload } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
+import { pickJsonFile, safeExportName, saveJsonFile } from "../../lib/jsonExchange";
 import {
+  createProjectIssue,
+  createProjectSprint,
+  createProjectVersion,
   createSupabaseProject,
   formatSupabaseError,
+  listProjectIssues,
+  listProjectSprints,
+  listProjectStrategies,
+  listProjectVersions,
   listSupabaseProjects,
+  saveProjectStrategy,
   type SupabaseProject,
+  type SupabaseProjectDraft,
 } from "../../lib/workspaceSync";
+import type { LocalIssue, LocalSprint, LocalStrategy, LocalVersion } from "./types";
+
+type ProjectExportFile = {
+  schema: "dawndesk.project";
+  version: 1;
+  exportedAt: string;
+  project: Pick<SupabaseProject, "name" | "key" | "description" | "color_tag" | "project_type">;
+  data: {
+    sprints: LocalSprint[];
+    issues: LocalIssue[];
+    versions: LocalVersion[];
+    strategies: LocalStrategy[];
+  };
+};
 
 interface ProjectListScreenProps {
   onProjectSelect: (project: SupabaseProject) => void;
@@ -26,6 +50,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
   const [newProjDesc, setNewProjDesc] = useState("");
   const [newProjType, setNewProjType] = useState<"Scrum" | "Kanban">("Scrum");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -50,9 +75,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
     loadData();
   }, []);
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjName.trim()) return;
+  const createProjectFromDraft = async (draft: SupabaseProjectDraft) => {
     setCreating(true);
     setSyncError("");
     try {
@@ -60,27 +83,160 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
         throw new Error("Cloud sync is not configured. Add the required environment settings.");
       }
 
-      const project = await createSupabaseProject({
-        name: newProjName.trim(),
-        key: newProjName.trim().substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || "PROJ",
-        description: newProjDesc.trim() || null,
-        color_tag: "#facc15",
-        project_type: newProjType,
-        created_at: new Date().toISOString(),
-      });
+      const project = await createSupabaseProject(draft);
       setIsModalOpen(false);
       setNewProjName("");
       setNewProjDesc("");
       setNewProjType("Scrum");
       await loadData();
       onProjectSelect(project);
-      logSuccess("Project created", newProjName.trim(), { source: "project-manager" });
+      logSuccess("Project created", draft.name, { source: "project-manager" });
+      return project;
     } catch (e) {
       const message = formatSupabaseError(e);
       setSyncError(message);
       logError("Project creation failed", message, { source: "project-manager" });
+      return null;
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
+  };
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjName.trim()) return;
+    await createProjectFromDraft({
+      name: newProjName.trim(),
+      key: newProjName.trim().substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '') || "PROJ",
+      description: newProjDesc.trim() || null,
+      color_tag: "#facc15",
+      project_type: newProjType,
+      created_at: new Date().toISOString(),
+    });
+  };
+
+  const handleExportProject = async (project: SupabaseProject) => {
+    setSyncError("");
+    try {
+      const [sprints, issues, versions, strategies] = await Promise.all([
+        listProjectSprints(project.id),
+        listProjectIssues(project.id),
+        listProjectVersions(project.id),
+        listProjectStrategies(project.id),
+      ]);
+      const payload: ProjectExportFile = {
+        schema: "dawndesk.project",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        project: {
+          name: project.name,
+          key: project.key,
+          description: project.description,
+          color_tag: project.color_tag,
+          project_type: project.project_type,
+        },
+        data: { sprints, issues, versions, strategies },
+      };
+      const path = await saveJsonFile(
+        `${safeExportName(project.name, "dawndesk-project")}.dawndesk-project.json`,
+        payload,
+        "Save project JSON export"
+      );
+      if (path) logSuccess("Project exported", path, { source: "project-manager" });
+    } catch (e) {
+      const message = formatSupabaseError(e);
+      setSyncError(message);
+      logError("Project export failed", message, { source: "project-manager" });
+    }
+  };
+
+  const normalizeImportedProject = (file: unknown): ProjectExportFile => {
+    if (!file || typeof file !== "object") throw new Error("This JSON file is not a DawnDesk project export.");
+    const maybeFile = file as Partial<ProjectExportFile> & { name?: string; description?: string };
+    const project = maybeFile.project ?? {
+      name: maybeFile.name,
+      key: maybeFile.name?.slice(0, 4).toUpperCase(),
+      description: maybeFile.description ?? null,
+      color_tag: "#facc15",
+      project_type: "Scrum",
+    };
+    if (!project.name || typeof project.name !== "string") {
+      throw new Error("Project JSON is missing a project name.");
+    }
+    return {
+      schema: "dawndesk.project",
+      version: 1,
+      exportedAt: typeof maybeFile.exportedAt === "string" ? maybeFile.exportedAt : new Date().toISOString(),
+      project: {
+        name: project.name,
+        key: (project.key || project.name.slice(0, 4)).toUpperCase().replace(/[^A-Z0-9]/g, "") || "PROJ",
+        description: project.description ?? null,
+        color_tag: project.color_tag || "#facc15",
+        project_type: project.project_type || "Scrum",
+      },
+      data: {
+        sprints: maybeFile.data?.sprints ?? [],
+        issues: maybeFile.data?.issues ?? [],
+        versions: maybeFile.data?.versions ?? [],
+        strategies: maybeFile.data?.strategies ?? [],
+      },
+    };
+  };
+
+  const handleImportProject = async () => {
+    setImporting(true);
+    setSyncError("");
+    try {
+      const file = normalizeImportedProject(await pickJsonFile());
+      const importedName = `${file.project.name} Import`;
+      const project = await createProjectFromDraft({
+        ...file.project,
+        name: importedName,
+        created_at: new Date().toISOString(),
+      });
+      if (!project) return;
+
+      const sprintIdMap = new Map<string, string>();
+      for (const sprint of file.data.sprints) {
+        const created = await createProjectSprint({
+          project_id: project.id,
+          name: sprint.name,
+          status: sprint.status,
+          start_date: sprint.start_date ?? null,
+          end_date: sprint.end_date ?? null,
+        });
+        sprintIdMap.set(sprint.id, created.id);
+      }
+      for (const version of file.data.versions) {
+        await createProjectVersion(project.id, version.name, version.release_date ?? null);
+      }
+      for (const strategy of file.data.strategies) {
+        await saveProjectStrategy(project.id, {
+          id: null,
+          name: strategy.name,
+          category: strategy.category,
+          markdown: strategy.markdown,
+        });
+      }
+      for (const issue of file.data.issues) {
+        await createProjectIssue(project.id, {
+          ...issue,
+          id: undefined,
+          project_id: project.id,
+          sprint_id: issue.sprint_id ? sprintIdMap.get(issue.sprint_id) ?? null : null,
+          parent_id: null,
+          key: undefined,
+        });
+      }
+      await loadData();
+      logSuccess("Project imported", importedName, { source: "project-manager" });
+    } catch (e) {
+      const message = formatSupabaseError(e);
+      setSyncError(message);
+      logError("Project import failed", message, { source: "project-manager" });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const filteredProjects = useMemo(() => {
@@ -119,13 +275,23 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
               className="pl-9 pr-4 py-2 w-64 bg-neutral-900/50 border border-neutral-800 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
             />
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="dd-btn-primary"
-          >
-            <Plus className="h-4 w-4" />
-            New Workspace
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleImportProject}
+              disabled={importing}
+              className="flex items-center gap-2 rounded-lg border border-neutral-700 px-4 py-2 text-sm font-bold text-neutral-200 transition-colors hover:bg-neutral-800 disabled:opacity-60"
+            >
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Import JSON
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="dd-btn-primary"
+            >
+              <Plus className="h-4 w-4" />
+              New Workspace
+            </button>
+          </div>
         </div>
       </section>
 
@@ -162,9 +328,14 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             
             {filteredProjects.map(p => (
-              <button 
+              <div
                 key={p.id}
                 onClick={() => onProjectSelect(p)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") onProjectSelect(p);
+                }}
+                role="button"
+                tabIndex={0}
                 className="group text-left border border-neutral-800 bg-neutral-900/40 hover:bg-neutral-800/60 rounded-2xl p-6 transition-all h-full min-h-[200px] flex flex-col relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
               >
                 <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: p.color_tag || '#4ade80' }} />
@@ -190,9 +361,19 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
                   <span className="text-xs text-neutral-500 font-medium">
                     Synced team project
                   </span>
-                  <Users className="ml-auto w-3.5 h-3.5 text-neutral-500" />
+                  <Users className="w-3.5 h-3.5 text-neutral-500" />
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleExportProject(p);
+                    }}
+                    className="ml-auto rounded-md border border-neutral-800 p-1.5 text-neutral-400 transition-colors hover:border-yellow-400/40 hover:bg-yellow-400/10 hover:text-yellow-300"
+                    title="Export project JSON"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </button>
+              </div>
             ))}
 
           </div>
@@ -206,7 +387,7 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
             <div className="px-6 py-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div>
                 <h2 className="text-lg font-semibold text-white">Create Workspace</h2>
-                <p className="text-sm text-neutral-400 mt-0.5">Initialize a new project environment.</p>
+                <p className="text-sm text-neutral-400 mt-0.5">Initialize a new project environment or import a DawnDesk JSON export.</p>
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)} 
@@ -253,6 +434,15 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
               </div>
 
               <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleImportProject}
+                  disabled={importing || creating}
+                  className="px-4 py-2.5 rounded-lg border border-neutral-700 text-sm font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors disabled:opacity-60"
+                  title="Create from JSON"
+                >
+                  {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                </button>
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)} 

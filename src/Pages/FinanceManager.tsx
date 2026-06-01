@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   Cloud,
   Database,
+  Download,
   FileBarChart,
   Landmark,
   Loader2,
@@ -20,19 +21,26 @@ import {
   ReceiptText,
   Search,
   ShoppingCart,
+  Upload,
   UserPlus,
   Users,
   Wallet,
   X,
 } from "lucide-react";
+import { useAppLogger } from "../utils/LoggerContext";
+import { pickJsonFile, safeExportName, saveJsonFile } from "../lib/jsonExchange";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
 import {
+  createFinanceRow,
   createFinanceWorkspace,
+  FINANCE_EXPORT_TABLES,
   formatSupabaseError,
   inviteFinanceMember,
   listFinanceMembers,
+  listFinanceRows,
   listFinanceWorkspaces,
   removeFinanceMember,
+  type FinanceTableRow,
   type FinanceMember,
   type FinanceWorkspace,
 } from "../lib/workspaceSync";
@@ -70,7 +78,16 @@ const NAV_ITEMS = [
   { id: "members", label: "Members", icon: <Users className="w-5 h-5" /> },
 ];
 
+type FinanceWorkspaceExportFile = {
+  schema: "dawndesk.finance-workspace";
+  version: 1;
+  exportedAt: string;
+  workspace: Pick<FinanceWorkspace, "name">;
+  tables: Partial<Record<(typeof FINANCE_EXPORT_TABLES)[number], FinanceTableRow[]>>;
+};
+
 export default function FinanceManager() {
+  const { logSuccess, logError } = useAppLogger();
   const [activeView, setActiveView] = useState("dashboard");
   const [navSearch, setNavSearch] = useState("");
   const [financeWorkspace, setFinanceWorkspace] = useState<FinanceWorkspace | null>(null);
@@ -81,6 +98,8 @@ export default function FinanceManager() {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [importingWorkspace, setImportingWorkspace] = useState(false);
+  const [exportingWorkspaceId, setExportingWorkspaceId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<FinanceMember["role"]>("Accountant");
   const [inviting, setInviting] = useState(false);
@@ -166,6 +185,84 @@ export default function FinanceManager() {
       setFinanceSyncError(formatSupabaseError(error));
     }
     setCreatingWorkspace(false);
+  };
+
+  const handleExportFinanceWorkspace = async (workspace: FinanceWorkspace) => {
+    setExportingWorkspaceId(workspace.id);
+    setFinanceSyncError("");
+    try {
+      const tableEntries = await Promise.all(
+        FINANCE_EXPORT_TABLES.map(async (tableName) => [
+          tableName,
+          await listFinanceRows(tableName, workspace.id),
+        ] as const)
+      );
+      const payload: FinanceWorkspaceExportFile = {
+        schema: "dawndesk.finance-workspace",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        workspace: { name: workspace.name },
+        tables: Object.fromEntries(tableEntries),
+      };
+      const path = await saveJsonFile(
+        `${safeExportName(workspace.name, "dawndesk-finance")}.dawndesk-finance.json`,
+        payload,
+        "Save finance project JSON export"
+      );
+      if (path) logSuccess("Finance project exported", path, { source: "finance" });
+    } catch (error) {
+      const message = formatSupabaseError(error);
+      setFinanceSyncError(message);
+      logError("Finance project export failed", message, { source: "finance" });
+    } finally {
+      setExportingWorkspaceId(null);
+    }
+  };
+
+  const normalizeImportedFinanceWorkspace = (file: unknown): FinanceWorkspaceExportFile => {
+    if (!file || typeof file !== "object") throw new Error("This JSON file is not a DawnDesk finance export.");
+    const maybeFile = file as Partial<FinanceWorkspaceExportFile> & { name?: string };
+    const workspace = maybeFile.workspace ?? { name: maybeFile.name };
+    if (!workspace.name || typeof workspace.name !== "string") {
+      throw new Error("Finance JSON is missing a project name.");
+    }
+    return {
+      schema: "dawndesk.finance-workspace",
+      version: 1,
+      exportedAt: typeof maybeFile.exportedAt === "string" ? maybeFile.exportedAt : new Date().toISOString(),
+      workspace: { name: workspace.name },
+      tables: maybeFile.tables ?? {},
+    };
+  };
+
+  const handleImportFinanceWorkspace = async () => {
+    setImportingWorkspace(true);
+    setFinanceSyncError("");
+    try {
+      const file = normalizeImportedFinanceWorkspace(await pickJsonFile());
+      const workspace = await createFinanceWorkspace(`${file.workspace.name} Import`);
+      for (const tableName of FINANCE_EXPORT_TABLES) {
+        const rows = file.tables[tableName] ?? [];
+        for (const row of rows) {
+          const { id: _id, workspace_id: _workspaceId, ...payload } = row;
+          await createFinanceRow(tableName, workspace.id, payload);
+        }
+      }
+      const workspaces = await listFinanceWorkspaces();
+      setFinanceWorkspaces(workspaces);
+      setFinanceWorkspace(workspace);
+      setFinanceMembers(await listFinanceMembers(workspace.id));
+      setNewWorkspaceName("");
+      setIsWorkspaceModalOpen(false);
+      setActiveView("dashboard");
+      logSuccess("Finance project imported", workspace.name, { source: "finance" });
+    } catch (error) {
+      const message = formatSupabaseError(error);
+      setFinanceSyncError(message);
+      logError("Finance project import failed", message, { source: "finance" });
+    } finally {
+      setImportingWorkspace(false);
+    }
   };
 
   const handleSelectWorkspace = async (workspaceId: string) => {
@@ -260,17 +357,23 @@ export default function FinanceManager() {
             workspaces={financeWorkspaces}
             loading={loadingWorkspace}
             error={financeSyncError}
+            importing={importingWorkspace}
+            exportingWorkspaceId={exportingWorkspaceId}
             onSelect={handleSelectWorkspace}
             onCreateClick={() => setIsWorkspaceModalOpen(true)}
+            onImport={handleImportFinanceWorkspace}
+            onExport={handleExportFinanceWorkspace}
           />
           {isWorkspaceModalOpen && (
             <FinanceWorkspaceCreateModal
               name={newWorkspaceName}
               creating={creatingWorkspace}
+              importing={importingWorkspace}
               error={financeSyncError}
               onNameChange={setNewWorkspaceName}
               onClose={() => setIsWorkspaceModalOpen(false)}
               onSubmit={handleCreateFinanceWorkspace}
+              onImport={handleImportFinanceWorkspace}
             />
           )}
         </>
@@ -293,6 +396,14 @@ export default function FinanceManager() {
             >
               <ArrowLeft className="h-4 w-4" />
               Finance projects
+            </button>
+            <button
+              onClick={() => financeWorkspace && handleExportFinanceWorkspace(financeWorkspace)}
+              disabled={!financeWorkspace || exportingWorkspaceId === financeWorkspace.id}
+              className="mt-3 flex items-center gap-2 text-xs font-bold text-white/60 transition-colors hover:text-white disabled:opacity-50"
+            >
+              {exportingWorkspaceId === financeWorkspace.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Export JSON
             </button>
             <div className="dd-search mt-5">
               <Search className="h-4 w-4" />
@@ -375,14 +486,22 @@ function FinanceWorkspaceHub({
   workspaces,
   loading,
   error,
+  importing,
+  exportingWorkspaceId,
   onSelect,
   onCreateClick,
+  onImport,
+  onExport,
 }: {
   workspaces: FinanceWorkspace[];
   loading: boolean;
   error: string;
+  importing: boolean;
+  exportingWorkspaceId: string | null;
   onSelect: (workspaceId: string) => void;
   onCreateClick: () => void;
+  onImport: () => void;
+  onExport: (workspace: FinanceWorkspace) => void;
 }) {
   return (
     <div className="mx-auto flex h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-8 p-4 sm:p-8">
@@ -396,10 +515,20 @@ function FinanceWorkspaceHub({
             <p className="mt-1 max-w-xl text-neutral-400">Choose a shared finance workspace or create a new one.</p>
           </div>
         </div>
-        <button onClick={onCreateClick} className="dd-btn-primary">
-          <Plus className="h-4 w-4" />
-          New Finance Project
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onImport}
+            disabled={importing}
+            className="flex items-center gap-2 rounded-lg border border-neutral-700 px-4 py-2 text-sm font-bold text-neutral-200 transition-colors hover:bg-neutral-800 disabled:opacity-60"
+          >
+            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Import JSON
+          </button>
+          <button onClick={onCreateClick} className="dd-btn-primary">
+            <Plus className="h-4 w-4" />
+            New Finance Project
+          </button>
+        </div>
       </section>
 
       {error && (
@@ -426,9 +555,14 @@ function FinanceWorkspaceHub({
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {workspaces.map((workspace) => (
-              <button
+              <div
                 key={workspace.id}
                 onClick={() => onSelect(workspace.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") onSelect(workspace.id);
+                }}
+                role="button"
+                tabIndex={0}
                 className="group relative flex min-h-[190px] flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 text-left transition-all hover:bg-neutral-800/60 focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
               >
                 <div className="absolute left-0 top-0 h-1 w-full bg-yellow-400" />
@@ -436,7 +570,19 @@ function FinanceWorkspaceHub({
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-800/80">
                     <Wallet className="h-5 w-5 text-neutral-300 transition-colors group-hover:text-white" />
                   </div>
-                  <Cloud className="h-4 w-4 text-yellow-400" />
+                  <div className="flex items-center gap-2">
+                    <Cloud className="h-4 w-4 text-yellow-400" />
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onExport(workspace);
+                      }}
+                      className="rounded-md border border-neutral-800 p-1.5 text-neutral-400 transition-colors hover:border-yellow-400/40 hover:bg-yellow-400/10 hover:text-yellow-300"
+                      title="Export finance project JSON"
+                    >
+                      {exportingWorkspaceId === workspace.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="flex-1">
                   <h3 className="mb-2 line-clamp-1 text-lg font-semibold text-white transition-colors group-hover:text-yellow-400">{workspace.name}</h3>
@@ -445,7 +591,7 @@ function FinanceWorkspaceHub({
                 <div className="mt-6 border-t border-neutral-800/60 pt-4 text-xs font-medium text-neutral-500">
                   {new Date(workspace.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
@@ -576,17 +722,21 @@ function FinanceMembersSettings({
 function FinanceWorkspaceCreateModal({
   name,
   creating,
+  importing,
   error,
   onNameChange,
   onClose,
   onSubmit,
+  onImport,
 }: {
   name: string;
   creating: boolean;
+  importing: boolean;
   error: string;
   onNameChange: (value: string) => void;
   onClose: () => void;
   onSubmit: (event: React.FormEvent) => void;
+  onImport: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -594,7 +744,7 @@ function FinanceWorkspaceCreateModal({
         <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/50 px-6 py-5">
           <div>
             <h2 className="text-lg font-semibold text-white">Create Finance Project</h2>
-            <p className="mt-0.5 text-sm text-neutral-400">Create a shared finance workspace.</p>
+            <p className="mt-0.5 text-sm text-neutral-400">Create a shared finance workspace or import a DawnDesk JSON export.</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white">
             <X className="h-5 w-5" />
@@ -619,6 +769,15 @@ function FinanceWorkspaceCreateModal({
             />
           </div>
           <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onImport}
+              disabled={importing || creating}
+              className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-white disabled:opacity-60"
+              title="Create from JSON"
+            >
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            </button>
             <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-white">
               Cancel
             </button>

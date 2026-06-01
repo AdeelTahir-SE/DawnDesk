@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
-import { Edit3, FilePlus2, FileText, Loader2, Pin, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Edit3, FilePlus2, FileText, Loader2, Pin, Plus, Save, Trash2, X } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
 import type { LocalStrategy } from "./types";
 import { deleteProjectStrategy, listProjectStrategies, saveProjectStrategy } from "../../lib/workspaceSync";
@@ -429,7 +429,7 @@ function StrategyPageModal({
               className="grid h-10 w-10 place-items-center rounded-full border border-yellow-400/35 bg-yellow-400/10 text-yellow-200 shadow-[0_0_24px_rgba(250,204,21,0.12)] transition-colors hover:bg-yellow-400/20 disabled:cursor-wait disabled:opacity-60"
               title="Generate strategy with AI"
             >
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
             </button>
             <button
               onClick={() => onModeChange(mode === "write" ? "preview" : "write")}
@@ -566,7 +566,7 @@ function GenerateStrategyModal({
         <div className="flex items-start justify-between gap-4 border-b border-neutral-800 p-5">
           <div className="flex gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-300">
-              <Sparkles className="h-5 w-5" />
+              <Bot className="h-5 w-5" />
             </span>
             <div>
               <h3 className="text-base font-black text-white">Generate Strategy</h3>
@@ -629,7 +629,7 @@ function GenerateStrategyModal({
             disabled={generating || !prompt.trim()}
             className="inline-flex items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-black text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
             {generating ? "Generating" : "Generate"}
           </button>
         </div>

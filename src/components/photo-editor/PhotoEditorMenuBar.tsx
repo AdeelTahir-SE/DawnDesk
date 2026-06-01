@@ -12,7 +12,7 @@ import {
   applySmartSharpen,
   applyVignette,
 } from '../../engine/photo-editor/filters';
-import { FolderOpen, Save, Folder, Library, Sparkles } from 'lucide-react';
+import { Bot, FolderOpen, Save, Folder, Library } from 'lucide-react';
 
 interface MenuBarProps {
   onOpenImage: () => void;
@@ -143,7 +143,7 @@ export default function PhotoEditorMenuBar({
     {
       label: 'AI',
       items: [
-        { label: 'AI Image Studio', icon: <Sparkles size={14} />, description: 'Open AI tools for generating images as layers or updating the active layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
+        { label: 'AI Image Studio', icon: <Bot size={14} />, description: 'Open AI tools for generating images as layers or updating the active layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
         { label: 'Generate Images as Layers', description: 'Create multiple AI images and insert each result as a separate layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
         { label: 'Update Active Layer with AI', description: 'Use the AI panel to replace the selected unlocked layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
       ],
