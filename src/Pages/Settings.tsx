@@ -19,6 +19,7 @@ import {
   Save,
   Settings as SettingsIcon,
   Shield,
+  Trash2,
   LogOut,
   Sliders,
   User,
@@ -46,7 +47,6 @@ const TABS = [
   { id: "loggers", label: "Operation Toasts", icon: <Bell className="h-4 w-4" /> },
   { id: "appearance", label: "Appearance", icon: <Monitor className="h-4 w-4" /> },
   { id: "privacy", label: "Privacy", icon: <Shield className="h-4 w-4" /> },
-  { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
 
 const RELEASE_AI_TEXT_PROVIDERS: TextAiProvider[] = ["ollama"];
@@ -356,25 +356,6 @@ export default function Settings() {
             </SettingsGrid>
           )}
 
-          {activeTab === "about" && (
-            <div className="dd-card-elevated">
-              <div className="flex flex-wrap items-center justify-between gap-6">
-                <div className="flex items-center gap-5">
-                  <div className="grid h-20 w-20 place-items-center rounded-2xl border border-neutral-800 bg-neutral-950 text-yellow-400">
-                    <SettingsIcon className="h-10 w-10" />
-                  </div>
-                  <div>
-                    <h3 className="font-heading text-3xl font-black text-white">DawnDesk</h3>
-                    <p className="mt-1 dd-subtext">Version 0.2.1</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button className="dd-btn-secondary">Check for Updates</button>
-                  <button className="dd-btn-secondary">View License</button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </main>
     </div>
@@ -1048,7 +1029,7 @@ const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
 };
 
 function LoggerSettingsPanel({ onSaved }: { onSaved: () => void }) {
-  const { logs, settings, updateLoggerSettings, resetLoggerSettings, logSuccess } = useAppLogger();
+  const { logs, settings, updateLoggerSettings, resetLoggerSettings, clearLogs, logSuccess, logError } = useAppLogger();
 
   const update = (patch: Parameters<typeof updateLoggerSettings>[0]) => {
     updateLoggerSettings(patch);
@@ -1065,6 +1046,18 @@ function LoggerSettingsPanel({ onSaved }: { onSaved: () => void }) {
 
   const updateMutedAction = (action: string, value: boolean) => {
     update({ mutedActions: { ...settings.mutedActions, [action]: value } });
+  };
+
+  const handleClearLogs = async () => {
+    const confirmed = window.confirm("Delete all local DawnDesk log data? This clears the in-app log list and the local log file.");
+    if (!confirmed) return;
+    try {
+      await clearLogs();
+      onSaved();
+      logSuccess("Settings", "Local log data cleared.", { source: "settings" });
+    } catch (error) {
+      logError("Settings", `Failed to clear log data: ${String(error)}`, { source: "settings" });
+    }
   };
 
   const recentActions = Array.from(new Set(logs.filter((log) => log.channel === "operation").map((log) => log.action))).slice(0, 10);
@@ -1104,6 +1097,18 @@ function LoggerSettingsPanel({ onSaved }: { onSaved: () => void }) {
                 onClick={() => logSuccess("Settings", "Operation toast preview is working.", { source: "settings" })}
               >
                 Test Toast
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="dd-card">
+          <div className="flex gap-4">
+            <span className="dd-icon-box"><Trash2 /></span>
+            <div className="flex-1">
+              <h3 className="dd-card-title">Clear Log Data</h3>
+              <p className="mt-1 dd-subtext">Remove local log history stored in DawnDesk.</p>
+              <button className="mt-5 dd-btn-secondary" onClick={() => void handleClearLogs()}>
+                Delete Logs
               </button>
             </div>
           </div>

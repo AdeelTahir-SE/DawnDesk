@@ -21,9 +21,6 @@ interface MenuBarProps {
   onExport: () => void;
   onExportDialog?: () => void;
   onBatchExport?: () => void;
-  onCopyToClipboard?: () => void;
-  onSendToNotes?: () => void;
-  onSendToEmail?: () => void;
   onOpenHelp?: () => void;
   onOpenAiPanel?: () => void;
   onRotate: (deg: 90 | -90 | 180) => void;
@@ -56,7 +53,7 @@ interface MenuDef {
 const ENABLE_PHOTO_EDITOR_AI_MENU = false;
 
 export default function PhotoEditorMenuBar({
-  onOpenImage, onOpenImageAndPlace, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
+  onOpenImage, onOpenImageAndPlace, onResizeImage, onExport, onExportDialog, onBatchExport, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
   onSaveProject, onSaveProjectAs, onExportProjectFile, onOpenProjects, onOpenAiPanel, currentProjectName,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -90,10 +87,6 @@ export default function PhotoEditorMenuBar({
         { label: 'Quick Export', shortcut: 'Ctrl+S', description: 'Save the active image using current export settings.', action: () => { onExport(); setOpenMenu(null); } },
         { label: 'Export...', description: 'Choose format, quality, and scale before exporting.', action: () => { onExportDialog?.(); setOpenMenu(null); } },
         { label: 'Batch Export Open Tabs...', description: 'Export every open image tab with shared settings.', action: () => { onBatchExport?.(); setOpenMenu(null); } },
-        { separator: true, label: '' },
-        { label: 'Copy Image', shortcut: 'Ctrl+C', description: 'Copy the active image to the system clipboard.', action: () => { onCopyToClipboard?.(); setOpenMenu(null); } },
-        { label: 'Send to Notes', description: 'Prepare the active image for DawnDesk Notes.', action: () => { onSendToNotes?.(); setOpenMenu(null); } },
-        { label: 'Send to Email', description: 'Prepare the active image for a DawnDesk Mail attachment.', action: () => { onSendToEmail?.(); setOpenMenu(null); } },
       ],
     },
     {

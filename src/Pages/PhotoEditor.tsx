@@ -53,7 +53,16 @@ function makeBlankDocument(name: string, width: number, height: number, dpi: num
 
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
-  const { logInfo, logSuccess, logError } = useAppLogger();
+  const { logInfo: logInfoBase, logSuccess: logSuccessBase, logError: logErrorBase } = useAppLogger();
+  const logInfo = useCallback((action: string, message: string) => {
+    logInfoBase(action, message, { source: 'photo-editor', toast: false });
+  }, [logInfoBase]);
+  const logSuccess = useCallback((action: string, message: string) => {
+    logSuccessBase(action, message, { source: 'photo-editor', toast: false });
+  }, [logSuccessBase]);
+  const logError = useCallback((action: string, message: string) => {
+    logErrorBase(action, message, { source: 'photo-editor', toast: false });
+  }, [logErrorBase]);
   const navigate = useNavigate();
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -537,9 +546,6 @@ function PhotoEditorInner() {
         onExport={handleExport}
         onExportDialog={() => setShowExportDialog(true)}
         onBatchExport={handleBatchExport}
-        onCopyToClipboard={handleCopyToClipboard}
-        onSendToNotes={() => logInfo('Notes handoff not connected', 'Photo handoff to Notes is not available in this release.', { source: 'photo-editor' })}
-        onSendToEmail={() => logInfo('Email handoff not connected', 'Photo handoff to email is not available in this release.', { source: 'photo-editor' })}
         onOpenHelp={() => navigate('/photo-editor/help')}
         onRotate={handleRotate}
         onFlip={handleFlip}
@@ -549,7 +555,7 @@ function PhotoEditorInner() {
         onSaveProject={handleSaveProject}
         onSaveProjectAs={handleSaveProjectAs}
         onExportProjectFile={handleExportProjectFile}
-        onOpenProjects={() => navigate('/projects')}
+        onOpenProjects={() => navigate('/project-manager')}
         onOpenAiPanel={() => dispatch({ type: 'SET_RIGHT_TAB', payload: 'ai' })}
         currentProjectName={currentProjectName}
       />

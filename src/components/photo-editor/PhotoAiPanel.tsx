@@ -86,7 +86,13 @@ function makeGeneratedDocument(name: string, imageData: ImageData) {
 
 export default function PhotoAiPanel() {
   const { state, dispatch, activeDocument } = useEditor();
-  const { logSuccess, logError } = useAppLogger();
+  const { logSuccess: logSuccessBase, logError: logErrorBase } = useAppLogger();
+  const logSuccess = (action: string, message: string) => {
+    logSuccessBase(action, message, { source: 'photo-editor', toast: false });
+  };
+  const logError = (action: string, message: string) => {
+    logErrorBase(action, message, { source: 'photo-editor', toast: false });
+  };
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState(IMAGE_MODEL_OPTIONS[0].value);
   const [count, setCount] = useState(2);

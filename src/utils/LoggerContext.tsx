@@ -39,6 +39,7 @@ export interface LoggerSettings {
 type LogOptions = {
   channel?: LogChannel;
   source?: LoggerSource;
+  toast?: boolean;
 };
 
 interface LoggerContextType {
@@ -46,6 +47,7 @@ interface LoggerContextType {
   settings: LoggerSettings;
   updateLoggerSettings: (patch: Partial<LoggerSettings>) => void;
   resetLoggerSettings: () => void;
+  clearLogs: () => Promise<void>;
   logInfo: (action: string, message: string, options?: LogOptions) => void;
   logSuccess: (action: string, message: string, options?: LogOptions) => void;
   logWarning: (action: string, message: string, options?: LogOptions) => void;
@@ -190,6 +192,16 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setSettings(defaultLoggerSettings);
   }, []);
 
+  const clearLogs = useCallback(async () => {
+    setLogs([]);
+    try {
+      await writeTextFile(LOG_FILE_NAME, '--- DawnDesk Log Cleared ---\n', { baseDir: BaseDirectory.AppLocalData });
+    } catch (error) {
+      console.error('Failed to clear log file', error);
+      throw error;
+    }
+  }, []);
+
   const persistLog = async (entry: LogEntry) => {
     try {
       const logString = `[${entry.timestamp}] [${entry.source}] [${entry.channel}] [${entry.level.toUpperCase()}] ${entry.action} - ${entry.message}\n`;
@@ -226,7 +238,7 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Add to state
     setLogs(prev => [entry, ...prev].slice(0, 100)); // Keep last 100
     
-    if (currentSettings.toastsEnabled && channel === 'operation') {
+    if (currentSettings.toastsEnabled && channel === 'operation' && options?.toast !== false) {
       const toastOptions = {
         description: message,
       };
@@ -262,7 +274,7 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const logError = useCallback((action: string, message: string, options?: LogOptions) => createLog('error', action, message, options), [createLog]);
 
   return (
-    <LoggerContext.Provider value={{ logs, settings, updateLoggerSettings, resetLoggerSettings, logInfo, logSuccess, logWarning, logError }}>
+    <LoggerContext.Provider value={{ logs, settings, updateLoggerSettings, resetLoggerSettings, clearLogs, logInfo, logSuccess, logWarning, logError }}>
       <Toaster 
         position="bottom-right" 
         closeButton
