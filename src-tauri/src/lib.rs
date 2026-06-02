@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{env, fs, path::PathBuf};
 use tauri::{Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 const STARTUP_SCRIPT_NAME: &str = "DawnDesk.cmd";
 const NATIVE_SETTINGS_FILE: &str = "native-settings.json";
@@ -626,6 +627,15 @@ pub fn run() {
     apply_hardware_acceleration_from_settings();
 
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(target_os = "windows")]
+            {
+                if let Err(error) = app.deep_link().register_all() {
+                    eprintln!("Failed to register deep links: {error}");
+                }
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(url) = auth_deep_link_from_args(argv) {
                 let _ = app.emit(AUTH_DEEP_LINK_EVENT, url);
