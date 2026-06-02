@@ -8,7 +8,6 @@ import {
   BookOpen,
   Building,
   ClipboardCheck,
-  Cloud,
   Database,
   Download,
   FileBarChart,
@@ -258,6 +257,7 @@ export default function FinanceManager() {
       logSuccess("Finance project imported", workspace.name, { source: "finance" });
     } catch (error) {
       const message = formatSupabaseError(error);
+      if (message === "No JSON file selected.") return;
       setFinanceSyncError(message);
       logError("Finance project import failed", message, { source: "finance" });
     } finally {
@@ -403,7 +403,7 @@ export default function FinanceManager() {
               className="mt-3 flex items-center gap-2 text-xs font-bold text-white/60 transition-colors hover:text-white disabled:opacity-50"
             >
               {exportingWorkspaceId === financeWorkspace.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Export JSON
+              Export Project
             </button>
             <div className="dd-search mt-5">
               <Search className="h-4 w-4" />
@@ -421,8 +421,8 @@ export default function FinanceManager() {
               <button
                 key={item.id}
                 onClick={() => setActiveView(item.id)}
-                className={`dd-nav-item ${
-                  activeView === item.id ? "dd-nav-item-active" : ""
+                className={`dd-nav-item-sm ${
+                  activeView === item.id ? "dd-nav-item-sm-active" : ""
                 }`}
               >
                 {item.icon}
@@ -436,22 +436,13 @@ export default function FinanceManager() {
             )}
           </nav>
 
-          <div className="space-y-3 border-t border-neutral-800 p-4">
-            <div className="dd-sidebar-notice">
-              <div className="flex items-center gap-2 text-xs font-bold text-white">
-                {loadingWorkspace ? <Loader2 className="h-4 w-4 animate-spin text-yellow-400" /> : <Cloud className="h-4 w-4 text-yellow-400" />}
-                Cloud finance workspace
-              </div>
-              <p className="dd-subtext mt-1 leading-relaxed">
-                {financeWorkspace ? `${financeWorkspace.name} - ${financeMembers.length} member${financeMembers.length === 1 ? "" : "s"} connected.` : "Sign-in creates a shared finance workspace."}
-              </p>
-            </div>
-            {financeSyncError && (
+          {financeSyncError && (
+            <div className="border-t border-neutral-800 p-4">
               <p className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs leading-relaxed text-red-200">
                 {financeSyncError}
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </aside>
 
         <main className="relative flex-1 overflow-hidden">
@@ -507,9 +498,6 @@ function FinanceWorkspaceHub({
     <div className="mx-auto flex h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-8 p-4 sm:p-8">
       <section className="flex flex-col justify-between gap-6 border-b border-neutral-800 pb-6 md:flex-row md:items-end">
         <div className="flex items-center gap-5">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-neutral-700/50 bg-gradient-to-br from-neutral-800 to-neutral-900 shadow-inner">
-            <Wallet className="h-8 w-8 text-neutral-300" />
-          </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Finance Projects</h1>
             <p className="mt-1 max-w-xl text-neutral-400">Choose a shared finance workspace or create a new one.</p>
@@ -571,7 +559,6 @@ function FinanceWorkspaceHub({
                     <Wallet className="h-5 w-5 text-neutral-300 transition-colors group-hover:text-white" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Cloud className="h-4 w-4 text-yellow-400" />
                     <button
                       onClick={(event) => {
                         event.stopPropagation();

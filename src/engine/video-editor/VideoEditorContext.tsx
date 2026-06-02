@@ -2,8 +2,7 @@
 // DawnDesk Video Editor — Context & Reducer
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react';
-import { useAppLogger } from '../../utils/LoggerContext';
+import { createContext, useContext, useReducer, type ReactNode } from 'react';
 import type {
   VideoEditorState,
   VideoEditorAction,
@@ -26,8 +25,6 @@ import {
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
 const MAX_HISTORY = 50;
-const NOISY_ACTIONS = new Set<VideoEditorAction['type']>(['SET_PLAYHEAD']);
-
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 function generateId(): string {
@@ -1333,15 +1330,7 @@ const VideoEditorContext = createContext<{
 } | null>(null);
 
 export function VideoEditorProvider({ children }: { children: ReactNode }) {
-  const [state, baseDispatch] = useReducer(videoEditorReducer, initialState);
-  const { logInfo } = useAppLogger();
-
-  const dispatch = useCallback((action: VideoEditorAction) => {
-    if (!NOISY_ACTIONS.has(action.type)) {
-      logInfo('Video Editor', `Performed action: ${action.type}`);
-    }
-    baseDispatch(action);
-  }, [baseDispatch, logInfo]);
+  const [state, dispatch] = useReducer(videoEditorReducer, initialState);
 
   return (
     <VideoEditorContext.Provider value={{ state, dispatch }}>

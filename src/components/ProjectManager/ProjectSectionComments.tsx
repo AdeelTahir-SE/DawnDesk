@@ -403,21 +403,13 @@ function replaceActiveMention(value: string, mention: string) {
 }
 
 function MemberStack({ members }: { members: ProjectMember[] }) {
-  const visible = members.slice(0, 3);
-  const overflow = Math.max(0, members.length - visible.length);
-
   return (
-    <span className="flex items-center">
-      {visible.map((member, index) => (
+    <span className="flex min-w-0 items-center">
+      {members.map((member, index) => (
         <span key={member.id} className={index > 0 ? "-ml-2" : ""}>
           <Avatar name={member.display_name || member.email || "User"} src={member.avatar_url} size="sm" />
         </span>
       ))}
-      {overflow > 0 && (
-        <span className="-ml-2 grid h-7 w-7 place-items-center rounded-full border-2 border-neutral-900 bg-neutral-800 text-[10px] font-black text-white/70">
-          +{overflow}
-        </span>
-      )}
     </span>
   );
 }
@@ -431,6 +423,7 @@ function Avatar({
   src?: string | null;
   size?: "sm" | "md";
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const className = size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
   const initials = name
     .split(/\s+/)
@@ -439,12 +432,25 @@ function Avatar({
     .map((part) => part[0]?.toUpperCase())
     .join("") || "U";
 
-  if (src) {
-    return <img src={src} alt="" className={`${className} shrink-0 rounded-full border-2 border-neutral-900 object-cover`} />;
+  if (src && !imageFailed) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        title={name}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setImageFailed(true)}
+        className={`${className} shrink-0 rounded-full border-2 border-neutral-900 bg-neutral-800 object-cover`}
+      />
+    );
   }
 
   return (
-    <span className={`${className} grid shrink-0 place-items-center rounded-full border-2 border-neutral-900 bg-neutral-800 font-black text-white/70`}>
+    <span
+      className={`${className} grid shrink-0 place-items-center rounded-full border-2 border-neutral-900 bg-neutral-800 font-black text-white/70`}
+      title={name}
+    >
       {initials}
     </span>
   );

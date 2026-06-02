@@ -4,7 +4,7 @@ import {
   useEffect,
   useCallback,
 } from "react";
-import { StickyNote, Maximize2, Minimize2, AlignCenter, Bot, Loader2, X } from "lucide-react";
+import { StickyNote, Maximize2, Minimize2, AlignCenter, Bot, Image as ImageIcon, Link2, Loader2, X } from "lucide-react";
 import EditorToolbar from "./EditorToolbar";
 import EditorStatusBar from "./EditorStatusBar";
 import { generateText } from "../../lib/aiTextGeneration";
@@ -42,6 +42,10 @@ export default function NoteEditor({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [typewriterMode, setTypewriterMode] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showLinkToast, setShowLinkToast] = useState(false);
+  const [showImageToast, setShowImageToast] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [aiAction, setAiAction] = useState<"summarize" | "generate" | "rewrite" | "continue">("summarize");
   const [aiPlacement, setAiPlacement] = useState<"append" | "replace" | "section">("section");
   const [aiPrompt, setAiPrompt] = useState("");
@@ -51,6 +55,8 @@ export default function NoteEditor({
 
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  const savedLinkRangeRef = useRef<Range | null>(null);
+  const savedImageRangeRef = useRef<Range | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitRef = useRef(false);
 
@@ -105,6 +111,85 @@ export default function NoteEditor({
   const handleInput = useCallback(() => {
     triggerSave();
   }, [triggerSave]);
+
+  const openLinkToast = useCallback(() => {
+    const selection = window.getSelection();
+    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    savedLinkRangeRef.current = range && editorRef.current?.contains(range.commonAncestorContainer)
+      ? range.cloneRange()
+      : null;
+    setLinkUrl("");
+    setShowLinkToast(true);
+  }, []);
+
+  const closeLinkToast = useCallback(() => {
+    setShowLinkToast(false);
+    setLinkUrl("");
+    savedLinkRangeRef.current = null;
+  }, []);
+
+  const openImageToast = useCallback(() => {
+    const selection = window.getSelection();
+    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    savedImageRangeRef.current = range && editorRef.current?.contains(range.commonAncestorContainer)
+      ? range.cloneRange()
+      : null;
+    setImageUrl("");
+    setShowImageToast(true);
+  }, []);
+
+  const closeImageToast = useCallback(() => {
+    setShowImageToast(false);
+    setImageUrl("");
+    savedImageRangeRef.current = null;
+  }, []);
+
+  const normalizeUrl = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (/^(https?:|mailto:|tel:|data:|blob:|file:|asset:|#|\/)/i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  }, []);
+
+  const applyLink = useCallback((event?: React.FormEvent) => {
+    event?.preventDefault();
+    const url = normalizeUrl(linkUrl);
+    if (!url) return;
+
+    editorRef.current?.focus();
+    const selection = window.getSelection();
+    const range = savedLinkRangeRef.current;
+
+    if (selection && range) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    document.execCommand("createLink", false, url);
+    triggerSave();
+    logSuccess("Link added", "Inserted a link into the current note.", { source: "notes" });
+    closeLinkToast();
+  }, [closeLinkToast, linkUrl, logSuccess, normalizeUrl, triggerSave]);
+
+  const applyImage = useCallback((event?: React.FormEvent) => {
+    event?.preventDefault();
+    const url = normalizeUrl(imageUrl);
+    if (!url) return;
+
+    editorRef.current?.focus();
+    const selection = window.getSelection();
+    const range = savedImageRangeRef.current;
+
+    if (selection && range) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    document.execCommand("insertImage", false, url);
+    triggerSave();
+    logSuccess("Image inserted", "Added an image to the current note.", { source: "notes" });
+    closeImageToast();
+  }, [closeImageToast, imageUrl, logSuccess, normalizeUrl, triggerSave]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -227,10 +312,7 @@ export default function NoteEditor({
         break;
       }
       case "link": {
-        const url = prompt("Enter URL:");
-        if (url) {
-          document.execCommand("createLink", false, url);
-        }
+        openLinkToast();
         break;
       }
       case "table": {
@@ -262,17 +344,14 @@ export default function NoteEditor({
         break;
       }
       case "image": {
-        const imgUrl = prompt("Enter image URL:");
-        if (imgUrl) {
-          document.execCommand("insertImage", false, imgUrl);
-        }
+        openImageToast();
         break;
       }
       default:
         break;
     }
     triggerSave();
-  }, [triggerSave]);
+  }, [openImageToast, openLinkToast, triggerSave]);
 
   // Re-compute word count on each render when note exists
   const [wordCount, setWordCount] = useState(0);
@@ -388,7 +467,7 @@ export default function NoteEditor({
       {/* Toolbar */}
       <div className="shrink-0 border-b border-neutral-800 bg-neutral-950/80 px-4 py-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex-1 overflow-x-auto">
+          <div className="min-w-0 flex-1 overflow-visible">
             <EditorToolbar onCommand={handleCommand} editorRef={editorRef} />
           </div>
 
@@ -513,6 +592,92 @@ export default function NoteEditor({
           tags={tags}
         />
       </div>
+
+      {showLinkToast && (
+        <div className="fixed left-1/2 top-24 z-[180] w-[min(440px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl shadow-black/60">
+          <form onSubmit={applyLink} className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl border border-yellow-400/25 bg-yellow-400/10 text-yellow-300">
+                  <Link2 className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black text-white">Insert Link</h3>
+                  <p className="mt-1 text-xs leading-5 text-white/45">Paste a URL and apply it to the selected text.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeLinkToast}
+                className="rounded-lg p-2 text-white/40 transition-colors hover:bg-neutral-800 hover:text-white"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={linkUrl}
+                onChange={(event) => setLinkUrl(event.target.value)}
+                autoFocus
+                placeholder="https://example.com"
+                className="min-w-0 flex-1 rounded-lg border border-neutral-800 bg-black px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-yellow-400/60"
+              />
+              <button
+                type="submit"
+                disabled={!linkUrl.trim()}
+                className="rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-black text-black transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showImageToast && (
+        <div className="fixed left-1/2 top-24 z-[180] w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-neutral-800 bg-neutral-950 p-4 shadow-2xl shadow-black/60">
+          <form onSubmit={applyImage} className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl border border-yellow-400/25 bg-yellow-400/10 text-yellow-300">
+                  <ImageIcon className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black text-white">Insert Image</h3>
+                  <p className="mt-1 text-xs leading-5 text-white/45">Paste an image URL and DawnDesk will place it in this note.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeImageToast}
+                className="rounded-lg p-2 text-white/40 transition-colors hover:bg-neutral-800 hover:text-white"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={imageUrl}
+                onChange={(event) => setImageUrl(event.target.value)}
+                autoFocus
+                placeholder="https://example.com/image.png"
+                className="min-w-0 flex-1 rounded-lg border border-neutral-800 bg-black px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-yellow-400/60"
+              />
+              <button
+                type="submit"
+                disabled={!imageUrl.trim()}
+                className="rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-black text-black transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Insert
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showAiModal && (
         <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">

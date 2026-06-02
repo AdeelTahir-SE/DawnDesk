@@ -120,7 +120,7 @@ export default function EditorToolbar({ onCommand, editorRef }: EditorToolbarPro
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 rounded-xl border border-neutral-800 bg-neutral-900/80 px-2 py-1.5 backdrop-blur-sm">
+    <div className="relative z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-xl border border-neutral-800 bg-neutral-900/80 px-2 py-1.5 backdrop-blur-sm">
       {/* Text formatting */}
       {textTools.map((tool) => (
         <ToolbarButton
@@ -145,7 +145,7 @@ export default function EditorToolbar({ onCommand, editorRef }: EditorToolbarPro
           <ChevronDown className="h-3 w-3" />
         </button>
         {headingOpen && (
-          <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl shadow-black/40 animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute left-0 top-full z-[120] mt-2 w-44 rounded-xl border border-neutral-800 bg-neutral-950 p-1 shadow-2xl shadow-black/60 animate-in fade-in zoom-in-95 duration-150 sm:left-auto sm:right-0">
             {headingOptions.map((opt) => {
               const Icon = opt.icon;
               return (

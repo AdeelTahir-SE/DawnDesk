@@ -175,34 +175,35 @@ export default function Roadmap({ projectId }: { projectId: string | null }) {
   }
 
   return (
-    <div className="flex flex-col h-full animate-fadeIn">
-      <div className="flex items-center justify-between mb-6">
-        <div>
+    <div className="flex h-full min-h-0 flex-col animate-fadeIn">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-[220px] flex-1">
           <h2 className="text-2xl font-bold text-white flex items-center gap-3">Roadmap</h2>
           <p className="text-sm text-white/50 mt-1">Timeline view of your Epics and major milestones.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <input
             value={versionName}
             onChange={(e) => setVersionName(e.target.value)}
             placeholder="Version name"
-            className="w-36 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-yellow-400/60"
+            className="w-40 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-yellow-400/60"
           />
           <input
             type="date"
             value={releaseDate}
             onChange={(e) => setReleaseDate(e.target.value)}
-            className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-yellow-400/60"
+            className="w-36 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-yellow-400/60"
           />
           <button
             onClick={createVersion}
-            className="rounded-lg bg-yellow-400 px-3 py-2 text-xs font-bold text-black hover:bg-yellow-300"
+            className="grid h-9 w-10 place-items-center rounded-lg bg-yellow-400 text-xs font-bold text-black hover:bg-yellow-300"
+            title="Add version"
           >
             <Plus className="h-4 w-4" />
           </button>
         </div>
         {epics.length > 0 && (
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
             {Object.entries(STATUS_BAR_COLORS).map(([status, style]) => (
               <div key={status} className="flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 rounded-full ${style.bg}`} />
@@ -253,7 +254,7 @@ export default function Roadmap({ projectId }: { projectId: string | null }) {
           )}
           {/* Scrollable container */}
           <div className="overflow-auto custom-scrollbar flex-1">
-            <div className="min-w-[800px]">
+            <div className="relative min-w-[960px]">
               {/* Month Headers */}
               <div className="flex border-b border-neutral-800 sticky top-0 z-10 bg-neutral-900/95 backdrop-blur-sm">
                 {/* Left label column */}
@@ -299,7 +300,7 @@ export default function Roadmap({ projectId }: { projectId: string | null }) {
                       <span className="text-sm text-white/80 truncate">{epic.title}</span>
                     </div>
                     {/* Timeline bar area */}
-                    <div className="flex-1 relative py-3 px-1">
+                    <div className="relative flex-1 px-1 py-3">
                       {/* Month grid lines */}
                       <div className="absolute inset-0 flex pointer-events-none">
                         {months.map((month, i) => {
@@ -316,7 +317,7 @@ export default function Roadmap({ projectId }: { projectId: string | null }) {
                       </div>
                       {/* The bar */}
                       <div
-                        className={`absolute top-1/2 -translate-y-1/2 h-7 rounded-md ${style.bg} border ${style.border} shadow-sm flex items-center px-2 overflow-hidden transition-all group-hover:shadow-md group-hover:shadow-black/30`}
+                        className={`absolute top-1/2 z-20 flex h-7 -translate-y-1/2 items-center overflow-hidden rounded-md border px-2 shadow-sm transition-all group-hover:shadow-md group-hover:shadow-black/30 ${style.bg} ${style.border}`}
                         style={{
                           left: `${leftPct}%`,
                           width: `${Math.max(widthPct, 1.5)}%`,
@@ -340,7 +341,7 @@ export default function Roadmap({ projectId }: { projectId: string | null }) {
                   const todayPct = (todayOffset / totalDays) * 100;
                   return (
                     <div
-                      className="absolute top-0 bottom-0 w-px bg-yellow-400/50 pointer-events-none z-20"
+                      className="pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-yellow-400/50"
                       style={{
                         left: `calc(260px + (100% - 260px) * ${todayPct / 100})`,
                       }}
@@ -361,17 +362,12 @@ export default function Roadmap({ projectId }: { projectId: string | null }) {
                   return (
                     <div
                       key={`version-${version.id}`}
-                      className="absolute top-0 bottom-0 w-px border-l-2 border-dashed border-blue-500/50 pointer-events-none z-10 flex flex-col items-center"
+                      className="pointer-events-none absolute bottom-0 top-0 z-[1] w-px border-l-2 border-dashed border-blue-500/35"
                       style={{
                         left: `calc(260px + (100% - 260px) * ${leftPct / 100})`,
                       }}
                       title={`Release: ${version.name} (${vDate.toLocaleDateString()})`}
-                    >
-                      <div className="mt-12 bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-blue-500/40 backdrop-blur-sm shadow-sm pointer-events-auto flex items-center gap-1">
-                        <Milestone className="w-3 h-3" />
-                        {version.name}
-                      </div>
-                    </div>
+                    />
                   );
                 }
                 return null;

@@ -52,6 +52,8 @@ interface MenuDef {
   items: MenuItem[];
 }
 
+const ENABLE_PHOTO_EDITOR_AI_MENU = false;
+
 export default function PhotoEditorMenuBar({
   onOpenImage, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
   onSaveProject, onSaveProjectAs, onExportProjectFile, onOpenProjects, onOpenAiPanel, currentProjectName,
@@ -140,14 +142,14 @@ export default function PhotoEditorMenuBar({
         { label: 'Liquify Warp', description: 'Apply an experimental v3 center warp effect.', action: () => { onApplyFilter('Liquify Warp', (d) => applyLiquifyWarp(d, 18)); setOpenMenu(null); } },
       ],
     },
-    {
+    ...(ENABLE_PHOTO_EDITOR_AI_MENU ? [{
       label: 'AI',
       items: [
         { label: 'AI Image Studio', icon: <Bot size={14} />, description: 'Open AI tools for generating images as layers or updating the active layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
         { label: 'Generate Images as Layers', description: 'Create multiple AI images and insert each result as a separate layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
         { label: 'Update Active Layer with AI', description: 'Use the AI panel to replace the selected unlocked layer.', action: () => { onOpenAiPanel?.(); setOpenMenu(null); } },
       ],
-    },
+    }] : []),
     {
       label: 'Help',
       items: [

@@ -68,6 +68,29 @@ export type FinanceMember = {
   avatar_url?: string | null;
 };
 
+export type WorkspaceInviteAlert = {
+  invite_id: string;
+  invite_type: "project" | "finance";
+  resource_id: string;
+  resource_name: string;
+  role: string;
+  invited_email: string;
+  created_at: string;
+};
+
+export type WorkspaceNotificationAlert = {
+  id: string;
+  alert_type: "mention" | "invite_declined";
+  resource_type: "project" | "finance";
+  resource_id: string;
+  resource_name: string;
+  section: string | null;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+};
+
 export type FinanceSectionComment = {
   id: string;
   finance_workspace_id: string;
@@ -803,6 +826,58 @@ export async function inviteFinanceMember(workspaceId: string, email: string, ro
 export async function removeFinanceMember(memberId: string) {
   const client = requireSupabase();
   const { error } = await client.from("finance_workspace_members").delete().eq("id", memberId);
+  if (error) throw error;
+}
+
+export async function listPendingWorkspaceInvites(): Promise<WorkspaceInviteAlert[]> {
+  const client = requireSupabase();
+  const user = await getCurrentUser();
+  await ensureUserProfile(user);
+
+  const { data, error } = await client.rpc("list_pending_workspace_invites");
+  if (error) throw error;
+  return (data ?? []) as WorkspaceInviteAlert[];
+}
+
+export async function acceptWorkspaceInvite(invite: Pick<WorkspaceInviteAlert, "invite_id" | "invite_type">) {
+  const client = requireSupabase();
+  const user = await getCurrentUser();
+  await ensureUserProfile(user);
+
+  const { error } = await client.rpc("accept_workspace_invite", {
+    invite_kind: invite.invite_type,
+    target_invite_id: invite.invite_id,
+  });
+  if (error) throw error;
+}
+
+export async function declineWorkspaceInvite(invite: Pick<WorkspaceInviteAlert, "invite_id" | "invite_type">) {
+  const client = requireSupabase();
+  const user = await getCurrentUser();
+  await ensureUserProfile(user);
+
+  const { error } = await client.rpc("decline_workspace_invite", {
+    invite_kind: invite.invite_type,
+    target_invite_id: invite.invite_id,
+  });
+  if (error) throw error;
+}
+
+export async function listWorkspaceNotifications(): Promise<WorkspaceNotificationAlert[]> {
+  const client = requireSupabase();
+  const user = await getCurrentUser();
+  await ensureUserProfile(user);
+
+  const { data, error } = await client.rpc("list_workspace_notifications");
+  if (error) throw error;
+  return (data ?? []) as WorkspaceNotificationAlert[];
+}
+
+export async function markWorkspaceNotificationRead(notificationId: string) {
+  const client = requireSupabase();
+  const { error } = await client.rpc("mark_workspace_notification_read", {
+    notification_id: notificationId,
+  });
   if (error) throw error;
 }
 

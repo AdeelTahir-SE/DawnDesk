@@ -21,7 +21,7 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 
 export default function EffectsBrowser() {
   const { state, dispatch } = useVideoEditor();
-  const { logInfo, logSuccess, logWarning } = useAppLogger();
+  const { logSuccess, logWarning } = useAppLogger();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<EffectCategory | 'all'>('all');
 
@@ -59,7 +59,6 @@ export default function EffectsBrowser() {
             <div key={effect.type} className="ve-effect-card" draggable={true}
               onDragStart={(e) => {
                 setEffectDragData(e.dataTransfer, { dragKind: 'effect', effectType: effect.type });
-                logInfo('Effect ready', `Drag "${effect.name}" onto a timeline clip`);
               }}
               onDoubleClick={() => {
                 if (state.selectedClipIds.length > 0) {

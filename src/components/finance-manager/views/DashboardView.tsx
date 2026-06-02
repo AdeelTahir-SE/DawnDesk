@@ -188,7 +188,7 @@ export default function DashboardView() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <MetricCard icon={<Banknote />} label="Total Cash" value={`$${metrics.totalCash.toFixed(2)}`} />
             <MetricCard icon={<ArrowUpCircle />} label="Total A/R" value={`$${metrics.totalAR.toFixed(2)}`} tone="success" />
             <MetricCard icon={<ArrowDownCircle />} label="Total A/P" value={`$${metrics.totalAP.toFixed(2)}`} tone="error" />
@@ -356,12 +356,14 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className="dd-card-inset">
+    <div className="dd-card-inset min-w-0 overflow-hidden">
       <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-900/60 ${toneClass}`}>
         {icon}
       </div>
-      <p className="text-xs font-semibold text-white/50">{label}</p>
-      <p className={`mt-1 text-2xl font-black ${toneClass}`}>{value}</p>
+      <p className="text-xs font-semibold leading-tight text-white/50">{label}</p>
+      <p className={`mt-1 max-w-full break-words font-mono text-[clamp(1rem,1.35vw,1.5rem)] font-black leading-tight tabular-nums ${toneClass}`}>
+        {value}
+      </p>
     </div>
   );
 }

@@ -37,6 +37,7 @@ import {
   VIDEO_MODEL_OPTIONS,
   type AiProvider,
   type AiSettings,
+  type TextAiProvider,
 } from "../lib/aiTextGeneration";
 
 const TABS = [
@@ -47,6 +48,9 @@ const TABS = [
   { id: "privacy", label: "Privacy", icon: <Shield className="h-4 w-4" /> },
   { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
+
+const RELEASE_AI_TEXT_PROVIDERS: TextAiProvider[] = ["ollama"];
+const ENABLE_RELEASE_MEDIA_AI_SETTINGS = false;
 
 const defaultSettings = {
   theme: "dark",
@@ -271,9 +275,9 @@ export default function Settings() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`dd-nav-item ${
+              className={`dd-nav-item-sm ${
                 activeTab === tab.id
-                  ? "dd-nav-item-active"
+                  ? "dd-nav-item-sm-active"
                   : ""
               }`}
             >
@@ -282,16 +286,6 @@ export default function Settings() {
             </button>
           ))}
         </nav>
-
-        <div className="border-t border-neutral-800 p-4">
-          <div className="dd-sidebar-notice">
-            <p className="dd-label-muted">Status</p>
-            <div className="mt-3 flex items-center gap-2 text-sm font-bold text-green-400">
-              <Check className="h-4 w-4" />
-              Local settings synced
-            </div>
-          </div>
-        </div>
       </aside>
 
       <main className="dd-main">
@@ -303,10 +297,10 @@ export default function Settings() {
                 <h2 className="dd-page-title mt-2">{TABS.find((tab) => tab.id === activeTab)?.label}</h2>
                 <p className="dd-body-lg max-w-2xl mt-2">Tune the desktop shell, privacy posture, and AI defaults from one place.</p>
               </div>
-              <button className="dd-btn-secondary bg-neutral-950/50">
-                {saved ? <Check className="h-4 w-4 text-green-400" /> : <Save className="h-4 w-4 text-yellow-400" />}
-                {saved ? "Saved" : "Auto-save on"}
-              </button>
+              <div className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-lg border border-neutral-800 bg-neutral-950/45 px-3 text-xs font-bold text-white/70 lg:self-auto">
+                {saved ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Save className="h-3.5 w-3.5 text-yellow-400" />}
+                <span>{saved ? "Saved" : "Auto-save on"}</span>
+              </div>
             </div>
           </section>
 
@@ -371,7 +365,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <h3 className="font-heading text-3xl font-black text-white">DawnDesk</h3>
-                    <p className="mt-1 dd-subtext">Version 0.2.0</p>
+                    <p className="mt-1 dd-subtext">Version 0.2.1</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -407,7 +401,37 @@ const AI_PROVIDER_HELP: Record<AiProvider, { title: string; keyLabel: string; te
     keyLabel: "Ollama Cloud API Key",
     text: "Choose local Ollama or Ollama Cloud. DawnDesk manages the endpoint.",
   },
+  gemini: {
+    title: "Gemini",
+    keyLabel: "Gemini API Key",
+    text: "Use Google Gemini models for writing, planning, and analysis workflows.",
+  },
+  deepseek: {
+    title: "DeepSeek",
+    keyLabel: "DeepSeek API Key",
+    text: "Use DeepSeek chat and reasoning models for text generation.",
+  },
+  seedream: {
+    title: "Seedream",
+    keyLabel: "Seedream API Key",
+    text: "Use Seedream models for image generation workflows.",
+  },
 };
+
+function hasApiKey(value?: string | null) {
+  return Boolean(value?.trim());
+}
+
+function isConfiguredTextProvider(settings: AiSettings, provider: TextAiProvider) {
+  return provider === "ollama" && settings.ollama.ollama_mode === "local"
+    ? true
+    : hasApiKey(settings[provider].api_key);
+}
+
+function getConfiguredTextProviders(settings: AiSettings) {
+  // Temporarily keep v1 settings focused on Ollama Cloud. Restore TEXT_PROVIDERS after release.
+  return RELEASE_AI_TEXT_PROVIDERS.filter((provider) => isConfiguredTextProvider(settings, provider));
+}
 
 function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
@@ -423,6 +447,9 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
     openai: false,
     anthropic: false,
     ollama: false,
+    gemini: false,
+    deepseek: false,
+    seedream: false,
   });
   const { logSuccess, logError } = useAppLogger();
 
@@ -430,7 +457,17 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
     let mounted = true;
     getAiSettings()
       .then((settings) => {
-        if (mounted) setAiSettings(settings);
+        if (mounted) {
+          setAiSettings({
+            ...settings,
+            default_provider: "ollama",
+            ollama: {
+              ...settings.ollama,
+              ollama_mode: "cloud",
+              model: settings.ollama.model?.includes("gpt-oss") ? settings.ollama.model : "gpt-oss:120b",
+            },
+          });
+        }
       })
       .catch((err) => {
         if (mounted) setError(String(err));
@@ -465,7 +502,22 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
     setSaving(true);
     setError("");
     try {
-      await saveAiSettings(aiSettings);
+      const settingsForRelease = {
+        ...aiSettings,
+        default_provider: "ollama",
+        ollama: {
+          ...aiSettings.ollama,
+          ollama_mode: "cloud",
+          model: aiSettings.ollama.model?.includes("gpt-oss") ? aiSettings.ollama.model : "gpt-oss:120b",
+        },
+      };
+      const configuredProviders = getConfiguredTextProviders(settingsForRelease);
+      const currentDefault = aiSettings.default_provider as TextAiProvider | undefined;
+      const settingsToSave = configuredProviders.length > 0 && (!currentDefault || !configuredProviders.includes(currentDefault))
+        ? { ...settingsForRelease, default_provider: configuredProviders[0] }
+        : settingsForRelease;
+      await saveAiSettings(settingsToSave);
+      setAiSettings(settingsToSave);
       onSaved();
       logSuccess("AI settings saved", "Provider keys and model defaults were saved to system settings.", { source: "settings" });
     } catch (err) {
@@ -523,6 +575,12 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
     );
   }
 
+  const configuredTextProviders = getConfiguredTextProviders(aiSettings);
+  const currentDefaultProvider = aiSettings.default_provider as TextAiProvider | undefined;
+  const defaultProviderValue = configuredTextProviders.includes(currentDefaultProvider as TextAiProvider)
+    ? currentDefaultProvider
+    : configuredTextProviders[0] || "";
+
   return (
     <div className="space-y-5">
       {error && (
@@ -551,11 +609,15 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
               Default text provider
             </span>
             <select
-              value={aiSettings.default_provider || "openai"}
-              onChange={(event) => setAiSettings((current) => current ? { ...current, default_provider: event.target.value as AiProvider } : current)}
+              value={defaultProviderValue}
+              onChange={(event) => setAiSettings((current) => current ? { ...current, default_provider: event.target.value as TextAiProvider } : current)}
+              disabled={configuredTextProviders.length === 0}
               className="mt-2 dd-select w-full"
             >
-              {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
+              {configuredTextProviders.length === 0 && (
+                <option value="">Add an API key first</option>
+              )}
+              {configuredTextProviders.map((provider) => (
                 <option key={provider} value={provider}>{PROVIDER_LABELS[provider]}</option>
               ))}
             </select>
@@ -564,7 +626,7 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/55 p-3 lg:col-span-2">
             <p className="dd-form-label">Media generation</p>
             <p className="mt-2 text-sm leading-6 text-white/55">
-              Image and video generation currently use the ChatGPT/OpenAI key. Their model choices live in their own sections below.
+              For the v1 release, DawnDesk only exposes Ollama Cloud AI settings here.
             </p>
           </div>
         </div>
@@ -579,7 +641,7 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
           </div>
         </div>
         <SettingsGrid>
-        {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => {
+        {RELEASE_AI_TEXT_PROVIDERS.map((provider) => {
           const helper = AI_PROVIDER_HELP[provider];
           const isOllamaCloud = aiSettings.ollama.ollama_mode !== "local";
           const fallbackModels = provider === "ollama"
@@ -624,22 +686,9 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
                     {provider === "ollama" && (
                       <label className="block">
                         <span className="dd-form-label">Connection</span>
-                        <select
-                          value={aiSettings.ollama.ollama_mode === "local" ? "local" : "cloud"}
-                          onChange={(event) => {
-                            const mode = event.target.value as "local" | "cloud";
-                            updateProvider("ollama", {
-                              ollama_mode: mode,
-                              model: mode === "cloud" ? "gpt-oss:120b" : "llama3.1",
-                            });
-                            setOllamaModels([]);
-                            setVerifyStatus((current) => ({ ...current, ollama: undefined }));
-                          }}
-                          className="mt-2 dd-select w-full"
-                        >
-                          <option value="cloud">Ollama Cloud</option>
-                          <option value="local">Local Ollama</option>
-                        </select>
+                        <div className="mt-2 flex h-11 w-full items-center rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-sm font-semibold text-white/75">
+                          Ollama Cloud
+                        </div>
                       </label>
                     )}
 
@@ -718,6 +767,7 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
         </SettingsGrid>
       </div>
 
+      {ENABLE_RELEASE_MEDIA_AI_SETTINGS && (
       <div>
         <div className="mb-3 flex items-center gap-3">
           <span className="dd-icon-box-sm"><ImageIcon className="h-4 w-4" /></span>
@@ -738,8 +788,93 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
           onChange={(value) => updateProvider("openai", { image_model: value })}
           onVerify={() => void handleVerifyMediaModel("image")}
         />
-      </div>
+        <div className={`mt-5 dd-card max-w-2xl transition-colors ${
+          verifyStatus.seedream?.ok
+            ? "border-green-500/25 bg-green-500/5"
+            : verifyStatus.seedream && !verifyStatus.seedream.ok
+              ? "border-red-500/25 bg-red-500/5"
+              : ""
+        }`}>
+          <div className="flex gap-4">
+            <span className="dd-icon-box"><ImageIcon /></span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="dd-card-title">{AI_PROVIDER_HELP.seedream.title}</h3>
+                  <p className="mt-1 dd-subtext">{AI_PROVIDER_HELP.seedream.text}</p>
+                </div>
+                {verifyStatus.seedream && (
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                    verifyStatus.seedream.ok
+                      ? "border-green-500/25 bg-green-500/10 text-green-300"
+                      : "border-red-500/25 bg-red-500/10 text-red-200"
+                  }`}>
+                    {verifyStatus.seedream.ok ? "Verified" : "Needs fix"}
+                  </span>
+                )}
+              </div>
 
+              <div className="mt-5 space-y-4">
+                <label className="block">
+                  <span className="dd-form-label">{AI_PROVIDER_HELP.seedream.keyLabel}</span>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type={visibleKeys.seedream ? "text" : "password"}
+                      value={aiSettings.seedream.api_key || ""}
+                      onChange={(event) => updateProvider("seedream", { api_key: event.target.value })}
+                      className="dd-input min-w-0 flex-1"
+                      placeholder="Paste Seedream API key"
+                    />
+                    <button
+                      type="button"
+                      title={visibleKeys.seedream ? "Hide key" : "Show key"}
+                      onClick={() => setVisibleKeys((current) => ({ ...current, seedream: !current.seedream }))}
+                      className="dd-icon-btn h-11 w-11 border border-neutral-800 bg-neutral-950"
+                    >
+                      {visibleKeys.seedream ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="dd-form-label">Default Seedream Model</span>
+                  <select
+                    value={aiSettings.seedream.model || MODEL_OPTIONS.seedream[0].value}
+                    onChange={(event) => updateProvider("seedream", { model: event.target.value })}
+                    className="mt-2 dd-select w-full"
+                  >
+                    {MODEL_OPTIONS.seedream.map((model) => (
+                      <option key={model.value} value={model.value}>{model.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => void handleVerify("seedream")}
+                  disabled={verifyingProvider === "seedream"}
+                  className="dd-btn-secondary inline-flex items-center gap-2 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {verifyingProvider === "seedream" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Verify
+                </button>
+                {verifyStatus.seedream && (
+                  <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    verifyStatus.seedream.ok
+                      ? "border-green-500/25 bg-green-500/10 text-green-300"
+                      : "border-red-500/25 bg-red-500/10 text-red-200"
+                  }`}>
+                    {verifyStatus.seedream.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {ENABLE_RELEASE_MEDIA_AI_SETTINGS && (
       <div>
         <div className="mb-3 flex items-center gap-3">
           <span className="dd-icon-box-sm"><Video className="h-4 w-4" /></span>
@@ -761,6 +896,7 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
           onVerify={() => void handleVerifyMediaModel("video")}
         />
       </div>
+      )}
     </div>
   );
 }

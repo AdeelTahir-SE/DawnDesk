@@ -22,7 +22,7 @@ export function useFFmpeg() {
   };
 
   const importMediaPaths = async (filePaths: string[]) => {
-    if (!filePaths || filePaths.length === 0) return;
+    if (!filePaths || filePaths.length === 0) return 0;
     dispatch({ type: 'SET_IMPORTING', payload: true });
   
     const newItems: MediaItem[] = [];
@@ -71,13 +71,15 @@ export function useFFmpeg() {
           folderId: null,
         });
       } catch (e) {
-        logError('Import Media', `Failed to probe media: ${path}`);
+        const name = path.split(/[/\\]/).pop() || 'selected file';
+        logError('Import failed', `DawnDesk could not read "${name}".`);
       }
     }
     if (newItems.length > 0) {
       dispatch({ type: 'ADD_MEDIA_BATCH', payload: newItems });
     }
     dispatch({ type: 'SET_IMPORTING', payload: false });
+    return newItems.length;
   };
 
   const importMedia = async () => {
@@ -92,10 +94,12 @@ export function useFFmpeg() {
       if (!files) return;
       
       const filePaths = Array.isArray(files) ? files : [files];
-      await importMediaPaths(filePaths);
-      logSuccess('Import Media', 'Media files imported successfully');
+      const importedCount = await importMediaPaths(filePaths);
+      if (importedCount > 0) {
+        logSuccess('Media imported', `${importedCount} file${importedCount === 1 ? '' : 's'} added to the project.`);
+      }
     } catch (e) {
-      logError('Import Media', `Import failed: ${String(e)}`);
+      logError('Import failed', 'DawnDesk could not import the selected media.');
       dispatch({ type: 'SET_IMPORTING', payload: false });
     }
   };
@@ -151,7 +155,7 @@ export function useFFmpeg() {
         unlistenComplete();
         unlistenRef.current = null;
         dispatch({ type: 'SET_EXPORT_SETTINGS', payload: { ...state.exportSettings, outputPath: undefined } }); // reset
-        logSuccess('Export', `Export complete: ${event.payload}`);
+        logSuccess('Export complete', 'Your video was exported successfully.');
       });
 
       const unlistenError = await listen<string>('export-error', (event) => {
@@ -164,7 +168,7 @@ export function useFFmpeg() {
         unlistenComplete();
         unlistenError();
         unlistenRef.current = null;
-        logError('Export', event.payload);
+        logError('Export failed', event.payload);
       });
 
       unlistenRef.current = () => {
@@ -175,7 +179,7 @@ export function useFFmpeg() {
 
       await invoke('ve_export_project', { settings: { ...settings, outputPath: finalOutputPath }, project: state.project });
     } catch (e) {
-      logError('Export', `Export failed: ${String(e)}`);
+      logError('Export failed', 'DawnDesk could not export this project.');
       dispatch({ type: 'EXPORT_ERROR', payload: String(e) });
       const jobId = state.renderQueue.length > 0 ? state.renderQueue[state.renderQueue.length - 1].id : `render-${Date.now()}`;
       dispatch({
@@ -192,9 +196,9 @@ export function useFFmpeg() {
   const cancelExport = async () => {
     try {
       await invoke('ve_cancel_export');
-      logInfo('Export', 'Export cancelled');
+      logInfo('Export cancelled', 'Video export was stopped.');
     } catch (e) {
-      logError('Export', 'Cancel export failed');
+      logError('Cancel failed', 'DawnDesk could not stop the current export.');
     }
   };
 
@@ -202,7 +206,7 @@ export function useFFmpeg() {
     try {
       return await invoke<number[]>('ve_generate_waveform', { path });
     } catch (e) {
-      logError('Waveform', `Waveform generation failed: ${path}`);
+      console.warn('Waveform generation failed', path, e);
       return [];
     }
   };
@@ -216,10 +220,10 @@ export function useFFmpeg() {
         await invoke('ve_save_project', { path, projectData: JSON.stringify(state.project) });
         dispatch({ type: 'SET_DIRTY', payload: false });
         dispatch({ type: 'SET_PROJECT_PATH', payload: path });
-        logSuccess('Project', 'Project saved successfully!');
+        logSuccess('Project saved', 'Video project saved successfully.');
       }
     } catch (e) {
-      logError('Project', 'Failed to save project');
+      logError('Save failed', 'DawnDesk could not save this video project.');
     }
   };
 
@@ -230,9 +234,9 @@ export function useFFmpeg() {
     try {
       await invoke('ve_save_project', { path: state.projectPath, projectData: JSON.stringify(state.project) });
       dispatch({ type: 'SET_DIRTY', payload: false });
-      logSuccess('Project', 'Project saved');
+      logSuccess('Project saved', 'Video project saved successfully.');
     } catch (e) {
-      logError('Project', 'Failed to save project');
+      logError('Save failed', 'DawnDesk could not save this video project.');
     }
   };
 
@@ -248,10 +252,10 @@ export function useFFmpeg() {
         const project = JSON.parse(data);
         dispatch({ type: 'LOAD_PROJECT', payload: project });
         dispatch({ type: 'SET_PROJECT_PATH', payload: path });
-        logSuccess('Project', 'Project loaded');
+        logSuccess('Project loaded', 'Video project opened successfully.');
       }
     } catch (e) {
-      logError('Project', 'Failed to load project');
+      logError('Open failed', 'DawnDesk could not open this video project.');
     }
   };
 

@@ -237,7 +237,7 @@
 
   /** Secondary / ghost button – bordered neutral */
   .dd-btn-secondary {
-    @apply rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-2.5
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-5 py-2.5
            text-sm font-semibold text-white/60
            transition-colors hover:text-white;
   }
@@ -640,7 +640,7 @@ html:not(.light) .prompt-hub-dock button:hover {
 html:not(.light) .prompt-hub-sidebar .prompt-hub-nav-active,
 html:not(.light) .prompt-hub-sidebar .prompt-hub-filter-active {
   background-color: rgba(250, 204, 21, 0.11) !important;
-  box-shadow: inset 3px 0 0 #facc15 !important;
+  box-shadow: none !important;
   color: #facc15 !important;
 }
 
@@ -654,11 +654,18 @@ html:not(.light) .prompt-hub-sidebar p[class*="uppercase"] {
   color: rgba(255, 255, 255, 0.42) !important;
 }
 
-html:not(.light) .prompt-hub-chip[class*="bg-white"],
-html:not(.light) .prompt-hub-sort[class*="bg-neutral-100"] {
+html:not(.light) .prompt-hub-chip-active,
+html:not(.light) .prompt-hub-sort-active {
   background-color: #facc15 !important;
   color: #111111 !important;
   border-color: #facc15 !important;
+}
+
+html:not(.light) .prompt-hub-chip:not(.prompt-hub-chip-active),
+html:not(.light) .prompt-hub-sort:not(.prompt-hub-sort-active) {
+  background-color: #1a1a1a !important;
+  color: rgba(255, 255, 255, 0.62) !important;
+  border-color: #2a2a2a !important;
 }
 
 html:not(.light) .prompt-hub-filter[class*="bg-yellow-100"] {
@@ -805,8 +812,8 @@ html:not(.light) .prompt-hub-shell [class*="border-neutral-100"] {
   border-color: #262626 !important;
 }
 
-html:not(.light) .prompt-hub-chip[class*="bg-white"],
-html:not(.light) .prompt-hub-sort[class*="bg-neutral-100"],
+html:not(.light) .prompt-hub-chip-active,
+html:not(.light) .prompt-hub-sort-active,
 html:not(.light) .prompt-hub-publish-card button {
   background-color: #facc15 !important;
   color: #111111 !important;

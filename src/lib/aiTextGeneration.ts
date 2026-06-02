@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type AiProvider = "openai" | "anthropic" | "ollama";
+export type AiProvider = "openai" | "anthropic" | "ollama" | "gemini" | "deepseek" | "seedream";
+export type TextAiProvider = Exclude<AiProvider, "seedream">;
 
 export type AiProviderSettings = {
   api_key?: string | null;
@@ -15,10 +16,13 @@ export type AiSettings = {
   openai: AiProviderSettings;
   anthropic: AiProviderSettings;
   ollama: AiProviderSettings;
+  gemini: AiProviderSettings;
+  deepseek: AiProviderSettings;
+  seedream: AiProviderSettings;
 };
 
 export type GenerateTextOptions = {
-  provider?: AiProvider;
+  provider?: TextAiProvider;
   prompt: string;
   system?: string;
   model?: string;
@@ -37,7 +41,7 @@ export type AiUsage = {
 
 export type GenerateTextResult = {
   text: string;
-  provider: AiProvider;
+  provider: TextAiProvider;
   model: string;
   usage: AiUsage;
 };
@@ -48,13 +52,21 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
   openai: "ChatGPT",
   anthropic: "Claude",
   ollama: "Ollama",
+  gemini: "Gemini",
+  deepseek: "DeepSeek",
+  seedream: "Seedream",
 };
+
+export const TEXT_PROVIDERS: TextAiProvider[] = ["openai", "anthropic", "ollama", "gemini", "deepseek"];
 
 const DEFAULT_SETTINGS: AiSettings = {
   default_provider: "openai",
   openai: { api_key: "", model: "gpt-4.1-mini", image_model: "gpt-image-1.5", video_model: "sora-2" },
   anthropic: { api_key: "", model: "claude-3-5-haiku-latest" },
   ollama: { api_key: "", model: "gpt-oss:120b", ollama_mode: "cloud" },
+  gemini: { api_key: "", model: "gemini-2.5-flash" },
+  deepseek: { api_key: "", model: "deepseek-chat" },
+  seedream: { api_key: "", model: "seedream-4.0" },
 };
 
 export const MODEL_OPTIONS: Record<AiProvider, { value: string; label: string }[]> = {
@@ -82,6 +94,19 @@ export const MODEL_OPTIONS: Record<AiProvider, { value: string; label: string }[
     { value: "qwen2.5", label: "Qwen 2.5 Local" },
     { value: "codellama", label: "Code Llama Local" },
   ],
+  gemini: [
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
+  deepseek: [
+    { value: "deepseek-chat", label: "DeepSeek Chat" },
+    { value: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+  ],
+  seedream: [
+    { value: "seedream-4.0", label: "Seedream 4.0" },
+    { value: "seedream-3.0", label: "Seedream 3.0" },
+  ],
 };
 
 export const IMAGE_MODEL_OPTIONS = [
@@ -90,6 +115,8 @@ export const IMAGE_MODEL_OPTIONS = [
   { value: "gpt-image-1-mini", label: "GPT Image 1 mini" },
   { value: "chatgpt-image-latest", label: "ChatGPT Image latest" },
   { value: "dall-e-3", label: "DALL-E 3" },
+  { value: "seedream-4.0", label: "Seedream 4.0" },
+  { value: "seedream-3.0", label: "Seedream 3.0" },
 ];
 
 export const VIDEO_MODEL_OPTIONS = [
@@ -97,8 +124,8 @@ export const VIDEO_MODEL_OPTIONS = [
   { value: "sora-2-pro", label: "Sora 2 Pro" },
 ];
 
-function normalizeProvider(value: string | null | undefined): AiProvider {
-  return value === "anthropic" || value === "ollama" || value === "openai" ? value : "openai";
+function normalizeProvider(value: string | null | undefined): TextAiProvider {
+  return value === "anthropic" || value === "ollama" || value === "gemini" || value === "deepseek" || value === "openai" ? value : "openai";
 }
 
 function withDefaults(settings: Partial<AiSettings> | null | undefined): AiSettings {
@@ -111,6 +138,9 @@ function withDefaults(settings: Partial<AiSettings> | null | undefined): AiSetti
     openai: { ...DEFAULT_SETTINGS.openai, ...settings?.openai },
     anthropic: { ...DEFAULT_SETTINGS.anthropic, ...settings?.anthropic },
     ollama,
+    gemini: { ...DEFAULT_SETTINGS.gemini, ...settings?.gemini },
+    deepseek: { ...DEFAULT_SETTINGS.deepseek, ...settings?.deepseek },
+    seedream: { ...DEFAULT_SETTINGS.seedream, ...settings?.seedream },
   };
 }
 
@@ -142,6 +172,9 @@ export function readAiUsage(): Record<AiProvider, AiUsage> {
     openai: { provider: "openai", promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0, updatedAt: now },
     anthropic: { provider: "anthropic", promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0, updatedAt: now },
     ollama: { provider: "ollama", promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0, updatedAt: now },
+    gemini: { provider: "gemini", promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0, updatedAt: now },
+    deepseek: { provider: "deepseek", promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0, updatedAt: now },
+    seedream: { provider: "seedream", promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0, updatedAt: now },
   };
 
   try {
@@ -151,7 +184,7 @@ export function readAiUsage(): Record<AiProvider, AiUsage> {
   }
 }
 
-function addUsage(provider: AiProvider, promptTokens: number, completionTokens: number): AiUsage {
+function addUsage(provider: TextAiProvider, promptTokens: number, completionTokens: number): AiUsage {
   const usage = readAiUsage();
   const current = usage[provider];
   const next: AiUsage = {
@@ -179,7 +212,7 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
   const model = options.model || providerSettings.model || DEFAULT_SETTINGS[provider].model || "";
   const data = await invoke<{
     text: string;
-    provider: AiProvider;
+    provider: TextAiProvider;
     model: string;
     promptTokens: number;
     completionTokens: number;

@@ -15,7 +15,8 @@ import DevTools from "./Pages/DevTools";
 import FinanceManager from "./Pages/FinanceManager";
 import NotesApp from "./Pages/NotesApp";
 import RequireGoogleAuth from "./components/RequireGoogleAuth";
-import WorkflowBuilder from "./Pages/WorkflowBuilder";
+// Temporarily disabled for v1 release. Restore this import with the /workflow route below.
+// import WorkflowBuilder from "./Pages/WorkflowBuilder";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppLogger } from "./utils/LoggerContext";
@@ -82,7 +83,8 @@ function App() {
         <Route path="dev-tools" element={<DevTools />} />
         <Route path="finance" element={<RequireGoogleAuth moduleName="Finance Manager"><FinanceManager /></RequireGoogleAuth>} />
         <Route path="notes" element={<NotesApp />} />
-        <Route path="workflow" element={<WorkflowBuilder />} />
+        {/* Temporarily disabled for v1 release. Restore when Workflow Builder is ready again. */}
+        {/* <Route path="workflow" element={<WorkflowBuilder />} /> */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
       </Routes>

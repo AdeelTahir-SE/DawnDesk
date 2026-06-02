@@ -33,21 +33,46 @@ export async function saveJsonFile(filename: string, data: unknown, title = "Sav
 export function pickJsonFile(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
+    let settled = false;
+
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      input.remove();
+      callback();
+    };
+
+    const rejectNoSelection = () => {
+      finish(() => reject(new Error("No JSON file selected.")));
+    };
+
+    const handleWindowFocus = () => {
+      window.setTimeout(() => {
+        if (!settled && !input.files?.length) rejectNoSelection();
+      }, 500);
+    };
+
     input.type = "file";
     input.accept = "application/json,.json";
+    input.style.display = "none";
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) {
-        reject(new Error("No JSON file selected."));
+        rejectNoSelection();
         return;
       }
 
       try {
-        resolve(JSON.parse(await file.text()));
+        const parsed = JSON.parse(await file.text());
+        finish(() => resolve(parsed));
       } catch {
-        reject(new Error("Selected file is not valid JSON."));
+        finish(() => reject(new Error("Selected file is not valid JSON.")));
       }
     };
+    input.oncancel = rejectNoSelection;
+    document.body.appendChild(input);
+    window.addEventListener("focus", handleWindowFocus);
     input.click();
   });
 }

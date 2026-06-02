@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, BarChart3, Bot, Check, ChevronRight, Clock3, CloudUpload, Copy, Download, Edit, FileQuestion, Gift, Globe2, Hash, Heart, Home, Image, MessageSquareText, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, UserCircle, Variable, X } from "lucide-react";
+import { BarChart3, Bot, Check, ChevronRight, CloudUpload, Copy, Download, Edit, FileQuestion, Globe2, Hash, Heart, Home, Image, MessageSquareText, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, UserCircle, Variable, X } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
 import ConnectionErrorModal from "../components/ConnectionErrorModal";
 import { useAppLogger } from "../utils/LoggerContext";
@@ -37,71 +37,21 @@ type HubProfile = {
   avatarUrl: string;
 };
 
-const SEEDED_PROMPTS: Prompt[] = [
-  {
-    id: "marketing-1",
-    category: "Marketing",
-    title: "Social Media Hook Generator",
-    content: "Write a high-converting social media post hook for the following topic: [Topic]. Ensure it targets a pain point, builds curiosity, and includes a call to action. Tone: [Tone]",
-    isCustom: false,
-  },
-  {
-    id: "marketing-2",
-    category: "Marketing",
-    title: "SEO Blog Post Outline",
-    content: "Generate a detailed SEO-friendly blog post outline for the keyword: [Keyword]. Include search intent, H2/H3 structure, target length, and related terms to include.",
-    isCustom: false,
-  },
-  {
-    id: "marketing-3",
-    category: "Marketing",
-    title: "Cold Outreach Email",
-    content: "Create a personalized cold outreach email for a prospect in [Industry]. The offer is [Offer] and the goal is a 15-minute discovery call. Keep it concise, benefit-led, and conversational.",
-    isCustom: false,
-  },
-  {
-    id: "dev-1",
-    category: "Development",
-    title: "Code Refactor Specialist",
-    content: "Refactor the following [Language] code for readability, performance, and best practices. Explain the most important changes made:\n\n[Code]",
-    isCustom: false,
-  },
-  {
-    id: "dev-2",
-    category: "Development",
-    title: "Regex Pattern Generator",
-    content: "Generate a regular expression pattern that matches: [Criteria]. Provide example matches, non-matches, and a concise breakdown for [Language/Standard].",
-    isCustom: false,
-  },
-  {
-    id: "dev-3",
-    category: "Development",
-    title: "Code Documentation Writer",
-    content: "Write professional JSDoc/TSDoc or docstring documentation for the following function or class. Include parameters, return values, thrown errors, and a usage example:\n\n[Code]",
-    isCustom: false,
-  },
-  {
-    id: "writing-1",
-    category: "Writing & Design",
-    title: "Tone & Voice Adjuster",
-    content: "Rewrite the following text in a [Desired Tone] tone. Keep the original meaning, but adjust vocabulary, rhythm, and sentence structure:\n\n[Text]",
-    isCustom: false,
-  },
-  {
-    id: "writing-2",
-    category: "Writing & Design",
-    title: "Catchy Headline Copywriter",
-    content: "Brainstorm 10 benefit-driven headlines for [Product Name]. It is a [Product Description] for [Target Audience]. Prioritize clarity, emotional pull, and specificity.",
-    isCustom: false,
-  },
-  {
-    id: "writing-3",
-    category: "Writing & Design",
-    title: "Component Style Architect",
-    content: "As a frontend design lead, suggest structure, Tailwind classes, color palette, typography, and interaction states for a premium [Component Name]. Vibe: [Vibe].",
-    isCustom: false,
-  },
-];
+const REMOVED_SEEDED_PROMPT_IDS = new Set([
+  "marketing-1",
+  "marketing-2",
+  "marketing-3",
+  "dev-1",
+  "dev-2",
+  "dev-3",
+  "writing-1",
+  "writing-2",
+  "writing-3",
+]);
+
+function removeSeededPrompts(prompts: Prompt[]) {
+  return prompts.filter((prompt) => prompt.isCustom !== false && !REMOVED_SEEDED_PROMPT_IDS.has(prompt.id));
+}
 
 const extractVariables = (content: string) => Array.from(new Set(content.match(/\[[^\]]+\]/g) ?? []));
 
@@ -204,14 +154,18 @@ export default function PromptManager() {
     const stored = localStorage.getItem("dawndesk_prompts");
     if (stored) {
       try {
-        setPrompts(JSON.parse(stored));
+        const storedPrompts = JSON.parse(stored);
+        const nextPrompts = Array.isArray(storedPrompts) ? removeSeededPrompts(storedPrompts) : [];
+        setPrompts(nextPrompts);
+        localStorage.setItem("dawndesk_prompts", JSON.stringify(nextPrompts));
       } catch (e) {
-        console.error("Failed to parse stored prompts, falling back to seeds", e);
-        setPrompts(SEEDED_PROMPTS);
+        console.error("Failed to parse stored prompts, starting with an empty prompt library", e);
+        setPrompts([]);
+        localStorage.setItem("dawndesk_prompts", JSON.stringify([]));
       }
     } else {
-      setPrompts(SEEDED_PROMPTS);
-      localStorage.setItem("dawndesk_prompts", JSON.stringify(SEEDED_PROMPTS));
+      setPrompts([]);
+      localStorage.setItem("dawndesk_prompts", JSON.stringify([]));
     }
   }, []);
 
@@ -476,7 +430,7 @@ export default function PromptManager() {
     setModalMode("create");
     setEditingPromptId(null);
     setFormTitle("");
-    setFormCategory(categories[1] || "Marketing");
+    setFormCategory(categories[1] || "New Category...");
     setCustomCategory("");
     setFormContent("");
     setFormModel("");
@@ -538,26 +492,23 @@ export default function PromptManager() {
     return (
       <WelcomeScreen appKey="prompts" title="Prompt Manager" description="Browse, save, and publish prompt templates.">
         <div className="prompt-hub-shell flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f5f3ee] text-neutral-950">
-          <aside className="prompt-hub-sidebar custom-scrollbar flex w-60 shrink-0 flex-col overflow-y-auto border-r border-neutral-800 bg-neutral-900/60 px-3 py-4 shadow-none">
-            <div className="prompt-hub-sidebar-header mb-6 flex items-center gap-3 px-1.5">
-              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 text-white">
-                <img src="/realistic_logo.png" alt="DawnDesk" className="h-full w-full object-cover" />
-              </div>
+          <aside className="prompt-hub-sidebar dd-sidebar-narrow custom-scrollbar overflow-y-auto px-3 py-4">
+            <div className="dd-sidebar-header -mx-3 -mt-4 mb-4 px-5 py-5">
               <div>
-                <h1 className="text-base font-black leading-none text-neutral-950">DawnDesk <span className="font-serif italic">Hub</span></h1>
-                <p className="mt-1 text-xs font-semibold text-neutral-500">Prompt Gallery</p>
+                <h1 className="dd-sidebar-title text-base">Prompts</h1>
+                <p className="dd-subtext">{prompts.length} templates</p>
               </div>
             </div>
 
-            <nav className="space-y-0.5 text-sm font-semibold text-neutral-600">
-              <button onClick={() => setActiveView("library")} className="prompt-hub-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-neutral-100 hover:text-neutral-950">
+            <nav className="space-y-1">
+              <button onClick={() => setActiveView("library")} className="prompt-hub-nav-item dd-nav-item-sm">
                 <Home className="h-4 w-4" />
                 <span className="prompt-hub-nav-label">My Library</span>
               </button>
               <button
                 onClick={() => setHubMode("explore")}
-                className={`prompt-hub-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${
-                  hubMode === "explore" ? "prompt-hub-nav-active" : "hover:bg-neutral-100 hover:text-neutral-950"
+                className={`prompt-hub-nav-item dd-nav-item-sm ${
+                  hubMode === "explore" ? "dd-nav-item-sm-active prompt-hub-nav-active" : ""
                 }`}
               >
                 <Globe2 className="h-4 w-4" />
@@ -565,8 +516,8 @@ export default function PromptManager() {
               </button>
               <button
                 onClick={() => setHubMode("dashboard")}
-                className={`prompt-hub-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-neutral-100 hover:text-neutral-950 ${
-                  hubMode === "dashboard" ? "prompt-hub-nav-active" : ""
+                className={`prompt-hub-nav-item dd-nav-item-sm ${
+                  hubMode === "dashboard" ? "dd-nav-item-sm-active prompt-hub-nav-active" : ""
                 }`}
               >
                 <BarChart3 className="h-4 w-4" />
@@ -575,14 +526,14 @@ export default function PromptManager() {
             </nav>
 
             <div className="mt-7">
-              <p className="mb-2 px-3 text-xs font-black uppercase tracking-[0.18em] text-neutral-400">Categories</p>
+              <p className="dd-label-muted mb-2 px-2">Categories</p>
               <div className="space-y-1">
                 {hubCategories.map((category) => (
                   <button
                     key={category}
                     onClick={() => setSelectedHubCategory(category)}
-                    className={`prompt-hub-filter flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
-                      selectedHubCategory === category ? "prompt-hub-filter-active" : "text-neutral-600 hover:bg-neutral-100"
+                    className={`prompt-hub-filter dd-nav-item-sm justify-between ${
+                      selectedHubCategory === category ? "dd-nav-item-sm-active prompt-hub-filter-active" : ""
                     }`}
                   >
                     <span className="inline-flex min-w-0 items-center gap-3">
@@ -596,7 +547,7 @@ export default function PromptManager() {
             </div>
 
             <div className="mt-7">
-              <p className="mb-2 px-3 text-xs font-black uppercase tracking-[0.18em] text-neutral-400">Output Type</p>
+              <p className="dd-label-muted mb-2 px-2">Output Type</p>
               <div className="space-y-1">
                 {hubOutputTypes.map((type) => {
                   const Icon = type === "Image" ? Image : type === "Text" ? MessageSquareText : type === "Text + Image" ? Sparkles : FileQuestion;
@@ -604,8 +555,8 @@ export default function PromptManager() {
                     <button
                       key={type}
                       onClick={() => setSelectedHubOutputType(type)}
-                      className={`prompt-hub-filter flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
-                        selectedHubOutputType === type ? "prompt-hub-filter-active" : "text-neutral-600 hover:bg-neutral-100"
+                      className={`prompt-hub-filter dd-nav-item-sm ${
+                        selectedHubOutputType === type ? "dd-nav-item-sm-active prompt-hub-filter-active" : ""
                       }`}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -617,14 +568,14 @@ export default function PromptManager() {
             </div>
 
             <div className="mt-7">
-              <p className="mb-2 px-3 text-xs font-black uppercase tracking-[0.18em] text-neutral-400">Models</p>
+              <p className="dd-label-muted mb-2 px-2">Models</p>
               <div className="space-y-1">
                 {hubModels.slice(0, 7).map((model) => (
                   <button
                     key={model}
                     onClick={() => setSelectedHubModel(model)}
-                    className={`prompt-hub-filter flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
-                      selectedHubModel === model ? "prompt-hub-filter-active" : "text-neutral-600 hover:bg-neutral-100"
+                    className={`prompt-hub-filter dd-nav-item-sm ${
+                      selectedHubModel === model ? "dd-nav-item-sm-active prompt-hub-filter-active" : ""
                     }`}
                   >
                     <Bot className="h-4 w-4 shrink-0" />
@@ -632,22 +583,6 @@ export default function PromptManager() {
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="prompt-hub-publish-card mt-5 rounded-xl border border-yellow-200 bg-gradient-to-br from-white to-yellow-50 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-neutral-950">Publish prompts</p>
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">Share from your local library to Prompt Hub.</p>
-                </div>
-                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 bg-white">
-                  <Gift className="h-4 w-4 text-neutral-700" />
-                </div>
-              </div>
-              <button onClick={() => setActiveView("library")} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-neutral-950 px-3 py-2 text-sm font-bold text-white">
-                <CloudUpload className="h-4 w-4" />
-                Publish
-              </button>
             </div>
 
             <div className="prompt-hub-profile mt-3 flex items-center gap-3 border-t border-neutral-800/70 px-1.5 py-3">
@@ -659,8 +594,8 @@ export default function PromptManager() {
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-black text-neutral-950">{hubProfile?.name ?? "DawnDesk User"}</p>
-                <p className="truncate text-xs font-semibold text-neutral-500">{hubProfile?.email || "Signed in profile"}</p>
+                <p className="truncate text-sm font-black text-white">{hubProfile?.name ?? "DawnDesk User"}</p>
+                <p className="truncate text-xs font-semibold text-white/45">{hubProfile?.email || "Signed in profile"}</p>
               </div>
             </div>
           </aside>
@@ -675,7 +610,7 @@ export default function PromptManager() {
                         key={model}
                         onClick={() => setSelectedHubModel(model)}
                         className={`prompt-hub-chip rounded-xl border px-4 py-2 text-sm font-semibold ${
-                          selectedHubModel === model ? "border-neutral-950 bg-white text-neutral-950" : "border-transparent text-neutral-500 hover:bg-white"
+                          selectedHubModel === model ? "prompt-hub-chip-active border-yellow-400 bg-yellow-400 text-neutral-950" : "border-transparent bg-neutral-200/70 text-neutral-600 hover:bg-neutral-300"
                         }`}
                       >
                         {model}
@@ -721,7 +656,7 @@ export default function PromptManager() {
                           key={sort}
                           onClick={() => setHubSort(sort)}
                           className={`prompt-hub-sort rounded-xl px-4 py-2 text-sm font-bold capitalize ${
-                            hubSort === sort ? "bg-neutral-100 text-neutral-950" : "text-neutral-500 hover:text-neutral-950"
+                            hubSort === sort ? "prompt-hub-sort-active bg-yellow-400 text-neutral-950" : "bg-neutral-100/70 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-950"
                           }`}
                         >
                           {sort}
@@ -885,7 +820,7 @@ export default function PromptManager() {
                           <img
                             src={output?.imageUrl}
                             alt={`${prompt.title} output`}
-                            className={`${visualHeights[index % visualHeights.length]} w-full object-cover`}
+                            className="h-auto w-full bg-neutral-100 object-contain"
                           />
                         ) : (
                           <div className={`${visualHeights[index % visualHeights.length]} flex flex-col justify-between bg-gradient-to-br from-neutral-950 via-neutral-800 to-yellow-500 p-5 text-white`}>
@@ -893,7 +828,7 @@ export default function PromptManager() {
                             <p className="line-clamp-6 text-2xl font-black leading-tight">{prompt.title}</p>
                           </div>
                         )}
-                        <div className="space-y-3 p-4">
+                        <div className={`${hasImage ? "space-y-2 p-3" : "space-y-3 p-4"}`}>
                           <div className="prompt-hub-card-meta flex min-h-7 flex-wrap items-start gap-2">
                             <span className="prompt-hub-card-pill inline-flex max-w-full shrink-0 items-center rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold leading-5 text-neutral-600">
                               <span className="truncate">{prompt.category}</span>
@@ -902,8 +837,8 @@ export default function PromptManager() {
                               <span className="truncate">{getPromptOutputType(prompt)}</span>
                             </span>
                           </div>
-                          <h3 className="line-clamp-2 text-lg font-black leading-tight text-neutral-950">{prompt.title}</h3>
-                          <p className="line-clamp-3 text-sm leading-6 text-neutral-600">{prompt.content}</p>
+                          <h3 className={`${hasImage ? "line-clamp-2 text-base" : "line-clamp-2 text-lg"} font-black leading-tight text-neutral-950`}>{prompt.title}</h3>
+                          <p className={`${hasImage ? "line-clamp-2 text-xs leading-5" : "line-clamp-3 text-sm leading-6"} text-neutral-600`}>{prompt.content}</p>
                           <div className="flex items-center justify-between gap-3 pt-1">
                             <div className="flex min-w-0 items-center gap-2">
                               <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-neutral-950 text-white">
@@ -938,27 +873,6 @@ export default function PromptManager() {
               )}
             </div>
 
-            {hubMode === "explore" && (
-              <div className="pointer-events-none sticky bottom-5 z-20 flex justify-center px-4">
-                <div className="prompt-hub-dock pointer-events-auto flex items-center gap-2 rounded-3xl border border-neutral-200 bg-white/92 p-2 shadow-2xl backdrop-blur-xl">
-                  <button onClick={() => setActiveView("library")} className="grid h-12 w-12 place-items-center rounded-2xl text-neutral-700 hover:bg-neutral-100" title="My library">
-                    <Home className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => setHubSort("newest")} className="grid h-12 w-12 place-items-center rounded-2xl text-neutral-700 hover:bg-neutral-100" title="Recent">
-                    <Clock3 className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => setHubSort("popular")} className="grid h-12 w-12 place-items-center rounded-2xl text-neutral-700 hover:bg-neutral-100" title="Popular">
-                    <Heart className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => setSelectedHubModel("All")} className="grid h-12 w-12 place-items-center rounded-2xl text-neutral-700 hover:bg-neutral-100" title="All models">
-                    <Bot className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="grid h-12 w-12 place-items-center rounded-2xl text-neutral-700 hover:bg-neutral-100" title="Back to top">
-                    <ArrowUp className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            )}
           </main>
 
           {selectedHubPrompt && (
@@ -1086,13 +1000,12 @@ export default function PromptManager() {
               </button>
               <button
                 onClick={() => setActiveView("hub")}
-                className="dd-nav-item-sm justify-between"
+                className="dd-nav-item-sm"
               >
                 <span className="inline-flex items-center gap-2">
                   <Globe2 className="h-4 w-4" />
                   Prompt Hub
                 </span>
-                <span className="text-xs text-white/35">{hubPrompts.length}</span>
               </button>
             </div>
 
@@ -1129,19 +1042,19 @@ export default function PromptManager() {
                   <h2 className="dd-page-title mt-2">Reusable Prompt Library</h2>
                   <p className="dd-body-lg max-w-2xl mt-2">Keep your best AI instructions organized, searchable, and ready to copy.</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 lg:self-auto">
                   <button
                     onClick={() => setActiveView("hub")}
-                    className="dd-btn-secondary"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950/45 px-3 text-xs font-bold text-white/70 transition-colors hover:border-neutral-700 hover:bg-neutral-900 hover:text-white"
                   >
-                    <Globe2 className="h-4 w-4" />
+                    <Globe2 className="h-3.5 w-3.5 text-white/55" />
                     Open Hub
                   </button>
                   <button
                     onClick={openCreateModal}
-                    className="dd-btn-primary"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-yellow-400 px-3.5 text-xs font-black text-black transition-colors hover:bg-yellow-300"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-3.5 w-3.5" />
                     New Prompt
                   </button>
                 </div>
@@ -1165,130 +1078,142 @@ export default function PromptManager() {
               </div>
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/60">
-              <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-                <div>
+            <section className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950/70 shadow-2xl shadow-black/20">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 bg-neutral-900/45 px-5 py-4">
+                <div className="min-w-0">
                   <h3 className="dd-section-title">Library</h3>
                   <p className="dd-subtext mt-1">{filteredPrompts.length} matching templates</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-bold text-white/55">
+                  <span className="rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1.5">
+                    {filteredPrompts.filter((prompt) => prompt.output?.text?.trim()).length} text outputs
+                  </span>
+                  <span className="rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1.5">
+                    {filteredPrompts.filter((prompt) => prompt.output?.imageUrl?.trim()).length} image outputs
+                  </span>
                 </div>
               </div>
 
               {filteredPrompts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
                   <FileQuestion className="mb-4 h-10 w-10 text-white/25" />
-                  <h3 className="text-base font-semibold text-white">No prompts found</h3>
-                  <p className="mt-1 text-sm text-white/45">Try a different category or search term.</p>
+                  <h3 className="text-base font-semibold text-white">{prompts.length === 0 ? "No prompts yet" : "No prompts found"}</h3>
+                  <p className="mt-1 text-sm text-white/45">
+                    {prompts.length === 0 ? "Create your first prompt or save one from Prompt Hub." : "Try a different category or search term."}
+                  </p>
                 </div>
               ) : (
-                <div className="divide-y divide-neutral-800">
+                <div className="grid gap-4 p-4 xl:grid-cols-2">
                   {filteredPrompts.map((prompt) => {
                     const variables = extractVariables(prompt.content);
                     const hasOutputText = Boolean(prompt.output?.text?.trim());
                     const hasOutputImage = Boolean(prompt.output?.imageUrl?.trim());
                     const hasOutput = Boolean(prompt.output?.model?.trim() || hasOutputText || hasOutputImage);
                     return (
-                      <article key={prompt.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-neutral-800/35 lg:grid-cols-[1fr_190px_132px] lg:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="dd-card-title truncate">{prompt.title}</h4>
+                      <article key={prompt.id} className="group flex min-h-[280px] flex-col rounded-xl border border-neutral-800 bg-neutral-900/55 p-4 transition-colors hover:border-yellow-400/25 hover:bg-neutral-900">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="max-w-full truncate text-base font-black text-white">{prompt.title}</h4>
+                              {prompt.authorName && (
+                                <span className="inline-flex max-w-40 items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-1 text-[11px] font-semibold text-white/45">
+                                  <UserCircle className="h-3 w-3 shrink-0 text-yellow-400" />
+                                  <span className="truncate">By {prompt.authorName}</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span className="dd-pill">
                               {prompt.category}
                             </span>
-                            {prompt.authorName && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-1 text-[11px] font-semibold text-white/45">
-                                <UserCircle className="h-3 w-3 text-yellow-400" />
-                                By {prompt.authorName}
+                              <span className="inline-flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-1 text-[11px] font-bold text-white/45">
+                                <Variable className="h-3 w-3" />
+                                {variables.length ? `${variables.length} variables` : "No variables"}
                               </span>
+                              <span className="inline-flex max-w-36 items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-1 text-[11px] font-bold text-white/45">
+                                <Bot className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{prompt.output?.model?.trim() || "No model"}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              onClick={() => handleCopy(prompt.id, prompt.content)}
+                              className={`grid h-9 w-9 place-items-center rounded-lg border transition-colors ${
+                                copiedId === prompt.id
+                                  ? "border-green-500/30 bg-green-500/10 text-green-300"
+                                  : "border-neutral-800 bg-neutral-950 text-white/55 hover:text-white"
+                              }`}
+                              title="Copy prompt"
+                            >
+                              {copiedId === prompt.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            </button>
+                            <button
+                              onClick={() => openEditModal(prompt)}
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:text-white"
+                              title="Edit prompt"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            {canPublishToHub && !prompt.sourceHubId && (
+                              <button
+                                onClick={() => void handlePublishPrompt(prompt)}
+                                className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:border-yellow-400/40 hover:text-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
+                                title="Publish to Prompt Hub"
+                                disabled={publishingId === prompt.id}
+                              >
+                                <CloudUpload className={`h-4 w-4 ${publishingId === prompt.id ? "animate-pulse" : ""}`} />
+                              </button>
+                            )}
+                            {prompt.isCustom !== false && (
+                              <button
+                                onClick={() => handleDelete(prompt.id)}
+                                className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:border-red-500/30 hover:text-red-300"
+                                title="Delete prompt"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             )}
                           </div>
-                          <p className="dd-body mt-2 line-clamp-2 max-w-4xl whitespace-pre-wrap leading-relaxed">{prompt.content}</p>
+                        </div>
+
+                        <p className="mt-4 line-clamp-3 min-h-[4.5rem] whitespace-pre-wrap text-sm leading-6 text-white/70">{prompt.content}</p>
 
                           {hasOutput && (
-                            <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/65 p-3">
-                              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-bold text-white/60">
-                                <MessageSquareText className="h-3.5 w-3.5 text-yellow-400" />
-                                Saved output
+                          <div className="mt-auto rounded-xl border border-neutral-800 bg-black/30 p-3">
+                            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-bold text-white/60">
+                              <MessageSquareText className="h-3.5 w-3.5 text-yellow-400" />
+                              Saved output
                                 {prompt.output?.model?.trim() && (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-white/50">
-                                    <Bot className="h-3 w-3" />
+                                <span className="inline-flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[11px] text-white/50">
+                                  <Bot className="h-3 w-3" />
                                     {prompt.output.model}
                                   </span>
                                 )}
                                 {hasOutputImage && (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-white/50">
-                                    <Image className="h-3 w-3" />
+                                <span className="inline-flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[11px] text-white/50">
+                                  <Image className="h-3 w-3" />
                                     Image
                                   </span>
                                 )}
                               </div>
-                              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px]">
+                            <div className={`grid gap-3 ${hasOutputImage ? "sm:grid-cols-[minmax(0,1fr)_128px]" : ""}`}>
                                 {hasOutputText ? (
-                                  <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-white/70">{prompt.output?.text}</p>
+                                <p className="line-clamp-5 whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-950/70 p-3 text-sm leading-6 text-white/75">{prompt.output?.text}</p>
                                 ) : (
-                                  <p className="text-sm text-white/35">No text output saved.</p>
+                                <p className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3 text-sm text-white/35">No text output saved.</p>
                                 )}
                                 {hasOutputImage && (
                                   <img
                                     src={prompt.output?.imageUrl}
                                     alt={`${prompt.title} output`}
-                                    className="h-24 w-full rounded-lg border border-neutral-800 object-cover"
+                                  className="h-28 w-full rounded-lg border border-neutral-700 object-cover"
                                   />
                                 )}
                               </div>
                             </div>
                           )}
-                        </div>
-
-                        <div className="flex flex-col gap-2 text-xs text-white/45">
-                          <div className="flex items-center gap-2">
-                            <Variable className="h-3.5 w-3.5" />
-                            <span>{variables.length ? variables.join(", ") : "No variables"}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Bot className="h-3.5 w-3.5" />
-                            <span>{prompt.output?.model?.trim() || "No model saved"}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleCopy(prompt.id, prompt.content)}
-                            className={`grid h-9 w-9 place-items-center rounded-lg border transition-colors ${
-                              copiedId === prompt.id
-                                ? "border-green-500/30 bg-green-500/10 text-green-300"
-                                : "border-neutral-800 bg-neutral-950 text-white/55 hover:text-white"
-                            }`}
-                            title="Copy prompt"
-                          >
-                            {copiedId === prompt.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          </button>
-                          <button
-                            onClick={() => openEditModal(prompt)}
-                            className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:text-white"
-                            title="Edit prompt"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          {canPublishToHub && !prompt.sourceHubId && (
-                            <button
-                              onClick={() => void handlePublishPrompt(prompt)}
-                              className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:border-yellow-400/40 hover:text-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
-                              title="Publish to Prompt Hub"
-                              disabled={publishingId === prompt.id}
-                            >
-                              <CloudUpload className={`h-4 w-4 ${publishingId === prompt.id ? "animate-pulse" : ""}`} />
-                            </button>
-                          )}
-                          {prompt.isCustom !== false && (
-                            <button
-                              onClick={() => handleDelete(prompt.id)}
-                              className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 bg-neutral-950 text-white/55 hover:border-red-500/30 hover:text-red-300"
-                              title="Delete prompt"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
                       </article>
                     );
                   })}

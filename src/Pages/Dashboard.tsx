@@ -26,6 +26,8 @@ import { listFinanceWorkspaces, listSupabaseProjects } from "../lib/workspaceSyn
 
 type DashboardActivity = Pick<LogEntry, "timestamp" | "level" | "source" | "action" | "message">;
 
+const RELEASE_AI_USAGE_PROVIDERS: AiProvider[] = ["ollama"];
+
 type WorkspaceCounts = {
   projects: number | null;
   finance: number | null;
@@ -187,14 +189,14 @@ export default function Dashboard() {
     {
       label: "Project Workspaces",
       value: workspaceCounts.projects === null ? "Sign in" : String(workspaceCounts.projects),
-      detail: "Synced project spaces",
+      detail: "Project spaces",
       icon: FolderKanban,
       to: "/project-manager",
     },
     {
       label: "Finance Projects",
       value: workspaceCounts.finance === null ? "Sign in" : String(workspaceCounts.finance),
-      detail: "Synced finance workspaces",
+      detail: "Finance workspaces",
       icon: LineChart,
       to: "/finance",
     },
@@ -249,7 +251,7 @@ export default function Dashboard() {
                 <h2 className="dd-section-title">Open A Workspace</h2>
                 <p className="mt-1 dd-subtext">Useful shortcuts for the tools you actually use in DawnDesk.</p>
               </div>
-              <Link to="/settings" className="dd-btn-secondary">
+              <Link to="/settings" className="dd-btn-secondary h-10 px-3 text-xs">
                 <Settings className="h-4 w-4" />
                 Settings
               </Link>
@@ -343,7 +345,7 @@ export default function Dashboard() {
               </Link>
             </div>
             <div className="mt-4 space-y-3">
-              {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
+              {RELEASE_AI_USAGE_PROVIDERS.map((provider) => (
                 <div key={provider} className="rounded-xl border border-neutral-800 bg-neutral-950/45 px-3 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-bold text-white/80">{PROVIDER_LABELS[provider]}</span>

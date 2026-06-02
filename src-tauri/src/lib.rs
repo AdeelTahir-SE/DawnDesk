@@ -10,15 +10,19 @@ const NATIVE_SETTINGS_FILE: &str = "native-settings.json";
 const AI_SETTINGS_FILE: &str = "ai-settings.json";
 const OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com/v1";
+const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
+const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
 const OLLAMA_LOCAL_BASE_URL: &str = "http://localhost:11434/api";
 const OLLAMA_CLOUD_BASE_URL: &str = "https://ollama.com/api";
 
 #[derive(Default, Deserialize, Serialize)]
+#[serde(default)]
 struct NativeSettings {
     hardware_acceleration: Option<bool>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
+#[serde(default)]
 struct AiProviderSettings {
     api_key: Option<String>,
     model: Option<String>,
@@ -28,11 +32,15 @@ struct AiProviderSettings {
 }
 
 #[derive(Default, Deserialize, Serialize)]
+#[serde(default)]
 struct AiSettings {
     default_provider: Option<String>,
     openai: AiProviderSettings,
     anthropic: AiProviderSettings,
     ollama: AiProviderSettings,
+    gemini: AiProviderSettings,
+    deepseek: AiProviderSettings,
+    seedream: AiProviderSettings,
 }
 
 #[derive(Deserialize)]
@@ -193,6 +201,9 @@ fn normalize_ai_provider(provider: Option<&String>) -> String {
     match provider.map(|value| value.as_str()) {
         Some("anthropic") => "anthropic".to_string(),
         Some("ollama") => "ollama".to_string(),
+        Some("gemini") => "gemini".to_string(),
+        Some("deepseek") => "deepseek".to_string(),
+        Some("seedream") => "seedream".to_string(),
         _ => "openai".to_string(),
     }
 }
@@ -201,6 +212,9 @@ fn ai_provider_settings<'a>(settings: &'a AiSettings, provider: &str) -> &'a AiP
     match provider {
         "anthropic" => &settings.anthropic,
         "ollama" => &settings.ollama,
+        "gemini" => &settings.gemini,
+        "deepseek" => &settings.deepseek,
+        "seedream" => &settings.seedream,
         _ => &settings.openai,
     }
 }
@@ -209,6 +223,9 @@ fn ai_provider_label(provider: &str) -> &'static str {
     match provider {
         "anthropic" => "Claude",
         "ollama" => "Ollama",
+        "gemini" => "Gemini",
+        "deepseek" => "DeepSeek",
+        "seedream" => "Seedream",
         _ => "ChatGPT",
     }
 }
@@ -217,6 +234,9 @@ fn ai_default_model(provider: &str, settings: &AiProviderSettings) -> String {
     settings.model.clone().unwrap_or_else(|| match provider {
         "anthropic" => "claude-3-5-haiku-latest".to_string(),
         "ollama" => "gpt-oss:120b".to_string(),
+        "gemini" => "gemini-2.5-flash".to_string(),
+        "deepseek" => "deepseek-chat".to_string(),
+        "seedream" => "seedream-4.0".to_string(),
         _ => "gpt-4.1-mini".to_string(),
     })
 }
@@ -281,6 +301,36 @@ fn get_json(url: &str, headers: Vec<(&str, String)>) -> Result<Value, String> {
     Ok(data)
 }
 
+fn openai_compatible_chat(
+    base_url: &str,
+    provider: &str,
+    provider_settings: &AiProviderSettings,
+    model: &str,
+    prompt: String,
+    system: Option<String>,
+    temperature: f64,
+    max_tokens: u32,
+) -> Result<AiGenerateResponse, String> {
+    let mut messages = Vec::new();
+    if let Some(system) = system {
+        messages.push(json!({ "role": "system", "content": system }));
+    }
+    messages.push(json!({ "role": "user", "content": prompt }));
+    let data = post_json(
+        &format!("{}/chat/completions", base_url),
+        vec![("Authorization", format!("Bearer {}", require_ai_key(provider, &provider_settings.api_key)?))],
+        json!({ "model": model, "temperature": temperature, "max_tokens": max_tokens, "messages": messages }),
+    )?;
+    let text = data.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or("").trim().to_string();
+    Ok(AiGenerateResponse {
+        text,
+        provider: provider.to_string(),
+        model: model.to_string(),
+        prompt_tokens: data.pointer("/usage/prompt_tokens").and_then(Value::as_u64).unwrap_or(0),
+        completion_tokens: data.pointer("/usage/completion_tokens").and_then(Value::as_u64).unwrap_or(0),
+    })
+}
+
 #[tauri::command]
 fn ai_list_ollama_models(settings: AiSettings) -> Result<Vec<String>, String> {
     let mut headers = Vec::new();
@@ -311,6 +361,37 @@ fn ai_verify_provider(provider: String, settings: AiSettings) -> Result<String, 
             &format!("{}/models/{}", OPENAI_BASE_URL, model),
             vec![("Authorization", format!("Bearer {}", require_ai_key(&provider, &provider_settings.api_key)?))],
         )?;
+        return Ok(format!("{} is configured for {}.", ai_provider_label(&provider), model));
+    }
+
+    if provider == "deepseek" {
+        openai_compatible_chat(
+            DEEPSEEK_BASE_URL,
+            &provider,
+            provider_settings,
+            &model,
+            "Reply with ok.".to_string(),
+            None,
+            0.2,
+            1,
+        )?;
+        return Ok(format!("{} is configured for {}.", ai_provider_label(&provider), model));
+    }
+
+    if provider == "gemini" {
+        post_json(
+            &format!("{}/models/{}:generateContent?key={}", GEMINI_BASE_URL, model, require_ai_key(&provider, &provider_settings.api_key)?),
+            vec![],
+            json!({
+                "contents": [{ "parts": [{ "text": "Reply with ok." }] }],
+                "generationConfig": { "maxOutputTokens": 1, "temperature": 0.2 }
+            }),
+        )?;
+        return Ok(format!("{} is configured for {}.", ai_provider_label(&provider), model));
+    }
+
+    if provider == "seedream" {
+        require_ai_key(&provider, &provider_settings.api_key)?;
         return Ok(format!("{} is configured for {}.", ai_provider_label(&provider), model));
     }
 
@@ -348,24 +429,58 @@ fn ai_generate_text(request: AiGenerateRequest) -> Result<AiGenerateResponse, St
     let temperature = request.temperature.unwrap_or(0.7);
 
     if provider == "openai" {
-        let mut messages = Vec::new();
-        if let Some(system) = request.system.clone() {
-            messages.push(json!({ "role": "system", "content": system }));
+        return openai_compatible_chat(
+            OPENAI_BASE_URL,
+            &provider,
+            provider_settings,
+            &model,
+            request.prompt,
+            request.system,
+            temperature,
+            max_tokens,
+        );
+    }
+
+    if provider == "deepseek" {
+        return openai_compatible_chat(
+            DEEPSEEK_BASE_URL,
+            &provider,
+            provider_settings,
+            &model,
+            request.prompt,
+            request.system,
+            temperature,
+            max_tokens,
+        );
+    }
+
+    if provider == "gemini" {
+        let mut parts = Vec::new();
+        if let Some(system) = request.system.clone().filter(|value| !value.trim().is_empty()) {
+            parts.push(json!({ "text": format!("System instructions:\n{}\n\nUser request:\n{}", system, request.prompt) }));
+        } else {
+            parts.push(json!({ "text": request.prompt }));
         }
-        messages.push(json!({ "role": "user", "content": request.prompt }));
         let data = post_json(
-            &format!("{}/chat/completions", OPENAI_BASE_URL),
-            vec![("Authorization", format!("Bearer {}", require_ai_key(&provider, &provider_settings.api_key)?))],
-            json!({ "model": model, "temperature": temperature, "max_tokens": max_tokens, "messages": messages }),
+            &format!("{}/models/{}:generateContent?key={}", GEMINI_BASE_URL, model, require_ai_key(&provider, &provider_settings.api_key)?),
+            vec![],
+            json!({
+                "contents": [{ "role": "user", "parts": parts }],
+                "generationConfig": { "temperature": temperature, "maxOutputTokens": max_tokens }
+            }),
         )?;
-        let text = data.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or("").trim().to_string();
+        let text = data.pointer("/candidates/0/content/parts/0/text").and_then(Value::as_str).unwrap_or("").trim().to_string();
         return Ok(AiGenerateResponse {
             text,
             provider,
             model,
-            prompt_tokens: data.pointer("/usage/prompt_tokens").and_then(Value::as_u64).unwrap_or(0),
-            completion_tokens: data.pointer("/usage/completion_tokens").and_then(Value::as_u64).unwrap_or(0),
+            prompt_tokens: data.pointer("/usageMetadata/promptTokenCount").and_then(Value::as_u64).unwrap_or(0),
+            completion_tokens: data.pointer("/usageMetadata/candidatesTokenCount").and_then(Value::as_u64).unwrap_or(0),
         });
+    }
+
+    if provider == "seedream" {
+        return Err("Seedream is configured for image generation, not text generation.".to_string());
     }
 
     if provider == "anthropic" {

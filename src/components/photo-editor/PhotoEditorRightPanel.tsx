@@ -4,6 +4,8 @@ import LayersPanel from './LayersPanel';
 import HistogramPanel from './HistogramPanel';
 import PhotoAiPanel from './PhotoAiPanel';
 
+const ENABLE_PHOTO_EDITOR_AI = false;
+
 export default function PhotoEditorRightPanel() {
   const { state, dispatch } = useEditor();
 
@@ -23,18 +25,20 @@ export default function PhotoEditorRightPanel() {
         >
           Properties
         </button>
-        <button
-          className={`pe-right-panel__tab ${state.activeRightTab === 'ai' ? 'pe-right-panel__tab--active' : ''}`}
-          onClick={() => dispatch({ type: 'SET_RIGHT_TAB', payload: 'ai' })}
-        >
-          AI
-        </button>
+        {ENABLE_PHOTO_EDITOR_AI && (
+          <button
+            className={`pe-right-panel__tab ${state.activeRightTab === 'ai' ? 'pe-right-panel__tab--active' : ''}`}
+            onClick={() => dispatch({ type: 'SET_RIGHT_TAB', payload: 'ai' })}
+          >
+            AI
+          </button>
+        )}
       </div>
 
       {/* Panel content based on active tab */}
       {state.activeRightTab === 'adjustments' ? (
         <AdjustmentsPanel />
-      ) : state.activeRightTab === 'ai' ? (
+      ) : ENABLE_PHOTO_EDITOR_AI && state.activeRightTab === 'ai' ? (
         <PhotoAiPanel />
       ) : (
         <div style={{ padding: 16, color: 'var(--pe-text-muted)', fontSize: 12 }}>

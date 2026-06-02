@@ -1,0 +1,627 @@
+{
+  "schema": "dawndesk.finance-workspace",
+  "version": 1,
+  "exportedAt": "2026-06-01T12:00:00.000Z",
+  "workspace": {
+    "name": "Detailed Finance Operations Workspace"
+  },
+  "tables": {
+    "finance_accounts": [
+      {
+        "name": "Operating Checking",
+        "type_": "Bank",
+        "balance": 87500,
+        "currency": "USD"
+      },
+      {
+        "name": "Payroll Reserve",
+        "type_": "Bank",
+        "balance": 32000,
+        "currency": "USD"
+      },
+      {
+        "name": "Corporate Credit Card",
+        "type_": "Credit Card",
+        "balance": -6420.75,
+        "currency": "USD"
+      },
+      {
+        "name": "Stripe Clearing",
+        "type_": "Payment Processor",
+        "balance": 12450.5,
+        "currency": "USD"
+      }
+    ],
+    "finance_transactions": [
+      {
+        "account_id": null,
+        "amount": 18500,
+        "type_": "income",
+        "category": "Revenue",
+        "description": "Monthly SaaS subscriptions collected",
+        "date": "2026-05-31",
+        "status": "confirmed",
+        "notes": "Recognized from active subscriptions and cleared through Stripe.",
+        "receipt_bucket": null,
+        "receipt_path": null,
+        "is_recurring": true,
+        "created_by": null
+      },
+      {
+        "account_id": null,
+        "amount": -9200,
+        "type_": "expense",
+        "category": "Payroll",
+        "description": "Biweekly payroll run",
+        "date": "2026-05-24",
+        "status": "confirmed",
+        "notes": "Engineering, support, and operations payroll.",
+        "receipt_bucket": null,
+        "receipt_path": null,
+        "is_recurring": true,
+        "created_by": null
+      },
+      {
+        "account_id": null,
+        "amount": -1450,
+        "type_": "expense",
+        "category": "Cloud Infrastructure",
+        "description": "Cloud hosting and database spend",
+        "date": "2026-05-20",
+        "status": "confirmed",
+        "notes": "Production, staging, monitoring, backups, and object storage.",
+        "receipt_bucket": null,
+        "receipt_path": null,
+        "is_recurring": true,
+        "created_by": null
+      },
+      {
+        "account_id": null,
+        "amount": -780,
+        "type_": "expense",
+        "category": "Software",
+        "description": "Design, analytics, and automation tools",
+        "date": "2026-05-18",
+        "status": "confirmed",
+        "notes": "Shared workspace subscriptions for product and marketing teams.",
+        "receipt_bucket": null,
+        "receipt_path": null,
+        "is_recurring": true,
+        "created_by": null
+      },
+      {
+        "account_id": null,
+        "amount": 7200,
+        "type_": "income",
+        "category": "Professional Services",
+        "description": "Implementation services invoice paid",
+        "date": "2026-05-12",
+        "status": "confirmed",
+        "notes": "Client onboarding package for enterprise customer.",
+        "receipt_bucket": null,
+        "receipt_path": null,
+        "is_recurring": false,
+        "created_by": null
+      }
+    ],
+    "finance_budgets": [
+      {
+        "category": "Payroll",
+        "limit_amount": 22000,
+        "period": "monthly"
+      },
+      {
+        "category": "Cloud Infrastructure",
+        "limit_amount": 4200,
+        "period": "monthly"
+      },
+      {
+        "category": "Marketing",
+        "limit_amount": 7500,
+        "period": "monthly"
+      },
+      {
+        "category": "Software",
+        "limit_amount": 2500,
+        "period": "monthly"
+      },
+      {
+        "category": "Travel",
+        "limit_amount": 3000,
+        "period": "quarterly"
+      }
+    ],
+    "finance_goals": [
+      {
+        "name": "Maintain 6 Month Operating Runway",
+        "target_amount": 180000,
+        "current_amount": 119500,
+        "deadline": "2026-12-31",
+        "auto_allocate_percent": 12
+      },
+      {
+        "name": "Annual Tax Reserve",
+        "target_amount": 45000,
+        "current_amount": 26500,
+        "deadline": "2027-01-15",
+        "auto_allocate_percent": 8
+      },
+      {
+        "name": "Q3 Product Launch Fund",
+        "target_amount": 30000,
+        "current_amount": 11200,
+        "deadline": "2026-08-15",
+        "auto_allocate_percent": 5
+      }
+    ],
+    "finance_subscriptions": [
+      {
+        "name": "Cloud Hosting Platform",
+        "amount": 1450,
+        "billing_cycle": "monthly",
+        "next_date": "2026-06-20"
+      },
+      {
+        "name": "Analytics Suite",
+        "amount": 320,
+        "billing_cycle": "monthly",
+        "next_date": "2026-06-05"
+      },
+      {
+        "name": "Design Collaboration Tools",
+        "amount": 180,
+        "billing_cycle": "monthly",
+        "next_date": "2026-06-14"
+      },
+      {
+        "name": "Security Monitoring",
+        "amount": 520,
+        "billing_cycle": "monthly",
+        "next_date": "2026-06-22"
+      }
+    ],
+    "finance_debts": [
+      {
+        "name": "Equipment Financing",
+        "amount": 24000,
+        "type_": "installment loan",
+        "due_date": "2027-03-31",
+        "paid_amount": 8200
+      },
+      {
+        "name": "Corporate Credit Card Balance",
+        "amount": 6420.75,
+        "type_": "credit card",
+        "due_date": "2026-06-18",
+        "paid_amount": 0
+      }
+    ],
+    "finance_invoices": [
+      {
+        "client_name": "Northstar Retail Group",
+        "total_amount": 12500,
+        "status": "sent",
+        "due_date": "2026-06-15",
+        "items_json": [
+          {
+            "desc": "Enterprise subscription - annual plan",
+            "amount": 9800
+          },
+          {
+            "desc": "Implementation workshop",
+            "amount": 2700
+          }
+        ]
+      },
+      {
+        "client_name": "Brightline Studio",
+        "total_amount": 3400,
+        "status": "draft",
+        "due_date": "2026-06-25",
+        "items_json": [
+          {
+            "desc": "Monthly subscription",
+            "amount": 1400
+          },
+          {
+            "desc": "Custom reporting setup",
+            "amount": 2000
+          }
+        ]
+      },
+      {
+        "client_name": "Atlas Logistics",
+        "total_amount": 7200,
+        "status": "paid",
+        "due_date": "2026-05-30",
+        "items_json": [
+          {
+            "desc": "Implementation services",
+            "amount": 7200
+          }
+        ]
+      }
+    ],
+    "finance_chart_of_accounts": [
+      {
+        "code": "1000",
+        "name": "Cash and Cash Equivalents",
+        "account_type": "Asset",
+        "balance": 119500.5
+      },
+      {
+        "code": "1100",
+        "name": "Accounts Receivable",
+        "account_type": "Asset",
+        "balance": 15900
+      },
+      {
+        "code": "1500",
+        "name": "Fixed Assets",
+        "account_type": "Asset",
+        "balance": 38500
+      },
+      {
+        "code": "2000",
+        "name": "Accounts Payable",
+        "account_type": "Liability",
+        "balance": 12725.4
+      },
+      {
+        "code": "2100",
+        "name": "Credit Card Payable",
+        "account_type": "Liability",
+        "balance": 6420.75
+      },
+      {
+        "code": "3000",
+        "name": "Owner Equity",
+        "account_type": "Equity",
+        "balance": 82000
+      },
+      {
+        "code": "4000",
+        "name": "Subscription Revenue",
+        "account_type": "Revenue",
+        "balance": 18500
+      },
+      {
+        "code": "4100",
+        "name": "Professional Services Revenue",
+        "account_type": "Revenue",
+        "balance": 7200
+      },
+      {
+        "code": "5000",
+        "name": "Payroll Expense",
+        "account_type": "Expense",
+        "balance": 9200
+      },
+      {
+        "code": "5200",
+        "name": "Cloud Infrastructure Expense",
+        "account_type": "Expense",
+        "balance": 1450
+      }
+    ],
+    "finance_journal_entries": [
+      {
+        "date": "2026-05-31",
+        "reference": "JE-2026-05-001",
+        "description": "Recognize subscription revenue collected through payment processor",
+        "total_debit": 18500,
+        "total_credit": 18500,
+        "status": "posted",
+        "lines_json": [
+          {
+            "account": "1000 Cash and Cash Equivalents",
+            "debit": 18500,
+            "credit": 0,
+            "memo": "Cash receipts"
+          },
+          {
+            "account": "4000 Subscription Revenue",
+            "debit": 0,
+            "credit": 18500,
+            "memo": "Revenue recognition"
+          }
+        ],
+        "created_by": null
+      },
+      {
+        "date": "2026-05-24",
+        "reference": "JE-2026-05-002",
+        "description": "Record payroll expense and cash disbursement",
+        "total_debit": 9200,
+        "total_credit": 9200,
+        "status": "posted",
+        "lines_json": [
+          {
+            "account": "5000 Payroll Expense",
+            "debit": 9200,
+            "credit": 0,
+            "memo": "Payroll expense"
+          },
+          {
+            "account": "1000 Cash and Cash Equivalents",
+            "debit": 0,
+            "credit": 9200,
+            "memo": "Payroll cash payment"
+          }
+        ],
+        "created_by": null
+      }
+    ],
+    "finance_vendor_bills": [
+      {
+        "vendor_name": "CloudGrid Systems",
+        "bill_number": "CG-2026-0520",
+        "date": "2026-05-20",
+        "due_date": "2026-06-04",
+        "total_amount": 1450,
+        "status": "approved",
+        "items_json": [
+          {
+            "desc": "Compute and managed database",
+            "amount": 1050
+          },
+          {
+            "desc": "Object storage and monitoring",
+            "amount": 400
+          }
+        ]
+      },
+      {
+        "vendor_name": "SecureOps Monitoring",
+        "bill_number": "SEC-8114",
+        "date": "2026-05-22",
+        "due_date": "2026-06-06",
+        "total_amount": 520,
+        "status": "pending",
+        "items_json": [
+          {
+            "desc": "Security monitoring subscription",
+            "amount": 520
+          }
+        ]
+      }
+    ],
+    "finance_fixed_assets": [
+      {
+        "name": "Engineering Laptop Fleet",
+        "description": "Eight developer laptops assigned to engineering and support.",
+        "purchase_date": "2026-02-10",
+        "purchase_price": 18400,
+        "useful_life_years": 3,
+        "salvage_value": 2400,
+        "status": "active"
+      },
+      {
+        "name": "Office Network Equipment",
+        "description": "Routers, managed switches, backup power, and conference room hardware.",
+        "purchase_date": "2026-01-18",
+        "purchase_price": 6100,
+        "useful_life_years": 5,
+        "salvage_value": 800,
+        "status": "active"
+      }
+    ],
+    "finance_purchase_orders": [
+      {
+        "vendor_name": "BrightWare Supply",
+        "date": "2026-05-28",
+        "total_amount": 3800,
+        "status": "open",
+        "items_json": [
+          {
+            "desc": "Support team headsets",
+            "quantity": 12,
+            "unit_cost": 115
+          },
+          {
+            "desc": "Docking stations",
+            "quantity": 8,
+            "unit_cost": 302.5
+          }
+        ]
+      },
+      {
+        "vendor_name": "PrintWorks",
+        "date": "2026-05-16",
+        "total_amount": 960,
+        "status": "received",
+        "items_json": [
+          {
+            "desc": "Launch event print collateral",
+            "quantity": 400,
+            "unit_cost": 2.4
+          }
+        ]
+      }
+    ],
+    "finance_inventory_items": [
+      {
+        "sku": "KIT-STARTER-001",
+        "name": "Customer Onboarding Kit",
+        "description": "Printed cards, stickers, and quick-start booklet shipped to enterprise customers.",
+        "quantity": 86,
+        "unit_cost": 18.5,
+        "unit_price": 49
+      },
+      {
+        "sku": "HW-DONGLE-USB-C",
+        "name": "USB-C Security Key",
+        "description": "Hardware security key used for internal access control.",
+        "quantity": 42,
+        "unit_cost": 21,
+        "unit_price": 0
+      }
+    ],
+    "finance_tax_codes": [
+      {
+        "code": "US-SALES-STD",
+        "description": "Default US sales tax placeholder",
+        "rate_percent": 7.25,
+        "active": true
+      },
+      {
+        "code": "VAT-ZERO",
+        "description": "Zero-rated VAT or non-taxable export services",
+        "rate_percent": 0,
+        "active": true
+      },
+      {
+        "code": "SERVICES-EXEMPT",
+        "description": "Professional services exempt from sales tax where applicable",
+        "rate_percent": 0,
+        "active": true
+      }
+    ],
+    "finance_audit_logs": [
+      {
+        "timestamp": "2026-06-01T09:00:00.000Z",
+        "user_label": "Finance Lead",
+        "actor_id": null,
+        "action": "Workspace created",
+        "description": "Initialized finance workspace with chart of accounts, budget categories, and compliance roles."
+      },
+      {
+        "timestamp": "2026-06-01T09:20:00.000Z",
+        "user_label": "Finance Lead",
+        "actor_id": null,
+        "action": "Month-end checklist prepared",
+        "description": "Created May 2026 close tasks for reconciliation, review, accruals, and reporting."
+      }
+    ],
+    "finance_compliance_roles": [
+      {
+        "name": "Finance Administrator",
+        "description": "Can maintain accounting setup, approve close tasks, and manage finance workspace data.",
+        "permissions_json": [
+          "manage_accounts",
+          "post_journals",
+          "approve_bills",
+          "export_reports",
+          "manage_compliance"
+        ],
+        "is_system": false
+      },
+      {
+        "name": "Accounts Payable Reviewer",
+        "description": "Can review vendor bills, purchase orders, and payment readiness.",
+        "permissions_json": [
+          "view_ap",
+          "review_bills",
+          "review_purchase_orders"
+        ],
+        "is_system": false
+      },
+      {
+        "name": "Read Only Auditor",
+        "description": "Can inspect ledgers, audit logs, period closes, and reports without making changes.",
+        "permissions_json": [
+          "view_ledger",
+          "view_reports",
+          "view_audit_logs"
+        ],
+        "is_system": false
+      }
+    ],
+    "finance_period_closes": [
+      {
+        "period": "2026-05",
+        "task": "Reconcile operating checking and payroll reserve accounts",
+        "assigned_to": "Finance Lead",
+        "status": "in_progress"
+      },
+      {
+        "period": "2026-05",
+        "task": "Review open invoices and record allowance notes",
+        "assigned_to": "Controller",
+        "status": "not_started"
+      },
+      {
+        "period": "2026-05",
+        "task": "Post payroll and infrastructure accruals",
+        "assigned_to": "Accountant",
+        "status": "not_started"
+      },
+      {
+        "period": "2026-05",
+        "task": "Generate management reporting package",
+        "assigned_to": "Finance Lead",
+        "status": "blocked"
+      }
+    ],
+    "finance_exchange_rates": [
+      {
+        "pair": "USD/EUR",
+        "rate": 0.92,
+        "date": "2026-05-31"
+      },
+      {
+        "pair": "USD/GBP",
+        "rate": 0.78,
+        "date": "2026-05-31"
+      },
+      {
+        "pair": "USD/PKR",
+        "rate": 278.5,
+        "date": "2026-05-31"
+      }
+    ],
+    "finance_ar_recurring_billing": [
+      {
+        "client_name": "Northstar Retail Group",
+        "plan_name": "Enterprise Annual",
+        "amount": 9800,
+        "next_billing_date": "2027-05-31",
+        "status": "active"
+      },
+      {
+        "client_name": "Brightline Studio",
+        "plan_name": "Growth Monthly",
+        "amount": 1400,
+        "next_billing_date": "2026-06-25",
+        "status": "active"
+      },
+      {
+        "client_name": "Atlas Logistics",
+        "plan_name": "Implementation Support Retainer",
+        "amount": 2400,
+        "next_billing_date": "2026-06-12",
+        "status": "paused"
+      }
+    ],
+    "finance_ar_dunning_campaigns": [
+      {
+        "name": "Friendly 7 Day Reminder",
+        "trigger_days_overdue": 7,
+        "email_subject": "Quick reminder: your invoice is now 7 days overdue",
+        "is_active": true
+      },
+      {
+        "name": "Escalated 21 Day Reminder",
+        "trigger_days_overdue": 21,
+        "email_subject": "Action needed: overdue invoice follow-up",
+        "is_active": true
+      }
+    ],
+    "finance_ar_revrec_schedules": [
+      {
+        "client_name": "Northstar Retail Group",
+        "total_amount": 9800,
+        "recognized_amount": 816.67,
+        "deferred_amount": 8983.33,
+        "months": 12
+      },
+      {
+        "client_name": "Atlas Logistics",
+        "total_amount": 7200,
+        "recognized_amount": 3600,
+        "deferred_amount": 3600,
+        "months": 2
+      }
+    ]
+  }
+}

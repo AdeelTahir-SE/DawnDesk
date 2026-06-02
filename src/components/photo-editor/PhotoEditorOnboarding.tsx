@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { 
   Image as ImageIcon, Wand2, Layers, GraduationCap, ArrowRight,
-  Sparkles, SlidersHorizontal, HeartPulse, Palette, Settings2, Eye,
-  LayoutDashboard, FolderKanban, CloudUpload, PlaySquare, Lightbulb, 
+  Sparkles, SlidersHorizontal, Palette, Settings2, Eye,
+  FolderKanban, PlaySquare, Lightbulb, 
   Check, Play, ChevronRight 
 } from "lucide-react";
 import bgNightSky from "../../assets/bg-night-sky.png";
@@ -121,8 +121,8 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       
       <div className="absolute right-0 bottom-10 bg-neutral-900/90 backdrop-blur-xl rounded-2xl border border-white/10 p-5 shadow-2xl flex items-center gap-5 z-30">
         <div>
-          <div className="text-sm text-white font-semibold mb-0.5">Cloud Synced</div>
-          <div className="text-[11px] text-white/50">All changes saved</div>
+          <div className="text-sm text-white font-semibold mb-0.5">Project Saved</div>
+          <div className="text-[11px] text-white/50">Stored in Photo Editor</div>
         </div>
         <div className="w-10 h-10 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-400">
           <Check size={18} strokeWidth={3}/>
@@ -181,31 +181,31 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
     // Slide 0: Welcome
     {
       title: <><span className="text-white">Welcome to</span><br/><span className="text-[#facc15]">Photo Editor</span></>,
-      desc: <><p className="font-semibold text-white mb-1">Edit. Enhance. Inspire.</p><p>Transform your photos with powerful tools,<br/>creative filters, and professional adjustments<br/>— all in one beautiful workspace.</p></>,
+      desc: <><p className="font-semibold text-white mb-1">Edit. Adjust. Export.</p><p>Open images, work with layers,<br/>apply filters and adjustments,<br/>then export or save your project.</p></>,
       features: [
-        { icon: <Wand2 className="w-5 h-5 text-[#facc15]" />, title: "Powerful Tools", desc: "Everything you need to perfect your photos" },
-        { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Creative Freedom", desc: "Unleash your creativity with unlimited possibilities" }
+        { icon: <Wand2 className="w-5 h-5 text-[#facc15]" />, title: "Editing Tools", desc: "Crop, draw, retouch, transform, and filter images" },
+        { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Layer Workflow", desc: "Stack image layers and manage simple composites" }
       ],
       rightVisual: null
     },
     // Slide 1: Editing Tools
     {
       title: <><span className="text-white">Powerful</span><br/><span className="text-[#facc15]">Editing Tools</span></>,
-      desc: <p>Crop, adjust, retouch, and fine-tune<br/>every detail with a complete set of<br/>professional tools.</p>,
+      desc: <p>Crop, resize, rotate, retouch, draw,<br/>and fine-tune color with the tools<br/>available in the editor.</p>,
       features: [
-        { icon: <Sparkles className="w-5 h-5 text-[#facc15]" />, title: "Smart Adjustments", desc: "Perfect lighting and colors in one click" },
-        { icon: <SlidersHorizontal className="w-5 h-5 text-[#facc15]" />, title: "Advanced Controls", desc: "Precise edits for the perfect result" },
-        { icon: <HeartPulse className="w-5 h-5 text-[#facc15]" />, title: "Non-Destructive Editing", desc: "Edit freely, your originals stay safe" }
+        { icon: <Sparkles className="w-5 h-5 text-[#facc15]" />, title: "Filters", desc: "Apply grayscale, sepia, invert, blur, sharpen, and more" },
+        { icon: <SlidersHorizontal className="w-5 h-5 text-[#facc15]" />, title: "Adjustments", desc: "Tune exposure, contrast, hue, saturation, and levels" },
+        { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Layer Edits", desc: "Apply tool results to the active unlocked layer" }
       ],
       rightVisual: <EditingToolsVisual />
     },
     // Slide 2: Filters
     {
       title: <><span className="text-white">Stunning</span><br/><span className="text-[#facc15]">Filters & Effects</span></>,
-      desc: <p>Bring your photos to life with a wide<br/>range of creative filters and effects<br/>designed to inspire.</p>,
+      desc: <p>Use built-in filters and adjustment<br/>controls to quickly change the look<br/>of the active image.</p>,
       features: [
-        { icon: <Palette className="w-5 h-5 text-[#facc15]" />, title: "One-Click Looks", desc: "Instantly transform your photos" },
-        { icon: <Settings2 className="w-5 h-5 text-[#facc15]" />, title: "Custom Filters", desc: "Create and save your own style" },
+        { icon: <Palette className="w-5 h-5 text-[#facc15]" />, title: "Built-In Looks", desc: "Apply common color and stylized filters" },
+        { icon: <Settings2 className="w-5 h-5 text-[#facc15]" />, title: "Manual Control", desc: "Adjust values directly with editor controls" },
         { icon: <Eye className="w-5 h-5 text-[#facc15]" />, title: "Real-Time Preview", desc: "See every change as you edit" }
       ],
       rightVisual: <FiltersVisual />
@@ -213,22 +213,22 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
     // Slide 3: Work Your Way
     {
       title: <><span className="text-white">Work Your</span><br/><span className="text-[#facc15]">Way</span></>,
-      desc: <p>Customize your workspace, organize<br/>your projects, and work the way<br/>you like.</p>,
+      desc: <p>Save projects, reopen local edits,<br/>manage layers, and export images<br/>when your work is ready.</p>,
       features: [
-        { icon: <LayoutDashboard className="w-5 h-5 text-[#facc15]" />, title: "Custom Workspace", desc: "Arrange tools to fit your workflow" },
-        { icon: <FolderKanban className="w-5 h-5 text-[#facc15]" />, title: "Project Management", desc: "Keep your edits organized" },
-        { icon: <CloudUpload className="w-5 h-5 text-[#facc15]" />, title: "Cloud Sync", desc: "Access your projects anywhere" }
+        { icon: <FolderKanban className="w-5 h-5 text-[#facc15]" />, title: "Project Saves", desc: "Save layered Photo Editor projects" },
+        { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Layer Panel", desc: "Add, select, reorder, lock, and blend layers" },
+        { icon: <ImageIcon className="w-5 h-5 text-[#facc15]" />, title: "Export Images", desc: "Export PNG, JPG, WebP, or batch-export open tabs" }
       ],
       rightVisual: <WorkspaceVisual />
     },
     // Slide 4: Learn
     {
       title: <><span className="text-white">Learn.</span><br/><span className="text-[#facc15]">Create. Grow.</span></>,
-      desc: <p>Access tutorials, tips, and guides to<br/>improve your skills and take your<br/>creativity to the next level.</p>,
+      desc: <p>Use the built-in help page when you<br/>need a quick guide to tools, menus,<br/>shortcuts, and export options.</p>,
       features: [
-        { icon: <PlaySquare className="w-5 h-5 text-[#facc15]" />, title: "Step-by-Step Tutorials", desc: "Learn at your own pace" },
-        { icon: <Lightbulb className="w-5 h-5 text-[#facc15]" />, title: "Tips & Tricks", desc: "Discover new techniques" },
-        { icon: <ImageIcon className="w-5 h-5 text-[#facc15]" />, title: "Inspiration Gallery", desc: "Get inspired by amazing edits" }
+        { icon: <PlaySquare className="w-5 h-5 text-[#facc15]" />, title: "Help Page", desc: "Open the Photo Editor guide from the Help menu" },
+        { icon: <Lightbulb className="w-5 h-5 text-[#facc15]" />, title: "Shortcuts", desc: "Review common keyboard actions" },
+        { icon: <ImageIcon className="w-5 h-5 text-[#facc15]" />, title: "Export Guide", desc: "Understand format, quality, scale, and presets" }
       ],
       rightVisual: <LearnVisual />
     },
@@ -237,9 +237,9 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       title: <><span className="text-white">You're</span> <span className="text-[#facc15]">All Set!</span></>,
       desc: <p>Start editing and bring your<br/>vision to life with DawnDesk<br/>Photo Editor.</p>,
       features: [
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Powerful tools", desc: "" },
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Creative freedom", desc: "" },
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Endless possibilities", desc: "" }
+        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Open images", desc: "" },
+        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Edit with layers", desc: "" },
+        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Export finished work", desc: "" }
       ],
       rightVisual: null
     }
@@ -315,13 +315,9 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
                 <button onClick={nextStep} className="flex items-center justify-between w-[340px] bg-[#facc15] hover:bg-[#fbbf24] text-black font-semibold py-4 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-500/20 group">
                   <div className="flex items-center gap-4">
                     <GraduationCap className="w-6 h-6 opacity-80" strokeWidth={2.5} />
-                    <span className="text-lg tracking-wide">Learn Photo Editing</span>
+                    <span className="text-lg tracking-wide">Start Photo Editing</span>
                   </div>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button onClick={handleComplete} className="text-white/50 hover:text-white transition-colors text-[0.95rem] font-medium relative group">
-                  Skip welcome tour
-                  <span className="absolute -bottom-1 left-0 w-full h-[1px] bg-white/20 group-hover:bg-[#facc15] transition-colors"></span>
                 </button>
               </div>
             ) : step === 5 ? (

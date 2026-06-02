@@ -9,7 +9,6 @@ import {
   LayoutTemplate,
   Archive,
   Trash2,
-  ShieldCheck,
   Plus,
   ChevronDown,
   ChevronRight,
@@ -113,20 +112,20 @@ export default function NotesSidebar({
   return (
     <aside className="dd-sidebar overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 px-5 pt-5 pb-3">
+      <div className="dd-sidebar-header shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-400/10">
             <StickyNote className="h-5 w-5 text-yellow-400" />
           </div>
           <div>
-            <h1 className="dd-sidebar-title">Notes</h1>
-            <p className="text-[11px] text-white/40 leading-none">Your Knowledge Base</p>
+            <h1 className="dd-sidebar-title text-base">Notes</h1>
+            <p className="dd-subtext leading-none">Your Knowledge Base</p>
           </div>
         </div>
       </div>
 
       {/* Search */}
-      <div className="shrink-0 px-4 pb-3">
+      <div className="shrink-0 px-4 py-3">
         <div className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/70 px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-white/30" />
           <input
@@ -301,18 +300,6 @@ export default function NotesSidebar({
         </div>
       </div>
 
-      {/* Privacy Notice */}
-      <div className="shrink-0 border-t border-neutral-800/60 p-4">
-        <div className="dd-sidebar-notice flex items-start gap-2.5">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-green-400 mt-0.5" />
-          <div>
-            <p className="text-xs font-semibold text-white/70">Local-first storage</p>
-            <p className="mt-0.5 text-[11px] text-white/30 leading-relaxed">
-              All your notes stay on your device. No cloud sync, full privacy.
-            </p>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }
@@ -334,7 +321,7 @@ function NavItem({
 }) {
   return (
     <button
-      className={`${active ? "dd-nav-item dd-nav-item-active" : "dd-nav-item"} !gap-2.5 !px-2.5 !py-2 !rounded-lg`}
+      className={`${active ? "dd-nav-item-sm dd-nav-item-sm-active" : "dd-nav-item-sm"} !gap-2.5 !px-2.5 !py-2 !rounded-lg`}
       onClick={onClick}
     >
       <Icon className={`h-4 w-4 shrink-0 ${active ? "text-yellow-400" : "text-white/40"}`} />

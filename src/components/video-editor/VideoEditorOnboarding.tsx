@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { 
   Film, Wand2, Layers, ArrowRight, Video, Scissors, Gauge, Diamond, 
-  Sparkles, Type, Music, FolderKanban, CloudUpload, Save, Download,
+  Sparkles, Type, Music, FolderKanban, Save, Download,
   PlaySquare, Lightbulb, Image as LucideImage, Check, Play, ChevronRight, CheckSquare
 } from "lucide-react";
 import bgNightSky from "../../assets/bg-night-sky.png";
 import bgOcean from "../../assets/bg-ocean.png";
 import bgForest from "../../assets/bg-forest.png";
+
+const VIDEO_EDITOR_ONBOARDING_KEY = "onboarded_video-editor-v1";
 
 export default function VideoEditorOnboarding({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -17,7 +19,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
   const currentBg = bgImages[step % bgImages.length];
 
   useEffect(() => {
-    const hasOnboarded = localStorage.getItem('onboarded_video-editor');
+    const hasOnboarded = localStorage.getItem(VIDEO_EDITOR_ONBOARDING_KEY);
     if (!hasOnboarded) {
       setShowOnboarding(true);
     }
@@ -25,7 +27,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
   }, []);
 
   const handleComplete = () => {
-    localStorage.setItem(`onboarded_video-editor`, "true");
+    localStorage.setItem(VIDEO_EDITOR_ONBOARDING_KEY, "true");
     setShowOnboarding(false);
   };
 
@@ -183,7 +185,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       
       <div className="absolute right-0 top-0 w-32 h-32 flex flex-col items-center justify-center z-30">
         <div className="w-16 h-16 rounded-2xl border-2 border-[#facc15]/30 flex items-center justify-center bg-neutral-900/80 backdrop-blur-md mb-2 shadow-[0_0_30px_rgba(250,204,21,0.15)]">
-          <CloudUpload size={28} className="text-[#facc15]" />
+          <Save size={28} className="text-[#facc15]" />
         </div>
       </div>
 
@@ -256,11 +258,11 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
     // Slide 0: Welcome
     {
       title: <><span className="text-white">Welcome to</span><br/><span className="text-[#facc15]">Video Editor</span></>,
-      desc: <><p className="font-semibold text-white mb-1">Create. Edit. Inspire.</p><p>Transform your ideas into stunning videos<br/>with powerful tools, cinematic effects,<br/>and professional-grade editing —<br/>all in one intuitive workspace.</p></>,
+      desc: <><p className="font-semibold text-white mb-1">Import. Edit. Export.</p><p>Build video projects with a timeline,<br/>media bin, effects, text, audio tools,<br/>and export presets.</p></>,
       features: [
-        { icon: <Wand2 className="w-5 h-5 text-[#facc15]" />, title: "Powerful Tools", desc: "Everything you need to edit like a pro" },
-        { icon: <Film className="w-5 h-5 text-[#facc15]" />, title: "Cinematic Effects", desc: "Stunning filters, transitions & animations" },
-        { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Seamless Workflow", desc: "Fast, smooth and easy to use" }
+        { icon: <Wand2 className="w-5 h-5 text-[#facc15]" />, title: "Editing Tools", desc: "Trim, split, arrange, and tune clips" },
+        { icon: <Film className="w-5 h-5 text-[#facc15]" />, title: "Effects & Transitions", desc: "Use built-in effects, transitions, and color controls" },
+        { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Timeline Workflow", desc: "Work with tracks, media, text, and audio" }
       ],
       rightVisual: null
     },
@@ -271,7 +273,7 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       features: [
         { icon: <Scissors className="w-5 h-5 text-[#facc15]" />, title: "Precision Editing", desc: "Frame-accurate control" },
         { icon: <Gauge className="w-5 h-5 text-[#facc15]" />, title: "Speed & Motion Control", desc: "Create slow motion or speed ramps" },
-        { icon: <Diamond className="w-5 h-5 text-[#facc15]" />, title: "Keyframe Animations", desc: "Add life to every element" }
+        { icon: <Diamond className="w-5 h-5 text-[#facc15]" />, title: "Clip Controls", desc: "Adjust clip properties in the editor panels" }
       ],
       rightVisual: <EditingToolsVisual />
     },
@@ -289,24 +291,23 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
     },
     // Slide 3: Organize
     {
-      title: <><span className="text-white">Organize.</span><br/><span className="text-[#facc15]">Manage. Sync.</span></>,
-      desc: <p>Keep your projects organized and<br/>access them anywhere. Never lose<br/>progress again.</p>,
+      title: <><span className="text-white">Organize.</span><br/><span className="text-[#facc15]">Save. Export.</span></>,
+      desc: <p>Keep media in the bin, save project<br/>files, and export finished videos<br/>through DawnDesk.</p>,
       features: [
-        { icon: <FolderKanban className="w-5 h-5 text-[#facc15]" />, title: "Project Management", desc: "Organize all your projects" },
-        { icon: <CloudUpload className="w-5 h-5 text-[#facc15]" />, title: "Cloud Sync", desc: "Access anywhere, anytime" },
-        { icon: <Save className="w-5 h-5 text-[#facc15]" />, title: "Auto Save", desc: "Your work is always safe" },
-        { icon: <Download className="w-5 h-5 text-[#facc15]" />, title: "Easy Import", desc: "Import media with ease" }
+        { icon: <FolderKanban className="w-5 h-5 text-[#facc15]" />, title: "Project Files", desc: "Save and load DawnDesk video projects" },
+        { icon: <Save className="w-5 h-5 text-[#facc15]" />, title: "Manual Saves", desc: "Keep project state in a .ddvp file" },
+        { icon: <Download className="w-5 h-5 text-[#facc15]" />, title: "Media Import", desc: "Import media and prepare exports" }
       ],
       rightVisual: <SyncVisual />
     },
     // Slide 4: Learn
     {
       title: <><span className="text-white">Learn.</span><br/><span className="text-[#facc15]">Create. Grow.</span></>,
-      desc: <p>Access tutorials, tips, and inspiration<br/>to take your editing skills to the<br/>next level.</p>,
+      desc: <p>Use the built-in panels to work with<br/>media, properties, effects, transitions,<br/>audio, text, masks, and color.</p>,
       features: [
-        { icon: <PlaySquare className="w-5 h-5 text-[#facc15]" />, title: "Step-by-Step Tutorials", desc: "Learn at your own pace" },
-        { icon: <Lightbulb className="w-5 h-5 text-[#facc15]" />, title: "Pro Tips & Tricks", desc: "Discover new techniques" },
-        { icon: <LucideImage className="w-5 h-5 text-[#facc15]" />, title: "Inspiration Library", desc: "Get ideas for your next video" }
+        { icon: <PlaySquare className="w-5 h-5 text-[#facc15]" />, title: "Preview & Timeline", desc: "Review edits while building the sequence" },
+        { icon: <Lightbulb className="w-5 h-5 text-[#facc15]" />, title: "Editor Panels", desc: "Use focused panels for common editing tasks" },
+        { icon: <LucideImage className="w-5 h-5 text-[#facc15]" />, title: "Export Presets", desc: "Choose output settings before rendering" }
       ],
       rightVisual: <LearnVisual />
     },
@@ -315,10 +316,9 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       title: <><span className="text-white">You're</span> <span className="text-[#facc15]">All Set!</span></>,
       desc: <p>Everything is ready. Start creating<br/>amazing videos with DawnDesk<br/>Video Editor.</p>,
       features: [
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Powerful tools", desc: "" },
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Cinematic effects", desc: "" },
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Seamless workflow", desc: "" },
-        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Endless possibilities", desc: "" }
+        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Import media", desc: "" },
+        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Edit on the timeline", desc: "" },
+        { icon: <Check className="w-5 h-5 text-[#facc15]" />, title: "Export your video", desc: "" }
       ],
       rightVisual: null
     }
@@ -341,14 +341,6 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       {/* Left Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#111113] via-[#111113]/90 to-transparent w-[75%]" />
       <div className="absolute inset-0 bg-black/30" />
-      
-      {/* Top Right Skip Button */}
-      <button 
-        onClick={handleComplete} 
-        className="absolute top-8 right-8 px-5 py-2 rounded-lg bg-black/30 hover:bg-black/50 backdrop-blur-md text-white/90 text-sm font-medium transition-all border border-white/10 z-50 hover:text-white"
-      >
-        Skip
-      </button>
       
       {/* Content Container */}
       <div className="relative z-10 flex flex-col h-full w-full px-8 sm:px-16 pt-8 pb-8 justify-between">
@@ -397,10 +389,6 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
                     <span className="text-lg tracking-wide">Start Editing</span>
                   </div>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button onClick={handleComplete} className="text-white/50 hover:text-white transition-colors text-[0.95rem] font-medium relative group">
-                  Skip welcome tour
-                  <span className="absolute -bottom-1 left-0 w-full h-[1px] bg-white/20 group-hover:bg-[#facc15] transition-colors"></span>
                 </button>
               </div>
             ) : step === 5 ? (

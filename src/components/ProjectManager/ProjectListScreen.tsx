@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Layout, Loader2, Folder, X, Search, Cloud, Users, Download, Upload } from "lucide-react";
+import { Plus, Loader2, Folder, X, Search, Download, Upload } from "lucide-react";
 import { useAppLogger } from "../../utils/LoggerContext";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
 import { pickJsonFile, safeExportName, saveJsonFile } from "../../lib/jsonExchange";
@@ -255,9 +255,6 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
       {/* Header */}
       <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-neutral-800 pb-6">
         <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-neutral-800 to-neutral-900 flex items-center justify-center border border-neutral-700/50 shadow-inner">
-            <Layout className="w-8 h-8 text-neutral-300" />
-          </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Workspaces</h1>
             <p className="text-neutral-400 mt-1 max-w-xl">Organize shared projects in your DawnDesk workspace.</p>
@@ -356,19 +353,14 @@ export default function ProjectListScreen({ onProjectSelect }: ProjectListScreen
                   </p>
                 </div>
                 
-                <div className="flex items-center gap-2 mt-6 pt-4 border-t border-neutral-800/60">
-                  <Cloud className="w-3.5 h-3.5 text-yellow-400" />
-                  <span className="text-xs text-neutral-500 font-medium">
-                    Synced team project
-                  </span>
-                  <Users className="w-3.5 h-3.5 text-neutral-500" />
+                <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-neutral-800/60">
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
                       handleExportProject(p);
                     }}
-                    className="ml-auto rounded-md border border-neutral-800 p-1.5 text-neutral-400 transition-colors hover:border-yellow-400/40 hover:bg-yellow-400/10 hover:text-yellow-300"
-                    title="Export project JSON"
+                    className="rounded-md border border-neutral-800 p-1.5 text-neutral-400 transition-colors hover:border-yellow-400/40 hover:bg-yellow-400/10 hover:text-yellow-300"
+                    title="Export Project"
                   >
                     <Download className="h-3.5 w-3.5" />
                   </button>
