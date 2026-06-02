@@ -58,9 +58,10 @@ const CHANNEL_SLIDERS: SliderDef[] = [
 
 export default function AdjustmentsPanel() {
   const { state, activeDocument, dispatch } = useEditor();
-  const adjustments = activeDocument?.pendingAdjustments;
   const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+  const adjustments = activeLayer?.adjustment ?? activeDocument?.pendingAdjustments;
   const canEditLayer = Boolean(activeDocument && activeLayer && !activeLayer.locked);
+  const isAdjustmentLayer = Boolean(activeLayer?.adjustment);
 
   const handleChange = (key: keyof AdjustmentState, value: number) => {
     dispatch({ type: 'UPDATE_ADJUSTMENT', payload: { key, value } });
@@ -135,9 +136,9 @@ export default function AdjustmentsPanel() {
         <button
           className="pe-action-button pe-action-button--primary"
           disabled={!canEditLayer}
-          onClick={() => dispatch({ type: 'COMMIT_ADJUSTMENT' })}
+          onClick={() => !isAdjustmentLayer && dispatch({ type: 'COMMIT_ADJUSTMENT' })}
         >
-          Apply Adjustments
+          {isAdjustmentLayer ? 'Adjustment Layer Active' : 'Apply Adjustments'}
         </button>
       </div>
     </div>

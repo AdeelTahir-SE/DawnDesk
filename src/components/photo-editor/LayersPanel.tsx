@@ -2,9 +2,9 @@ import { useRef } from 'react';
 import { Reorder } from 'motion/react';
 import { useEditor } from '../../engine/photo-editor/EditorContext';
 import { loadImageFile } from '../../engine/photo-editor/importImage';
-import { Eye, EyeOff, Lock, Unlock, Plus, Trash2, GripVertical, Image as ImageIcon, ArrowUp, ArrowDown, Box, Circle, SlidersHorizontal } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Plus, Trash2, GripVertical, ArrowUp, ArrowDown, Box, Circle, SlidersHorizontal, Combine } from 'lucide-react';
 
-function LIcon({ name }: { name: 'eye' | 'eye-off' | 'lock' | 'unlock' | 'plus' | 'trash' | 'grip' | 'image' | 'up' | 'down' | 'smart-obj' | 'mask' | 'adj' }) {
+function LIcon({ name }: { name: 'eye' | 'eye-off' | 'lock' | 'unlock' | 'plus' | 'trash' | 'grip' | 'up' | 'down' | 'smart-obj' | 'mask' | 'adj' | 'merge' }) {
   const size = 14;
   switch (name) {
     case 'eye':       return <Eye size={size} />;
@@ -14,19 +14,18 @@ function LIcon({ name }: { name: 'eye' | 'eye-off' | 'lock' | 'unlock' | 'plus' 
     case 'plus':      return <Plus size={size} />;
     case 'trash':     return <Trash2 size={size} />;
     case 'grip':      return <GripVertical size={size} />;
-    case 'image':     return <ImageIcon size={size} />;
     case 'up':        return <ArrowUp size={size} />;
     case 'down':      return <ArrowDown size={size} />;
     case 'smart-obj': return <Box size={size} />;
     case 'mask':      return <Circle size={size} />;
     case 'adj':       return <SlidersHorizontal size={size} />;
+    case 'merge':     return <Combine size={size} />;
     default:          return null;
   }
 }
 
 export default function LayersPanel() {
   const { state, activeDocument, dispatch } = useEditor();
-  const imageLayerInputRef = useRef<HTMLInputElement>(null);
   const smartObjectInputRef = useRef<HTMLInputElement>(null);
   const layers = activeDocument ? state.layers : [];
   const activeLayer = layers.find((l) => l.id === state.activeLayerId);
@@ -55,6 +54,8 @@ export default function LayersPanel() {
   const firstLockedIdx = layers.findIndex((l) => l.locked);
   const bottomMoveIdx = firstLockedIdx >= 0 ? firstLockedIdx - 1 : layers.length - 1;
   const canMoveActive = Boolean(activeLayer && !activeLayer.locked);
+  const lowerLayer = activeIdx >= 0 ? layers[activeIdx + 1] : undefined;
+  const canMergeDown = Boolean(activeLayer && lowerLayer && !activeLayer.locked);
 
   const handleReorder = (nextIds: string[]) => {
     const currentIds = layers.map((layer) => layer.id);
@@ -138,10 +139,20 @@ export default function LayersPanel() {
       {/* Quick actions */}
       <div className="pe-layers-quick-actions">
         <span style={{ fontSize: 10, color: 'var(--pe-text-muted)' }}>Layer tools</span>
-        <button className="pe-layers-footer__btn" title="Add layer mask">
+        <button
+          className="pe-layers-footer__btn"
+          title={activeLayer?.mask ? 'Layer mask already added' : 'Add layer mask from current selection'}
+          disabled={!activeLayer || activeLayer.locked || Boolean(activeLayer.adjustment || activeLayer.mask)}
+          onClick={() => dispatch({ type: 'ADD_LAYER_MASK' })}
+        >
           <LIcon name="mask" />
         </button>
-        <button className="pe-layers-footer__btn" title="New adjustment layer">
+        <button
+          className="pe-layers-footer__btn"
+          title="New adjustment layer"
+          disabled={!activeDocument}
+          onClick={() => dispatch({ type: 'ADD_ADJUSTMENT_LAYER' })}
+        >
           <LIcon name="adj" />
         </button>
         <button
@@ -151,6 +162,14 @@ export default function LayersPanel() {
           onClick={() => dispatch({ type: 'CONVERT_ACTIVE_LAYER_TO_SMART_OBJECT' })}
         >
           <LIcon name="smart-obj" />
+        </button>
+        <button
+          className="pe-layers-footer__btn"
+          title="Merge selected layer down"
+          disabled={!canMergeDown}
+          onClick={() => dispatch({ type: 'MERGE_ACTIVE_LAYER_DOWN' })}
+        >
+          <LIcon name="merge" />
         </button>
         <button
           className="pe-layers-footer__btn"
@@ -211,6 +230,16 @@ export default function LayersPanel() {
                     <LIcon name="smart-obj" />
                   </span>
                 )}
+                {layer.adjustment && (
+                  <span title="Adjustment Layer" style={{ color: 'var(--pe-accent)', marginLeft: 4 }}>
+                    <LIcon name="adj" />
+                  </span>
+                )}
+                {layer.mask && (
+                  <span title="Layer Mask" style={{ color: 'var(--pe-accent)', marginLeft: 4 }}>
+                    <LIcon name="mask" />
+                  </span>
+                )}
               </div>
 
               {layer.locked && (
@@ -228,22 +257,12 @@ export default function LayersPanel() {
         <button className="pe-layers-footer__btn" title="New layer" onClick={() => dispatch({ type: 'ADD_LAYER' })}>
           <LIcon name="plus" />
         </button>
-        <button className="pe-layers-footer__btn" title="Add image as layer" onClick={() => imageLayerInputRef.current?.click()}>
-          <LIcon name="image" />
-        </button>
         <button className="pe-layers-footer__btn" title="Place image as Smart Object" onClick={() => smartObjectInputRef.current?.click()}>
           <LIcon name="smart-obj" />
         </button>
         <button className="pe-layers-footer__btn" title="Delete layer" onClick={() => dispatch({ type: 'DELETE_ACTIVE_LAYER' })}>
           <LIcon name="trash" />
         </button>
-        <input
-          ref={imageLayerInputRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => { handleAddImageLayer(e.target.files?.[0]); e.target.value = ''; }}
-        />
         <input
           ref={smartObjectInputRef}
           type="file"

@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { signInWithGoogleDesktop } from "../lib/desktopAuth";
 
 type RequireGoogleAuthProps = {
   moduleName: string;
@@ -58,18 +59,10 @@ export default function RequireGoogleAuth({ moduleName, children }: RequireGoogl
     }
 
     setIsSigningIn(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.href,
-        queryParams: {
-          prompt: "select_account",
-        },
-      },
-    });
-
-    if (error) {
-      setAuthError(error.message);
+    try {
+      await signInWithGoogleDesktop();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : String(error));
       setIsSigningIn(false);
     }
   };

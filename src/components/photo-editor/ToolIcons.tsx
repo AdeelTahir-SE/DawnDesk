@@ -13,12 +13,15 @@ export function ToolIcon({ type }: { type: ToolType }) {
     case 'move':
       return <Move size={size} />;
     case 'marquee-rect':
-    case 'marquee-ellipse':
       return <BoxSelect size={size} />;
+    case 'marquee-ellipse':
+      return <Circle size={size} />;
     case 'lasso':
-    case 'polygon-lasso':
-    case 'quick-selection':
       return <LassoSelect size={size} />;
+    case 'polygon-lasso':
+      return <PenTool size={size} />;
+    case 'quick-selection':
+      return <MousePointer2 size={size} />;
     case 'magic-wand':
       return <Wand2 size={size} />;
     case 'crop':
@@ -66,4 +69,3 @@ export function ToolIcon({ type }: { type: ToolType }) {
 export function getToolIcon(type: ToolType) {
   return <ToolIcon type={type} />;
 }
-

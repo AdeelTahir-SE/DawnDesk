@@ -39,7 +39,7 @@ export default function PhotoEditorCanvas() {
   const isSelecting = useRef(false);
 
   // Text input state
-  const [textInput, setTextInput] = useState<{ x: number; y: number; visible: boolean }>({ x: 0, y: 0, visible: false });
+  const [textInput, setTextInput] = useState<{ x: number; y: number; visible: boolean; value: string; layerId?: string }>({ x: 0, y: 0, visible: false, value: '' });
   const textInputRef = useRef<HTMLInputElement>(null);
 
   const zoom = activeDocument?.zoom ?? 1;
@@ -425,6 +425,7 @@ export default function PhotoEditorCanvas() {
         }
 
         case 'lasso':
+        case 'polygon-lasso':
         case 'quick-selection': {
           isSelecting.current = true;
           lassoPoints.current = [coords];
@@ -443,8 +444,17 @@ export default function PhotoEditorCanvas() {
         }
 
         case 'text': {
-          if (!editImageData) break;
-          setTextInput({ x: coords.x, y: coords.y, visible: true });
+          if (activeLayer?.text && activeLayerBounds && pointInBounds(coords, activeLayerBounds)) {
+            setTextInput({
+              x: activeLayer.text.x,
+              y: activeLayer.text.y,
+              visible: true,
+              value: activeLayer.text.content,
+              layerId: activeLayer.id,
+            });
+          } else {
+            setTextInput({ x: coords.x, y: coords.y, visible: true, value: '' });
+          }
           setTimeout(() => textInputRef.current?.focus(), 50);
           break;
         }
@@ -476,7 +486,7 @@ export default function PhotoEditorCanvas() {
         }
       }
     },
-    [activeDocument, activeLayerBounds, editImageData, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, zoom]
+    [activeDocument, activeLayer, activeLayerBounds, editImageData, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, zoom]
   );
 
   // ─── Pointer Move ───────────────────────────────────────────────
@@ -551,12 +561,12 @@ export default function PhotoEditorCanvas() {
         }
       }
 
-      if (isSelecting.current && (state.activeTool === 'lasso' || state.activeTool === 'quick-selection')) {
+      if (isSelecting.current && (state.activeTool === 'lasso' || state.activeTool === 'polygon-lasso' || state.activeTool === 'quick-selection')) {
         lassoPoints.current = [...lassoPoints.current, coords];
         const bounds = boundsFromPoints(lassoPoints.current);
         dispatch({
           type: 'SET_SELECTION',
-          payload: { type: 'lasso', ...bounds, active: true, points: lassoPoints.current },
+          payload: { type: state.activeTool === 'polygon-lasso' ? 'polygon' : 'lasso', ...bounds, active: true, points: lassoPoints.current },
         });
       }
     },
@@ -570,6 +580,25 @@ export default function PhotoEditorCanvas() {
 
       if (transformDrag.current && activeDocument) {
         const drag = transformDrag.current;
+        if (activeLayer?.text) {
+          const scale = drag.originalBounds.height > 0 ? drag.currentBounds.height / drag.originalBounds.height : 1;
+          dispatch({
+            type: 'UPDATE_TEXT_LAYER',
+            payload: {
+              id: activeLayer.id,
+              text: {
+                x: drag.currentBounds.x,
+                y: drag.currentBounds.y,
+                style: {
+                  fontSize: Math.max(1, Math.round(activeLayer.text.style.fontSize * scale)),
+                },
+              },
+            },
+          });
+          transformDrag.current = null;
+          setPreviewLayerBounds(null);
+          return;
+        }
         const transformed = transformLayerImageData(drag.imageData, drag.originalBounds, drag.currentBounds, activeDocument.width, activeDocument.height);
         dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: transformed, label: 'Transform Layer' } });
         transformDrag.current = null;
@@ -608,7 +637,7 @@ export default function PhotoEditorCanvas() {
           const w = Math.abs(coords.x - selStart.x);
           const h = Math.abs(coords.y - selStart.y);
 
-          if (w > 2 && h > 2) {
+          if ((state.activeTool === 'line' || state.activeTool === 'pen-path') ? Math.hypot(coords.x - selStart.x, coords.y - selStart.y) > 2 : w > 2 && h > 2) {
             const tmpCanvas = document.createElement('canvas');
             tmpCanvas.width = activeDocument.width;
             tmpCanvas.height = activeDocument.height;
@@ -628,7 +657,7 @@ export default function PhotoEditorCanvas() {
               drawPolygon(ctx, x + w / 2, y + h / 2, w / 2, h / 2, state.shapeOptions.sides, state.shapeOptions.star);
               ctx.fill();
               if (state.shapeOptions.strokeWidth > 0) ctx.stroke();
-            } else if (state.shapeOptions.shapeType === 'rect' || state.activeTool === 'shape-rect') {
+            } else if (state.activeTool === 'shape-rect') {
               if (state.shapeOptions.cornerRadius > 0) {
                 roundRect(ctx, x, y, w, h, state.shapeOptions.cornerRadius);
                 ctx.fill();
@@ -657,40 +686,46 @@ export default function PhotoEditorCanvas() {
         setSelStart(null);
       }
     },
-    [activeDocument, editImageData, state.activeTool, state.shapeOptions, dispatch, getImageCoords, selStart]
+    [activeDocument, activeLayer, editImageData, state.activeTool, state.shapeOptions, dispatch, getImageCoords, selStart]
   );
 
   // ─── Text commit handler ────────────────────────────────────────
   const commitText = useCallback(
     (text: string) => {
-      if (!editImageData || !activeDocument || !text.trim()) {
-        setTextInput({ x: 0, y: 0, visible: false });
+      if (!activeDocument || !text.trim()) {
+        setTextInput({ x: 0, y: 0, visible: false, value: '' });
         return;
       }
 
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = activeDocument.width;
-      tmpCanvas.height = activeDocument.height;
-      const ctx = tmpCanvas.getContext('2d')!;
-      ctx.putImageData(editImageData, 0, 0);
-
-      const { fontFamily, fontSize, fontWeight, fontStyle, color } = state.textOptions;
-      ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = color;
-      ctx.textBaseline = 'top';
-      ctx.fillText(text, textInput.x, textInput.y);
+      if (textInput.layerId) {
+        dispatch({
+          type: 'UPDATE_TEXT_LAYER',
+          payload: {
+            id: textInput.layerId,
+            text: {
+              content: text,
+              x: textInput.x,
+              y: textInput.y,
+            },
+          },
+        });
+        setTextInput({ x: 0, y: 0, visible: false, value: '' });
+        return;
+      }
 
       dispatch({
-        type: 'APPLY_TOOL_RESULT',
+        type: 'ADD_TEXT_LAYER',
         payload: {
-          imageData: ctx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height),
-          label: 'Text',
+          content: text,
+          x: textInput.x,
+          y: textInput.y,
+          style: { ...state.textOptions },
         },
       });
 
-      setTextInput({ x: 0, y: 0, visible: false });
+      setTextInput({ x: 0, y: 0, visible: false, value: '' });
     },
-    [activeDocument, editImageData, state.textOptions, dispatch, textInput]
+    [activeDocument, state.textOptions, dispatch, textInput]
   );
 
   // ─── Canvas Style — Simple left/top positioning ─────────────────
@@ -732,6 +767,8 @@ export default function PhotoEditorCanvas() {
     };
     setPreviewLayerBounds(activeLayerBounds);
   };
+
+  const inlineTextOptions = textInput.layerId && activeLayer?.text ? activeLayer.text.style : state.textOptions;
 
   return (
     <div className="pe-canvas-area">
@@ -806,11 +843,11 @@ export default function PhotoEditorCanvas() {
                   position: 'absolute',
                   left: imgLeft + textInput.x * zoom,
                   top: imgTop + textInput.y * zoom,
-                  fontSize: state.textOptions.fontSize * zoom,
-                  fontFamily: state.textOptions.fontFamily,
-                  fontWeight: state.textOptions.fontWeight,
-                  fontStyle: state.textOptions.fontStyle,
-                  color: state.textOptions.color,
+                  fontSize: inlineTextOptions.fontSize * zoom,
+                  fontFamily: inlineTextOptions.fontFamily,
+                  fontWeight: inlineTextOptions.fontWeight,
+                  fontStyle: inlineTextOptions.fontStyle,
+                  color: inlineTextOptions.color,
                   background: 'transparent',
                   border: '1px dashed var(--pe-accent)',
                   outline: 'none',
@@ -824,14 +861,16 @@ export default function PhotoEditorCanvas() {
                     commitText((e.target as HTMLInputElement).value);
                   }
                   if (e.key === 'Escape') {
-                    setTextInput({ x: 0, y: 0, visible: false });
+                    setTextInput({ x: 0, y: 0, visible: false, value: '' });
                   }
                 }}
+                value={textInput.value}
+                onChange={(e) => setTextInput((prev) => ({ ...prev, value: e.target.value }))}
                 onBlur={(e) => {
                   if (e.target.value.trim()) {
                     commitText(e.target.value);
                   } else {
-                    setTextInput({ x: 0, y: 0, visible: false });
+                    setTextInput({ x: 0, y: 0, visible: false, value: '' });
                   }
                 }}
                 placeholder="Type text..."
@@ -992,6 +1031,38 @@ function transformLayerImageData(
   return ctx.getImageData(0, 0, canvasWidth, canvasHeight);
 }
 
+function applyMaskToImageData(imageData: ImageData, mask: ImageData): ImageData {
+  const out = cloneImageData(imageData);
+  for (let i = 0; i < out.data.length; i += 4) {
+    out.data[i + 3] = Math.round(out.data[i + 3] * (mask.data[i] / 255));
+  }
+  return out;
+}
+
+const supportedBlendModes = new Set([
+  'multiply',
+  'screen',
+  'overlay',
+  'soft-light',
+  'hard-light',
+  'color-dodge',
+  'color-burn',
+  'darken',
+  'lighten',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
+
+function toCompositeOperation(blendMode: string): GlobalCompositeOperation {
+  return supportedBlendModes.has(blendMode)
+    ? blendMode as GlobalCompositeOperation
+    : 'source-over';
+}
+
 function compositeImageLayers(layers: LayerInfo[], width: number, height: number) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, width);
@@ -999,20 +1070,23 @@ function compositeImageLayers(layers: LayerInfo[], width: number, height: number
   const ctx = canvas.getContext('2d')!;
 
   [...layers].reverse().forEach((layer) => {
-    if (!layer.visible || !layer.imageData) return;
+    if (!layer.visible) return;
+
+    if (layer.adjustment) {
+      const adjusted = applyAllAdjustments(ctx.getImageData(0, 0, canvas.width, canvas.height), layer.adjustment);
+      ctx.putImageData(adjusted, 0, 0);
+      return;
+    }
+
+    if (!layer.imageData) return;
+    const sourceImageData = layer.mask ? applyMaskToImageData(layer.imageData, layer.mask.imageData) : layer.imageData;
     const source = document.createElement('canvas');
-    source.width = layer.imageData.width;
-    source.height = layer.imageData.height;
-    source.getContext('2d')!.putImageData(layer.imageData, 0, 0);
+    source.width = sourceImageData.width;
+    source.height = sourceImageData.height;
+    source.getContext('2d')!.putImageData(sourceImageData, 0, 0);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity / 100));
-    ctx.globalCompositeOperation = layer.blendMode === 'soft-light'
-      ? 'soft-light'
-      : layer.blendMode === 'color'
-        ? 'color'
-        : ['multiply', 'screen', 'overlay'].includes(layer.blendMode)
-          ? layer.blendMode as GlobalCompositeOperation
-          : 'source-over';
+    ctx.globalCompositeOperation = toCompositeOperation(layer.blendMode);
     ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
     ctx.restore();
   });

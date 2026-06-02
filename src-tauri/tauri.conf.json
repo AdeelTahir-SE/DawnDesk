@@ -25,6 +25,13 @@
       }
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["dawndesk"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, Cloud, ShieldCheck, Sparkles, UserRound } from "
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { signInWithGoogleDesktop } from "../lib/desktopAuth";
 
 export default function AuthChoice() {
   const navigate = useNavigate();
@@ -62,18 +63,10 @@ export default function AuthChoice() {
     }
 
     setIsSigningIn(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-        queryParams: {
-          prompt: "select_account",
-        },
-      },
-    });
-
-    if (error) {
-      setAuthError(error.message);
+    try {
+      await signInWithGoogleDesktop();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : String(error));
       setIsSigningIn(false);
     }
   };

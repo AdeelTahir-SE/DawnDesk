@@ -14,6 +14,33 @@ const numberInputStyle = {
 
 export default function PhotoEditorOptionsBar() {
   const { state, dispatch, activeDocument } = useEditor();
+  const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+  const activeTextLayer = activeLayer?.text ? activeLayer : null;
+  const textOptions = activeTextLayer?.text?.style ?? state.textOptions;
+
+  const updateTextOptions = (patch: Partial<typeof state.textOptions>) => {
+    dispatch({ type: 'SET_TEXT_OPTIONS', payload: patch });
+    if (activeTextLayer?.text) {
+      dispatch({
+        type: 'UPDATE_TEXT_LAYER',
+        payload: {
+          id: activeTextLayer.id,
+          text: { style: patch },
+        },
+      });
+    }
+  };
+
+  const updateTextContent = (content: string) => {
+    if (!activeTextLayer?.text) return;
+    dispatch({
+      type: 'UPDATE_TEXT_LAYER',
+      payload: {
+        id: activeTextLayer.id,
+        text: { content },
+      },
+    });
+  };
 
   const resizeActiveDocument = () => {
     const width = Number((document.getElementById('pe-resize-width') as HTMLInputElement)?.value);
@@ -61,21 +88,34 @@ export default function PhotoEditorOptionsBar() {
       case 'text':
         return (
           <>
-            <select className="pe-options-bar__select" value={state.textOptions.fontFamily} onChange={(e) => dispatch({ type: 'SET_TEXT_OPTIONS', payload: { fontFamily: e.target.value } })}>
+            {activeTextLayer?.text && (
+              <>
+                <span className="pe-options-bar__label">Text:</span>
+                <input
+                  className="pe-options-bar__select"
+                  value={activeTextLayer.text.content}
+                  onChange={(e) => updateTextContent(e.target.value)}
+                  style={{ width: 180 }}
+                />
+                <div className="pe-options-bar__separator" />
+              </>
+            )}
+            <select className="pe-options-bar__select" value={textOptions.fontFamily} onChange={(e) => updateTextOptions({ fontFamily: e.target.value })}>
               {['Arial', 'Helvetica', 'Georgia', 'Times New Roman', 'Courier New', 'Verdana', 'Impact'].map((font) => <option key={font} value={font}>{font}</option>)}
             </select>
-            <select className="pe-options-bar__select" value={state.textOptions.fontWeight} onChange={(e) => dispatch({ type: 'SET_TEXT_OPTIONS', payload: { fontWeight: e.target.value as 'normal' | 'bold' } })}>
+            <select className="pe-options-bar__select" value={textOptions.fontWeight} onChange={(e) => updateTextOptions({ fontWeight: e.target.value as 'normal' | 'bold' })}>
               <option value="normal">Regular</option>
               <option value="bold">Bold</option>
             </select>
-            <button className={`pe-options-bar__icon-btn ${state.textOptions.fontStyle === 'italic' ? 'pe-options-bar__icon-btn--active' : ''}`} onClick={() => dispatch({ type: 'SET_TEXT_OPTIONS', payload: { fontStyle: state.textOptions.fontStyle === 'italic' ? 'normal' : 'italic' } })}>I</button>
+            <button className={`pe-options-bar__icon-btn ${textOptions.fontStyle === 'italic' ? 'pe-options-bar__icon-btn--active' : ''}`} onClick={() => updateTextOptions({ fontStyle: textOptions.fontStyle === 'italic' ? 'normal' : 'italic' })}>I</button>
             {(['left', 'center', 'right'] as const).map((align) => (
-              <button key={align} className={`pe-options-bar__icon-btn ${state.textOptions.textAlign === align ? 'pe-options-bar__icon-btn--active' : ''}`} onClick={() => dispatch({ type: 'SET_TEXT_OPTIONS', payload: { textAlign: align } })}>
+              <button key={align} className={`pe-options-bar__icon-btn ${textOptions.textAlign === align ? 'pe-options-bar__icon-btn--active' : ''}`} onClick={() => updateTextOptions({ textAlign: align })}>
                 {align[0].toUpperCase()}
               </button>
             ))}
             <span className="pe-options-bar__label">Size:</span>
-            <input type="number" min={1} max={500} value={state.textOptions.fontSize} onChange={(e) => dispatch({ type: 'SET_TEXT_OPTIONS', payload: { fontSize: Number(e.target.value) } })} style={numberInputStyle} />
+            <input type="number" min={1} max={500} value={textOptions.fontSize} onChange={(e) => updateTextOptions({ fontSize: Number(e.target.value) })} style={numberInputStyle} />
+            <input type="color" value={textOptions.color} onChange={(e) => updateTextOptions({ color: e.target.value })} />
           </>
         );
 

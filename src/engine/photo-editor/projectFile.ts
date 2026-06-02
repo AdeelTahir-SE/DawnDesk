@@ -3,7 +3,8 @@
 // document metadata, and editor settings. Each layer's ImageData is stored
 // as a base64-encoded PNG data URL for portability.
 
-import type { EditorState, LayerInfo, ImageDocument } from './types';
+import type { EditorState, LayerInfo, ImageDocument, TextOptions, AdjustmentState } from './types';
+import { applyAllAdjustments } from './filters';
 
 // ─── Project File Format ──────────────────────────────────────────────────────
 
@@ -15,8 +16,16 @@ export interface ProjectLayer {
   opacity: number;
   blendMode: string;
   imageDataUrl: string | null; // base64 PNG
+  maskDataUrl?: string | null;
   thumbnail: string | null;
   isSmartObject?: boolean;
+  adjustment?: AdjustmentState;
+  text?: {
+    content: string;
+    x: number;
+    y: number;
+    style: TextOptions;
+  };
 }
 
 export interface ProjectDocument {
@@ -60,6 +69,42 @@ const PROJECT_KEY_PREFIX = 'dawndesk.photoEditor.project.';
 const DB_NAME = 'dawndesk.photoEditor';
 const DB_VERSION = 1;
 const PROJECT_STORE = 'projects';
+
+const supportedBlendModes = new Set([
+  'multiply',
+  'screen',
+  'overlay',
+  'soft-light',
+  'hard-light',
+  'color-dodge',
+  'color-burn',
+  'darken',
+  'lighten',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
+
+function toCompositeOperation(blendMode: string): GlobalCompositeOperation {
+  return supportedBlendModes.has(blendMode)
+    ? blendMode as GlobalCompositeOperation
+    : 'source-over';
+}
+
+function applyProjectAdjustments(imageData: ImageData, adjustments: AdjustmentState): ImageData {
+  return applyAllAdjustments(imageData, adjustments);
+}
+
+function applyMaskToImageData(imageData: ImageData, mask: ImageData): ImageData {
+  const out = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+  for (let i = 0; i < out.data.length; i += 4) {
+    out.data[i + 3] = Math.round(out.data[i + 3] * (mask.data[i] / 255));
+  }
+  return out;
+}
 
 export function getProjectRegistry(): ProjectEntry[] {
   try {
@@ -180,8 +225,11 @@ export async function saveProject(
       opacity: layer.opacity,
       blendMode: layer.blendMode,
       imageDataUrl: layer.imageData ? await imageDataToDataUrl(layer.imageData) : null,
+      maskDataUrl: layer.mask?.imageData ? await imageDataToDataUrl(layer.mask.imageData) : null,
       thumbnail: layer.thumbnail,
       isSmartObject: layer.isSmartObject,
+      adjustment: layer.adjustment,
+      text: layer.text,
     }))
   );
 
@@ -251,8 +299,11 @@ export async function updateProject(
       opacity: layer.opacity,
       blendMode: layer.blendMode,
       imageDataUrl: layer.imageData ? await imageDataToDataUrl(layer.imageData) : null,
+      maskDataUrl: layer.mask?.imageData ? await imageDataToDataUrl(layer.mask.imageData) : null,
       thumbnail: layer.thumbnail,
       isSmartObject: layer.isSmartObject,
+      adjustment: layer.adjustment,
+      text: layer.text,
     }))
   );
 
@@ -308,6 +359,7 @@ export async function loadProject(projectId: string): Promise<LoadedProject> {
   const layers: LayerInfo[] = await Promise.all(
     project.layers.map(async (pl) => {
       const imageData = pl.imageDataUrl ? await dataUrlToImageData(pl.imageDataUrl) : null;
+      const maskImageData = pl.maskDataUrl ? await dataUrlToImageData(pl.maskDataUrl) : null;
       return {
         id: pl.id,
         name: pl.name,
@@ -318,6 +370,9 @@ export async function loadProject(projectId: string): Promise<LoadedProject> {
         thumbnail: pl.thumbnail,
         imageData,
         isSmartObject: pl.isSmartObject,
+        mask: maskImageData ? { imageData: maskImageData, thumbnail: pl.maskDataUrl ?? null } : undefined,
+        adjustment: pl.adjustment,
+        text: pl.text,
       };
     })
   );
@@ -330,15 +385,21 @@ export async function loadProject(projectId: string): Promise<LoadedProject> {
   const compositeCtx = compositeCanvas.getContext('2d')!;
 
   [...layers].reverse().forEach((layer) => {
-    if (!layer.visible || !layer.imageData) return;
+    if (!layer.visible) return;
+    if (layer.adjustment) {
+      const adjusted = applyProjectAdjustments(compositeCtx.getImageData(0, 0, doc.width, doc.height), layer.adjustment);
+      compositeCtx.putImageData(adjusted, 0, 0);
+      return;
+    }
+    if (!layer.imageData) return;
+    const sourceImageData = layer.mask ? applyMaskToImageData(layer.imageData, layer.mask.imageData) : layer.imageData;
     const src = document.createElement('canvas');
-    src.width = layer.imageData.width;
-    src.height = layer.imageData.height;
-    src.getContext('2d')!.putImageData(layer.imageData, 0, 0);
+    src.width = sourceImageData.width;
+    src.height = sourceImageData.height;
+    src.getContext('2d')!.putImageData(sourceImageData, 0, 0);
     compositeCtx.save();
     compositeCtx.globalAlpha = layer.opacity / 100;
-    compositeCtx.globalCompositeOperation =
-      (layer.blendMode as GlobalCompositeOperation) ?? 'source-over';
+    compositeCtx.globalCompositeOperation = toCompositeOperation(layer.blendMode);
     compositeCtx.drawImage(src, 0, 0, doc.width, doc.height);
     compositeCtx.restore();
   });
@@ -418,8 +479,11 @@ export async function exportProjectAsFile(
       opacity: layer.opacity,
       blendMode: layer.blendMode,
       imageDataUrl: layer.imageData ? await imageDataToDataUrl(layer.imageData) : null,
+      maskDataUrl: layer.mask?.imageData ? await imageDataToDataUrl(layer.mask.imageData) : null,
       thumbnail: layer.thumbnail,
       isSmartObject: layer.isSmartObject,
+      adjustment: layer.adjustment,
+      text: layer.text,
     }))
   );
 
@@ -466,6 +530,7 @@ export async function importProjectFromFile(file: File): Promise<LoadedProject> 
   const layers: LayerInfo[] = await Promise.all(
     project.layers.map(async (pl) => {
       const imageData = pl.imageDataUrl ? await dataUrlToImageData(pl.imageDataUrl) : null;
+      const maskImageData = pl.maskDataUrl ? await dataUrlToImageData(pl.maskDataUrl) : null;
       return {
         id: pl.id,
         name: pl.name,
@@ -476,6 +541,9 @@ export async function importProjectFromFile(file: File): Promise<LoadedProject> 
         thumbnail: pl.thumbnail,
         imageData,
         isSmartObject: pl.isSmartObject,
+        mask: maskImageData ? { imageData: maskImageData, thumbnail: pl.maskDataUrl ?? null } : undefined,
+        adjustment: pl.adjustment,
+        text: pl.text,
       };
     })
   );
@@ -487,13 +555,21 @@ export async function importProjectFromFile(file: File): Promise<LoadedProject> 
   const compositeCtx = compositeCanvas.getContext('2d')!;
 
   [...layers].reverse().forEach((layer) => {
-    if (!layer.visible || !layer.imageData) return;
+    if (!layer.visible) return;
+    if (layer.adjustment) {
+      const adjusted = applyProjectAdjustments(compositeCtx.getImageData(0, 0, doc.width, doc.height), layer.adjustment);
+      compositeCtx.putImageData(adjusted, 0, 0);
+      return;
+    }
+    if (!layer.imageData) return;
+    const sourceImageData = layer.mask ? applyMaskToImageData(layer.imageData, layer.mask.imageData) : layer.imageData;
     const src = document.createElement('canvas');
-    src.width = layer.imageData.width;
-    src.height = layer.imageData.height;
-    src.getContext('2d')!.putImageData(layer.imageData, 0, 0);
+    src.width = sourceImageData.width;
+    src.height = sourceImageData.height;
+    src.getContext('2d')!.putImageData(sourceImageData, 0, 0);
     compositeCtx.save();
     compositeCtx.globalAlpha = layer.opacity / 100;
+    compositeCtx.globalCompositeOperation = toCompositeOperation(layer.blendMode);
     compositeCtx.drawImage(src, 0, 0, doc.width, doc.height);
     compositeCtx.restore();
   });

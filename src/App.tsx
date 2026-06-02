@@ -18,9 +18,10 @@ import RequireGoogleAuth from "./components/RequireGoogleAuth";
 // Temporarily disabled for v1 release. Restore this import with the /workflow route below.
 // import WorkflowBuilder from "./Pages/WorkflowBuilder";
 import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAppLogger } from "./utils/LoggerContext";
 import { CONNECTION_ERROR_EVENT, type ConnectionErrorDetail } from "./lib/connectionErrors";
+import { getInitialDesktopAuthUrl, handleDesktopAuthUrl, listenForDesktopAuthUrl } from "./lib/desktopAuth";
 
 function NavigationLogger() {
   const location = useLocation();
@@ -62,12 +63,52 @@ function ConnectionErrorToastBridge() {
   return null;
 }
 
+function DesktopAuthCallbackBridge() {
+  const navigate = useNavigate();
+  const { logError, logSuccess } = useAppLogger();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const processAuthUrl = async (url: string) => {
+      try {
+        const handled = await handleDesktopAuthUrl(url);
+        if (handled && isMounted) {
+          logSuccess("Signed in with Google", "DawnDesk cloud session is ready.", { source: "shell" });
+          navigate("/dashboard", { replace: true });
+        }
+      } catch (error) {
+        logError("Google sign-in failed", error instanceof Error ? error.message : String(error), { source: "shell" });
+      }
+    };
+
+    void getInitialDesktopAuthUrl().then((url) => {
+      if (url) void processAuthUrl(url);
+    });
+
+    let unlisten: (() => void) | undefined;
+    void listenForDesktopAuthUrl((url) => {
+      void processAuthUrl(url);
+    }).then((nextUnlisten) => {
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      isMounted = false;
+      unlisten?.();
+    };
+  }, [logError, logSuccess, navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <>
       <ThemeBootstrap />
       <NavigationLogger />
       <ConnectionErrorToastBridge />
+      <DesktopAuthCallbackBridge />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/auth" element={<AuthChoice />} />

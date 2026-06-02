@@ -53,7 +53,7 @@ function makeBlankDocument(name: string, width: number, height: number, dpi: num
 
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
-  const { logSuccess, logError } = useAppLogger();
+  const { logInfo, logSuccess, logError } = useAppLogger();
   const navigate = useNavigate();
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,8 +66,7 @@ function PhotoEditorInner() {
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(null);
   const [resizeValues, setResizeValues] = useState({ width: 0, height: 0, lockRatio: true });
   const [panelWidths, setPanelWidths] = useState({ left: 140, right: 300 });
-  const [integrationMessage, setIntegrationMessage] = useState<string | null>(null);
-  const [exportPresets, setExportPresets] = useState<Array<{ name: string; format: 'png' | 'jpeg' | 'webp'; quality: number; scale: number }>>(() => {
+  const [exportPresets, setExportPresets] = useState<Array<{ name: string; format: 'png' | 'jpeg' | 'webp' | 'svg'; quality: number; scale: number }>>(() => {
     try {
       return JSON.parse(localStorage.getItem('dawndesk.photoEditor.exportPresets') ?? '[]');
     } catch {
@@ -141,6 +140,45 @@ function PhotoEditorInner() {
     }
   }, [dispatch, logSuccess, logError]);
 
+  const handleOpenImageAndPlace = useCallback(async () => {
+    try {
+      const doc = await openImageFromDisk();
+      if (!doc?.imageData) return;
+
+      if (!activeDocument?.imageData) {
+        const container = containerRef.current;
+        if (container) {
+          const canvasArea = container.querySelector('.pe-viewport');
+          if (canvasArea) {
+            doc.zoom = calculateFitZoom(
+              doc.width,
+              doc.height,
+              canvasArea.clientWidth,
+              canvasArea.clientHeight
+            );
+          }
+        }
+
+        dispatch({ type: 'OPEN_DOCUMENT', payload: doc });
+        logSuccess('Photo opened', doc.fileName, { source: 'photo-editor' });
+        return;
+      }
+
+      dispatch({
+        type: 'ADD_IMAGE_LAYER',
+        payload: {
+          imageData: doc.imageData,
+          name: doc.fileName.replace(/\.[^.]+$/, '') || 'Image Layer',
+          thumbnail: doc.thumbnail,
+        },
+      });
+      logSuccess('Image placed', doc.fileName, { source: 'photo-editor' });
+    } catch (err) {
+      console.error('Image place failed:', err);
+      logError('Image place failed', String(err), { source: 'photo-editor' });
+    }
+  }, [activeDocument, dispatch, logSuccess, logError]);
+
   const openResizeDialog = useCallback(() => {
     if (!activeDocument) return;
     setResizeValues({ width: activeDocument.width, height: activeDocument.height, lockRatio: true });
@@ -163,17 +201,14 @@ function PhotoEditorInner() {
       if (currentProjectId && !forceNew) {
         await updateProject(currentProjectId, state, projectName);
         setCurrentProjectName(projectName);
-        setIntegrationMessage(`Project "${projectName}" saved.`);
         logSuccess('Photo project saved', projectName, { source: 'photo-editor' });
       } else {
         const id = await saveProject(state, projectName);
         setCurrentProjectId(id);
         setCurrentProjectName(projectName);
-        setIntegrationMessage(`Project "${projectName}" saved.`);
         logSuccess('Photo project saved', projectName, { source: 'photo-editor' });
       }
     } catch (err) {
-      setIntegrationMessage(`Save failed: ${err}`);
       logError('Photo project save failed', String(err), { source: 'photo-editor' });
     }
   }, [activeDocument, currentProjectId, currentProjectName, state, logSuccess, logError]);
@@ -308,6 +343,12 @@ function PhotoEditorInner() {
         Boolean(target?.isContentEditable);
 
       if (isTyping && !(ctrl && ['s', 'o', 'z', 'y', 'c'].includes(e.key.toLowerCase()))) {
+        return;
+      }
+
+      if (!ctrl && !e.altKey && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        dispatch({ type: 'DELETE_ACTIVE_LAYER' });
         return;
       }
 
@@ -491,13 +532,14 @@ function PhotoEditorInner() {
       {/* Top menu bar */}
       <PhotoEditorMenuBar
         onOpenImage={handleOpenImage}
+        onOpenImageAndPlace={handleOpenImageAndPlace}
         onResizeImage={openResizeDialog}
         onExport={handleExport}
         onExportDialog={() => setShowExportDialog(true)}
         onBatchExport={handleBatchExport}
         onCopyToClipboard={handleCopyToClipboard}
-        onSendToNotes={() => setIntegrationMessage('The current image is ready to insert into DawnDesk Notes once the Notes handoff API is connected.')}
-        onSendToEmail={() => setIntegrationMessage('The current image is ready to attach to DawnDesk Mail once the Mail compose handoff API is connected.')}
+        onSendToNotes={() => logInfo('Notes handoff not connected', 'Photo handoff to Notes is not available in this release.', { source: 'photo-editor' })}
+        onSendToEmail={() => logInfo('Email handoff not connected', 'Photo handoff to email is not available in this release.', { source: 'photo-editor' })}
         onOpenHelp={() => navigate('/photo-editor/help')}
         onRotate={handleRotate}
         onFlip={handleFlip}
@@ -590,6 +632,7 @@ function PhotoEditorInner() {
                 <option value="png">PNG</option>
                 <option value="jpeg">JPG</option>
                 <option value="webp">WebP</option>
+                <option value="svg">SVG</option>
               </select>
             </label>
             <label className="pe-field">
@@ -600,7 +643,7 @@ function PhotoEditorInner() {
                 max="1"
                 step="0.01"
                 value={state.exportOptions.quality}
-                disabled={state.exportOptions.format === 'png'}
+                disabled={state.exportOptions.format === 'png' || state.exportOptions.format === 'svg'}
                 onChange={(e) => dispatch({ type: 'SET_EXPORT_OPTIONS', payload: { quality: Number(e.target.value) } })}
                 data-tooltip="Control JPG/WebP compression quality. Higher quality makes a larger file."
               />
@@ -697,12 +740,6 @@ function PhotoEditorInner() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {integrationMessage && (
-        <div className="pe-toast" onClick={() => setIntegrationMessage(null)}>
-          {integrationMessage}
         </div>
       )}
 

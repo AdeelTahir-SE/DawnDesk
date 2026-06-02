@@ -145,6 +145,17 @@ export interface LayerInfo {
   thumbnail: string | null;
   imageData: ImageData | null;
   isSmartObject?: boolean;
+  mask?: {
+    imageData: ImageData;
+    thumbnail: string | null;
+  };
+  adjustment?: AdjustmentState;
+  text?: {
+    content: string;
+    x: number;
+    y: number;
+    style: TextOptions;
+  };
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────
@@ -198,7 +209,7 @@ export interface ShapeOptions {
 }
 
 export interface ExportOptions {
-  format: 'png' | 'jpeg' | 'webp';
+  format: 'png' | 'jpeg' | 'webp' | 'svg';
   quality: number;
   scale: number;
 }
@@ -261,8 +272,13 @@ export type EditorAction =
   | { type: 'RESIZE_ACTIVE_DOCUMENT'; payload: { width: number; height: number } }
   | { type: 'ADD_LAYER' }
   | { type: 'ADD_IMAGE_LAYER'; payload: { imageData: ImageData; name: string; thumbnail?: string | null; isSmartObject?: boolean } }
+  | { type: 'ADD_TEXT_LAYER'; payload: { content: string; x: number; y: number; style: TextOptions } }
+  | { type: 'UPDATE_TEXT_LAYER'; payload: { id: string; text: Partial<Omit<NonNullable<LayerInfo['text']>, 'style'>> & { style?: Partial<TextOptions> } } }
+  | { type: 'ADD_LAYER_MASK' }
+  | { type: 'ADD_ADJUSTMENT_LAYER' }
   | { type: 'RESTORE_PROJECT_LAYERS'; payload: { layers: LayerInfo[]; activeLayerId: string | null } }
   | { type: 'CONVERT_ACTIVE_LAYER_TO_SMART_OBJECT' }
+  | { type: 'MERGE_ACTIVE_LAYER_DOWN' }
   | { type: 'DELETE_ACTIVE_LAYER' }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
   | { type: 'UPDATE_LAYER'; payload: { id: string; changes: Partial<LayerInfo> } }

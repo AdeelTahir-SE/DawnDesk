@@ -113,6 +113,8 @@ function cloneLayers(layers: LayerInfo[]): LayerInfo[] {
   return layers.map((layer) => ({
     ...layer,
     imageData: layer.imageData ? cloneImageData(layer.imageData) : null,
+    mask: layer.mask ? { ...layer.mask, imageData: cloneImageData(layer.mask.imageData) } : undefined,
+    adjustment: layer.adjustment ? { ...layer.adjustment } : undefined,
   }));
 }
 
@@ -140,6 +142,58 @@ function makeThumbnail(imageData: ImageData): string {
   return thumb.toDataURL('image/png');
 }
 
+function createLayerMask(width: number, height: number, selection: EditorState['selection']): ImageData {
+  const mask = new ImageData(Math.max(1, width), Math.max(1, height));
+  const hasSelection = Boolean(selection?.active);
+
+  for (let y = 0; y < mask.height; y++) {
+    for (let x = 0; x < mask.width; x++) {
+      const idx = (y * mask.width + x) * 4;
+      const inside = !hasSelection || (
+        x >= (selection?.x ?? 0) &&
+        x <= (selection?.x ?? 0) + (selection?.width ?? 0) &&
+        y >= (selection?.y ?? 0) &&
+        y <= (selection?.y ?? 0) + (selection?.height ?? 0)
+      );
+      const value = inside ? 255 : 0;
+      mask.data[idx] = value;
+      mask.data[idx + 1] = value;
+      mask.data[idx + 2] = value;
+      mask.data[idx + 3] = 255;
+    }
+  }
+
+  return mask;
+}
+
+function applyMaskToImageData(imageData: ImageData, mask: ImageData): ImageData {
+  const out = cloneImageData(imageData);
+  for (let i = 0; i < out.data.length; i += 4) {
+    out.data[i + 3] = Math.round(out.data[i + 3] * (mask.data[i] / 255));
+  }
+  return out;
+}
+
+function renderTextLayer(
+  content: string,
+  x: number,
+  y: number,
+  style: NonNullable<LayerInfo['text']>['style'],
+  width: number,
+  height: number
+): ImageData {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize}px ${style.fontFamily}`;
+  ctx.fillStyle = style.color;
+  ctx.textBaseline = 'top';
+  ctx.textAlign = style.textAlign;
+  ctx.fillText(content, x, y);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
 function fitImageDataToCanvas(imageData: ImageData, width: number, height: number): ImageData {
   const out = document.createElement('canvas');
   out.width = Math.max(1, width);
@@ -161,6 +215,30 @@ function fitImageDataToCanvas(imageData: ImageData, width: number, height: numbe
   return outCtx.getImageData(0, 0, out.width, out.height);
 }
 
+const supportedBlendModes = new Set([
+  'multiply',
+  'screen',
+  'overlay',
+  'soft-light',
+  'hard-light',
+  'color-dodge',
+  'color-burn',
+  'darken',
+  'lighten',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
+
+function toCompositeOperation(blendMode: string): GlobalCompositeOperation {
+  return supportedBlendModes.has(blendMode)
+    ? blendMode as GlobalCompositeOperation
+    : 'source-over';
+}
+
 function compositeLayers(layers: LayerInfo[], width: number, height: number): ImageData {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, width);
@@ -168,20 +246,23 @@ function compositeLayers(layers: LayerInfo[], width: number, height: number): Im
   const ctx = canvas.getContext('2d')!;
 
   [...layers].reverse().forEach((layer) => {
-    if (!layer.visible || !layer.imageData) return;
+    if (!layer.visible) return;
+
+    if (layer.adjustment) {
+      const adjusted = applyAllAdjustments(ctx.getImageData(0, 0, canvas.width, canvas.height), layer.adjustment);
+      ctx.putImageData(adjusted, 0, 0);
+      return;
+    }
+
+    if (!layer.imageData) return;
+    const sourceImageData = layer.mask ? applyMaskToImageData(layer.imageData, layer.mask.imageData) : layer.imageData;
     const source = document.createElement('canvas');
-    source.width = layer.imageData.width;
-    source.height = layer.imageData.height;
-    source.getContext('2d')!.putImageData(layer.imageData, 0, 0);
+    source.width = sourceImageData.width;
+    source.height = sourceImageData.height;
+    source.getContext('2d')!.putImageData(sourceImageData, 0, 0);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity / 100));
-    ctx.globalCompositeOperation = layer.blendMode === 'soft-light'
-      ? 'soft-light'
-      : layer.blendMode === 'color'
-        ? 'color'
-        : ['multiply', 'screen', 'overlay'].includes(layer.blendMode)
-          ? layer.blendMode as GlobalCompositeOperation
-          : 'source-over';
+    ctx.globalCompositeOperation = toCompositeOperation(layer.blendMode);
     ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
     ctx.restore();
   });
@@ -389,6 +470,21 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     case 'UPDATE_ADJUSTMENT': {
       const doc = state.documents.find((d) => d.id === state.activeDocumentId);
       if (!doc) return state;
+      const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+      if (activeLayer?.adjustment) {
+        const layers = state.layers.map((layer) =>
+          layer.id === activeLayer.id
+            ? {
+                ...layer,
+                adjustment: {
+                  ...layer.adjustment!,
+                  [action.payload.key]: action.payload.value,
+                },
+              }
+            : layer
+        );
+        return updateActiveDocumentComposite({ ...state, layers }, layers);
+      }
       return {
         ...state,
         documents: state.documents.map((d) =>
@@ -407,6 +503,14 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
 
     case 'RESET_ADJUSTMENTS':
+      if (state.layers.some((layer) => layer.id === state.activeLayerId && layer.adjustment)) {
+        const layers = state.layers.map((layer) =>
+          layer.id === state.activeLayerId && layer.adjustment
+            ? { ...layer, adjustment: { ...DEFAULT_ADJUSTMENTS } }
+            : layer
+        );
+        return updateActiveDocumentComposite({ ...state, layers }, layers);
+      }
       return {
         ...state,
         documents: state.documents.map((d) =>
@@ -523,10 +627,29 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const stateWithHistory = pushHistory(state, 'Resize Image');
       const nextW = Math.max(1, Math.round(action.payload.width));
       const nextH = Math.max(1, Math.round(action.payload.height));
+      const scaleX = nextW / doc.width;
+      const scaleY = nextH / doc.height;
       const layers = stateWithHistory.layers.map((layer) => {
-        if (!layer.imageData) return layer;
+        if (layer.adjustment) return layer;
+        const mask = layer.mask
+          ? { imageData: resizeImageData(layer.mask.imageData, nextW, nextH), thumbnail: makeThumbnail(resizeImageData(layer.mask.imageData, nextW, nextH)) }
+          : undefined;
+        if (layer.text) {
+          const text = {
+            ...layer.text,
+            x: layer.text.x * scaleX,
+            y: layer.text.y * scaleY,
+            style: {
+              ...layer.text.style,
+              fontSize: Math.max(1, Math.round(layer.text.style.fontSize * ((scaleX + scaleY) / 2))),
+            },
+          };
+          const imageData = renderTextLayer(text.content, text.x, text.y, text.style, nextW, nextH);
+          return { ...layer, text, mask, imageData, thumbnail: makeThumbnail(imageData) };
+        }
+        if (!layer.imageData) return { ...layer, mask };
         const imageData = resizeImageData(layer.imageData, nextW, nextH);
-        return { ...layer, imageData, thumbnail: makeThumbnail(imageData) };
+        return { ...layer, mask, imageData, thumbnail: makeThumbnail(imageData) };
       });
       const resized = compositeLayers(layers, nextW, nextH);
       return {
@@ -578,6 +701,67 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: layer.id }, layers);
     }
 
+    case 'ADD_TEXT_LAYER': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      const content = action.payload.content.trim();
+      if (!doc || !content) return state;
+      const text = {
+        content,
+        x: action.payload.x,
+        y: action.payload.y,
+        style: { ...action.payload.style },
+      };
+      const imageData = renderTextLayer(text.content, text.x, text.y, text.style, doc.width, doc.height);
+      const layer = {
+        id: `layer-${Date.now()}`,
+        name: text.content.slice(0, 32) || `Text Layer ${state.layers.length + 1}`,
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        thumbnail: makeThumbnail(imageData),
+        imageData,
+        isSmartObject: true,
+        text,
+      };
+      const stateWithHistory = pushHistory(state, 'Add Text Layer');
+      const layers = insertLayerAboveActive(stateWithHistory.layers, stateWithHistory.activeLayerId, layer);
+      return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: layer.id }, layers);
+    }
+
+    case 'ADD_LAYER_MASK': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
+      if (!doc || !activeLayer || activeLayer.locked || activeLayer.adjustment) return state;
+      const stateWithHistory = pushHistory(state, 'Add Layer Mask');
+      const mask = createLayerMask(doc.width, doc.height, stateWithHistory.selection);
+      const layers = stateWithHistory.layers.map((layer) =>
+        layer.id === stateWithHistory.activeLayerId
+          ? { ...layer, mask: { imageData: mask, thumbnail: makeThumbnail(mask) } }
+          : layer
+      );
+      return updateActiveDocumentComposite({ ...stateWithHistory, selection: null }, layers);
+    }
+
+    case 'ADD_ADJUSTMENT_LAYER': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc) return state;
+      const layer = {
+        id: `layer-${Date.now()}`,
+        name: 'Adjustment Layer',
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        thumbnail: null,
+        imageData: null,
+        adjustment: { ...doc.pendingAdjustments },
+      };
+      const stateWithHistory = pushHistory(state, 'Add Adjustment Layer');
+      const layers = insertLayerAboveActive(stateWithHistory.layers, stateWithHistory.activeLayerId, layer);
+      return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: layer.id }, layers);
+    }
+
     case 'RESTORE_PROJECT_LAYERS': {
       const doc = state.documents.find((d) => d.id === state.activeDocumentId);
       if (!doc) return state;
@@ -622,12 +806,73 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       );
     }
 
+    case 'MERGE_ACTIVE_LAYER_DOWN': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc) return state;
+      const activeIndex = state.layers.findIndex((layer) => layer.id === state.activeLayerId);
+      if (activeIndex < 0 || activeIndex >= state.layers.length - 1) return state;
+      const activeLayer = state.layers[activeIndex];
+      const lowerLayer = state.layers[activeIndex + 1];
+      if (!activeLayer || !lowerLayer || activeLayer.locked) return state;
+
+      const stateWithHistory = pushHistory(state, 'Merge Layers');
+      const currentActiveIndex = stateWithHistory.layers.findIndex((layer) => layer.id === stateWithHistory.activeLayerId);
+      const currentActiveLayer = stateWithHistory.layers[currentActiveIndex];
+      const currentLowerLayer = stateWithHistory.layers[currentActiveIndex + 1];
+      if (!currentActiveLayer || !currentLowerLayer) return state;
+
+      const mergedImageData = compositeLayers([currentActiveLayer, currentLowerLayer], doc.width, doc.height);
+      const mergedLayer = {
+        ...currentLowerLayer,
+        id: `layer-${Date.now()}`,
+        name: `${currentLowerLayer.name} + ${currentActiveLayer.name}`,
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        thumbnail: makeThumbnail(mergedImageData),
+        imageData: mergedImageData,
+        isSmartObject: false,
+        text: undefined,
+      };
+      const layers = [...stateWithHistory.layers];
+      layers.splice(currentActiveIndex, 2, mergedLayer);
+      return updateActiveDocumentComposite({ ...stateWithHistory, activeLayerId: mergedLayer.id }, layers);
+    }
+
     case 'UPDATE_LAYER':
       return updateActiveDocumentComposite({
         ...state,
       }, state.layers.map((layer) =>
           layer.id === action.payload.id ? { ...layer, ...action.payload.changes } : layer
         ));
+
+    case 'UPDATE_TEXT_LAYER': {
+      const doc = state.documents.find((d) => d.id === state.activeDocumentId);
+      if (!doc) return state;
+      const stateWithHistory = pushHistory(state, 'Edit Text Layer');
+      const layers = stateWithHistory.layers.map((layer) => {
+        if (layer.id !== action.payload.id || !layer.text) return layer;
+        const text = {
+          ...layer.text,
+          ...action.payload.text,
+          style: {
+            ...layer.text.style,
+            ...(action.payload.text.style ?? {}),
+          },
+        };
+        const imageData = renderTextLayer(text.content, text.x, text.y, text.style, doc.width, doc.height);
+        return {
+          ...layer,
+          name: text.content.trim().slice(0, 32) || layer.name,
+          text,
+          imageData,
+          thumbnail: makeThumbnail(imageData),
+          isSmartObject: true,
+        };
+      });
+      return updateActiveDocumentComposite(stateWithHistory, layers);
+    }
 
     case 'REORDER_LAYER': {
       const { fromIndex } = action.payload;
@@ -698,9 +943,16 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const stateWithHistory = pushHistory(state, `Rotate ${action.payload}°`);
       const { data, w, h } = rotateImageData(doc.imageData, action.payload);
       const layers = stateWithHistory.layers.map((layer) => {
-        if (!layer.imageData) return layer;
+        if (layer.adjustment) return layer;
+        const mask = layer.mask
+          ? (() => {
+              const rotatedMask = rotateImageData(layer.mask!.imageData, action.payload).data;
+              return { imageData: rotatedMask, thumbnail: makeThumbnail(rotatedMask) };
+            })()
+          : undefined;
+        if (!layer.imageData) return { ...layer, mask };
         const rotated = rotateImageData(layer.imageData, action.payload).data;
-        return { ...layer, imageData: rotated, thumbnail: makeThumbnail(rotated) };
+        return { ...layer, mask, imageData: rotated, thumbnail: makeThumbnail(rotated) };
       });
       const composite = compositeLayers(layers, w, h);
 
@@ -722,9 +974,16 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const stateWithHistory = pushHistory(state, `Flip ${action.payload}`);
       const flipped = flipImageData(doc.imageData, action.payload);
       const layers = stateWithHistory.layers.map((layer) => {
-        if (!layer.imageData) return layer;
+        if (layer.adjustment) return layer;
+        const mask = layer.mask
+          ? (() => {
+              const flippedMask = flipImageData(layer.mask!.imageData, action.payload);
+              return { imageData: flippedMask, thumbnail: makeThumbnail(flippedMask) };
+            })()
+          : undefined;
+        if (!layer.imageData) return { ...layer, mask };
         const imageData = flipImageData(layer.imageData, action.payload);
-        return { ...layer, imageData, thumbnail: makeThumbnail(imageData) };
+        return { ...layer, mask, imageData, thumbnail: makeThumbnail(imageData) };
       });
       const composite = compositeLayers(layers, doc.width, doc.height);
 

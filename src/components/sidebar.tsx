@@ -26,7 +26,7 @@ type SidebarProps = {
 
 import { useAppLogger } from "../utils/LoggerContext";
 import { useCallback, useEffect, useState } from "react";
-import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import {
     acceptWorkspaceInvite,
     declineWorkspaceInvite,
@@ -45,12 +45,13 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
     const [notifications, setNotifications] = useState<WorkspaceNotificationAlert[]>([]);
     const [alertsLoading, setAlertsLoading] = useState(false);
     const [alertsError, setAlertsError] = useState("");
+    const [isSignedIn, setIsSignedIn] = useState(false);
     const [activeInviteId, setActiveInviteId] = useState<string | null>(null);
     const [activeNotificationId, setActiveNotificationId] = useState<string | null>(null);
     const alertCount = invites.length + notifications.length;
 
     const loadAlerts = useCallback(async () => {
-        if (!isSupabaseConfigured) {
+        if (!isSupabaseConfigured || !isSignedIn) {
             setInvites([]);
             setNotifications([]);
             setAlertsError("");
@@ -71,11 +72,39 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
         } finally {
             setAlertsLoading(false);
         }
+    }, [isSignedIn]);
+
+    useEffect(() => {
+        if (!supabase || !isSupabaseConfigured) {
+            setIsSignedIn(false);
+            return;
+        }
+
+        let isMounted = true;
+
+        void supabase.auth.getSession().then(({ data }) => {
+            if (isMounted) setIsSignedIn(Boolean(data.session));
+        });
+
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+            setIsSignedIn(Boolean(session));
+            if (!session) {
+                setIsAlertsOpen(false);
+                setInvites([]);
+                setNotifications([]);
+                setAlertsError("");
+            }
+        });
+
+        return () => {
+            isMounted = false;
+            listener.subscription.unsubscribe();
+        };
     }, []);
 
     useEffect(() => {
-        void loadAlerts();
-    }, [loadAlerts]);
+        if (isSignedIn) void loadAlerts();
+    }, [isSignedIn, loadAlerts]);
 
     const handleToggle = () => {
         logInfo('Sidebar', `Sidebar ${showItems ? 'collapsed' : 'expanded'}`);
@@ -83,6 +112,7 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
     };
 
     const handleOpenAlerts = () => {
+        if (!isSignedIn) return;
         setIsAlertsOpen(true);
         void loadAlerts();
     };
@@ -169,23 +199,25 @@ export default function Sidebar({ showItems, onToggleItems }: SidebarProps) {
                 {/* <SidebarLink icon={Workflow} label="Workflow" to="/workflow" showItems={showItems} /> */}
                 <SidebarLink icon={Wrench} label="Dev Tools" to="/dev-tools" showItems={showItems} />
                 <SidebarLink icon={Settings} label="Settings" to="/settings" showItems={showItems} />
-                <button
-                    type="button"
-                    onClick={handleOpenAlerts}
-                    className={`flex flex-row items-center justify-start rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-neutral-800/70 hover:text-white gap-4 ${showItems ? "md:justify-start" : "md:justify-center"}`}
-                >
-                    <span className="relative">
-                        <Bell className="h-5 w-5 text-white/70" />
-                        {alertCount > 0 && (
-                            <span className="absolute -right-2 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-yellow-400 px-1 text-[10px] font-black leading-none text-black">
-                                {alertCount}
-                            </span>
-                        )}
-                    </span>
-                    <span className={showItems ? "hidden md:inline" : "hidden"}>Alerts</span>
-                </button>
+                {isSignedIn && (
+                    <button
+                        type="button"
+                        onClick={handleOpenAlerts}
+                        className={`flex flex-row items-center justify-start rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-neutral-800/70 hover:text-white gap-4 ${showItems ? "md:justify-start" : "md:justify-center"}`}
+                    >
+                        <span className="relative">
+                            <Bell className="h-5 w-5 text-white/70" />
+                            {alertCount > 0 && (
+                                <span className="absolute -right-2 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-yellow-400 px-1 text-[10px] font-black leading-none text-black">
+                                    {alertCount}
+                                </span>
+                            )}
+                        </span>
+                        <span className={showItems ? "hidden md:inline" : "hidden"}>Alerts</span>
+                    </button>
+                )}
             </nav>
-            {isAlertsOpen && (
+            {isSignedIn && isAlertsOpen && (
                 <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
                     <section className="w-full max-w-md overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl shadow-black/60">
                         <header className="flex items-start justify-between gap-4 border-b border-neutral-800 px-5 py-4">

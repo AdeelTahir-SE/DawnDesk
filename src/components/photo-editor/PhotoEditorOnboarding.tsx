@@ -217,7 +217,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       features: [
         { icon: <FolderKanban className="w-5 h-5 text-[#facc15]" />, title: "Project Saves", desc: "Save layered Photo Editor projects" },
         { icon: <Layers className="w-5 h-5 text-[#facc15]" />, title: "Layer Panel", desc: "Add, select, reorder, lock, and blend layers" },
-        { icon: <ImageIcon className="w-5 h-5 text-[#facc15]" />, title: "Export Images", desc: "Export PNG, JPG, WebP, or batch-export open tabs" }
+        { icon: <ImageIcon className="w-5 h-5 text-[#facc15]" />, title: "Export Images", desc: "Export PNG, JPG, WebP, SVG, or batch-export open tabs" }
       ],
       rightVisual: <WorkspaceVisual />
     },

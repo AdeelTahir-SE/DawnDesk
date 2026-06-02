@@ -4,6 +4,7 @@ pub mod sub_apps;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{env, fs, path::PathBuf};
+use tauri::{Emitter, Manager};
 
 const STARTUP_SCRIPT_NAME: &str = "DawnDesk.cmd";
 const NATIVE_SETTINGS_FILE: &str = "native-settings.json";
@@ -14,6 +15,8 @@ const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta"
 const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
 const OLLAMA_LOCAL_BASE_URL: &str = "http://localhost:11434/api";
 const OLLAMA_CLOUD_BASE_URL: &str = "https://ollama.com/api";
+const AUTH_DEEP_LINK_EVENT: &str = "dawndesk-auth-deep-link";
+const AUTH_DEEP_LINK_PREFIX: &str = "dawndesk://auth/callback";
 
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
@@ -83,6 +86,16 @@ struct AiGeneratedImage {
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+fn auth_deep_link_from_args(args: impl IntoIterator<Item = String>) -> Option<String> {
+    args.into_iter()
+        .find(|arg| arg.starts_with(AUTH_DEEP_LINK_PREFIX))
+}
+
+#[tauri::command]
+fn get_auth_deep_link_arg() -> Option<String> {
+    auth_deep_link_from_args(env::args())
 }
 
 fn app_config_dir() -> Result<PathBuf, String> {
@@ -613,12 +626,22 @@ pub fn run() {
     apply_hardware_acceleration_from_settings();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(url) = auth_deep_link_from_args(argv) {
+                let _ = app.emit(AUTH_DEEP_LINK_EVENT, url);
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_focus();
+                }
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            get_auth_deep_link_arg,
             get_auto_launch,
             set_auto_launch,
             get_hardware_acceleration,

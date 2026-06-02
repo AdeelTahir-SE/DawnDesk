@@ -192,21 +192,6 @@
   accent-color: var(--pe-accent);
 }
 
-.pe-toast {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 1001;
-  max-width: 360px;
-  padding: 10px 12px;
-  border: 1px solid var(--pe-border);
-  border-radius: 6px;
-  background: var(--pe-bg-panel-alt);
-  color: var(--pe-text-primary);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-}
-
 .pe-help-page {
   min-height: calc(100vh - 64px);
   overflow: auto;

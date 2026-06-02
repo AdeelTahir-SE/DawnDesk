@@ -161,7 +161,7 @@ function ToolGroupButton({ group, activeTool, selectedInGroup, onSelectTool }: T
           onMouseDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onSelectTool(group.tools[0].type);
+            onSelectTool(displayTool.type);
             setOpen(true);
           }}
           title={`${displayTool.name} (${displayTool.shortcut})`}

@@ -16,6 +16,7 @@ import { Bot, FolderOpen, Save, Folder, Library } from 'lucide-react';
 
 interface MenuBarProps {
   onOpenImage: () => void;
+  onOpenImageAndPlace?: () => void;
   onResizeImage?: () => void;
   onExport: () => void;
   onExportDialog?: () => void;
@@ -55,7 +56,7 @@ interface MenuDef {
 const ENABLE_PHOTO_EDITOR_AI_MENU = false;
 
 export default function PhotoEditorMenuBar({
-  onOpenImage, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
+  onOpenImage, onOpenImageAndPlace, onResizeImage, onExport, onExportDialog, onBatchExport, onCopyToClipboard, onSendToNotes, onSendToEmail, onOpenHelp, onRotate, onFlip, onApplyFilter, onUndo, onRedo,
   onSaveProject, onSaveProjectAs, onExportProjectFile, onOpenProjects, onOpenAiPanel, currentProjectName,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export default function PhotoEditorMenuBar({
         { label: 'Projects…', icon: <Library size={14} />, description: 'Go to the project manager.', action: () => { onOpenProjects?.(); setOpenMenu(null); } },
         { separator: true, label: '' },
         { label: 'Open Image...', shortcut: 'Ctrl+O', description: 'Import an image into a new editor tab.', action: () => { onOpenImage(); setOpenMenu(null); } },
+        { label: 'Open Image & Place', description: 'Place an image into the active document as a new layer.', action: () => { onOpenImageAndPlace?.(); setOpenMenu(null); } },
         { separator: true, label: '' },
         { label: 'Save Project', shortcut: 'Ctrl+Shift+S', description: 'Save current layers and settings as a project.', action: () => { onSaveProject?.(); setOpenMenu(null); } },
         { label: 'Save Project As…', description: 'Save as a new project with a different name.', action: () => { onSaveProjectAs?.(); setOpenMenu(null); } },

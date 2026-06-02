@@ -1,13 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 
+type ExportFormat = 'png' | 'jpeg' | 'webp' | 'svg';
+
 export async function exportImageToFile(
   imageData: ImageData,
   fileName: string,
-  format: 'png' | 'jpeg' | 'webp' = 'png',
+  format: ExportFormat = 'png',
   quality = 0.92,
   scale = 1
 ): Promise<void> {
-  const blob = await imageDataToBlob(imageData, format, quality, scale);
+  const blob = format === 'svg'
+    ? await imageDataToSvgBlob(imageData, scale)
+    : await imageDataToBlob(imageData, format, quality, scale);
   const exportName = withExtension(fileName, format);
 
   if (await saveWithBrowserPicker(blob, exportName, format)) {
@@ -41,7 +45,7 @@ export async function exportImageToFile(
 async function saveWithBrowserPicker(
   blob: Blob,
   fileName: string,
-  format: 'png' | 'jpeg' | 'webp'
+  format: ExportFormat
 ): Promise<boolean> {
   const picker = (window as unknown as {
     showSaveFilePicker?: (options: {
@@ -53,7 +57,7 @@ async function saveWithBrowserPicker(
   if (!picker) return false;
 
   try {
-    const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
+    const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : format === 'svg' ? 'image/svg+xml' : 'image/png';
     const extension = format === 'jpeg' ? '.jpg' : `.${format}`;
     const handle = await picker({
       suggestedName: fileName,
@@ -77,7 +81,7 @@ async function saveWithBrowserPicker(
 
 export async function imageDataToBlob(
   imageData: ImageData,
-  format: 'png' | 'jpeg' | 'webp' = 'png',
+  format: Exclude<ExportFormat, 'svg'> = 'png',
   quality = 0.92,
   scale = 1
 ): Promise<Blob> {
@@ -107,9 +111,31 @@ export async function imageDataToBlob(
   return blob;
 }
 
+async function imageDataToSvgBlob(imageData: ImageData, scale = 1): Promise<Blob> {
+  const png = await imageDataToBlob(imageData, 'png', 1, scale);
+  const dataUrl = await blobToDataUrl(png);
+  const width = Math.max(1, Math.round(imageData.width * scale));
+  const height = Math.max(1, Math.round(imageData.height * scale));
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<image href="${dataUrl}" width="${width}" height="${height}" preserveAspectRatio="none"/>`,
+    '</svg>',
+  ].join('');
+  return new Blob([svg], { type: 'image/svg+xml' });
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function exportBatchToFiles(
   documents: { fileName: string; imageData: ImageData | null }[],
-  format: 'png' | 'jpeg' | 'webp',
+  format: ExportFormat,
   quality: number,
   scale: number
 ): Promise<void> {
@@ -120,7 +146,7 @@ export async function exportBatchToFiles(
   }
 }
 
-function withExtension(fileName: string, format: 'png' | 'jpeg' | 'webp'): string {
+function withExtension(fileName: string, format: ExportFormat): string {
   const ext = format === 'jpeg' ? '.jpg' : `.${format}`;
   return fileName.replace(/\.[^.]+$/, '') + ext;
 }
