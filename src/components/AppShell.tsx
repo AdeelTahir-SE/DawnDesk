@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Minimize2 } from "lucide-react";
 import Navbar from "./navbar";
 import Sidebar from "./sidebar";
+import { AppToaster } from "../utils/LoggerContext";
 
 const FULLSCREEN_SUB_APP_PATHS = new Set([
   "/photo-editor",
@@ -92,6 +93,7 @@ export default function AppShell() {
         <div className={isAppFullscreen ? "min-h-0 flex-1 overflow-hidden" : ""}> 
           <Outlet />
         </div>
+        <AppToaster />
         {isAppFullscreen && (
           <p className="sr-only">Press Escape to leave fullscreen.</p>
         )}

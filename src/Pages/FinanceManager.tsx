@@ -15,7 +15,6 @@ import {
   Loader2,
   Package,
   PieChart,
-  Plug,
   Plus,
   ReceiptText,
   Search,
@@ -56,7 +55,6 @@ import FixedAssetsView from "../components/finance-manager/views/FixedAssetsView
 import TaxManagementView from "../components/finance-manager/views/TaxManagementView";
 import ProcurementView from "../components/finance-manager/views/ProcurementView";
 import InventoryCogsView from "../components/finance-manager/views/InventoryCogsView";
-import IntegrationsAutomationView from "../components/finance-manager/views/IntegrationsAutomationView";
 import ComplianceAuditView from "../components/finance-manager/views/ComplianceAuditView";
 import FinanceSectionComments from "../components/finance-manager/FinanceSectionComments";
 
@@ -72,7 +70,6 @@ const NAV_ITEMS = [
   { id: "tax", label: "Tax Management", icon: <ReceiptText className="w-5 h-5" /> },
   { id: "procurement", label: "Procurement", icon: <ShoppingCart className="w-5 h-5" /> },
   { id: "inventory", label: "Inventory & COGS", icon: <Package className="w-5 h-5" /> },
-  { id: "integrations", label: "Integrations", icon: <Plug className="w-5 h-5" /> },
   { id: "compliance", label: "Compliance & Audit", icon: <ClipboardCheck className="w-5 h-5" /> },
   { id: "members", label: "Members", icon: <Users className="w-5 h-5" /> },
 ];
@@ -316,8 +313,6 @@ export default function FinanceManager() {
         return <ProcurementView />;
       case "inventory":
         return <InventoryCogsView />;
-      case "integrations":
-        return <IntegrationsAutomationView />;
       case "compliance":
         return <ComplianceAuditView />;
       case "members":
@@ -656,8 +651,7 @@ function FinanceMembersSettings({
             onChange={(event) => onInviteRoleChange(event.target.value as FinanceMember["role"])}
             className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-400/60"
           >
-            <option value="Accountant">Accountant</option>
-            <option value="Viewer">Viewer</option>
+            <option value="Accountant">Full access</option>
           </select>
           <button type="submit" disabled={inviting} className="dd-btn-primary">
             {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}

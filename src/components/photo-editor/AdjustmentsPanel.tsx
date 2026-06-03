@@ -1,5 +1,6 @@
 import { useEditor } from '../../engine/photo-editor/EditorContext';
 import type { AdjustmentState } from '../../engine/photo-editor/types';
+import { useAppLogger } from '../../utils/LoggerContext';
 
 interface SliderDef {
   key: keyof AdjustmentState;
@@ -58,6 +59,7 @@ const CHANNEL_SLIDERS: SliderDef[] = [
 
 export default function AdjustmentsPanel() {
   const { state, activeDocument, dispatch } = useEditor();
+  const { logSuccess } = useAppLogger();
   const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
   const adjustments = activeLayer?.adjustment ?? activeDocument?.pendingAdjustments;
   const canEditLayer = Boolean(activeDocument && activeLayer && !activeLayer.locked);
@@ -65,6 +67,12 @@ export default function AdjustmentsPanel() {
 
   const handleChange = (key: keyof AdjustmentState, value: number) => {
     dispatch({ type: 'UPDATE_ADJUSTMENT', payload: { key, value } });
+  };
+
+  const applyAdjustments = () => {
+    if (isAdjustmentLayer) return;
+    dispatch({ type: 'COMMIT_ADJUSTMENT' });
+    logSuccess('Photo adjustments applied', activeLayer?.name ?? activeDocument?.fileName ?? 'Active layer', { source: 'photo-editor' });
   };
 
   const renderSliderGroup = (title: string, sliders: SliderDef[]) => (
@@ -136,7 +144,7 @@ export default function AdjustmentsPanel() {
         <button
           className="pe-action-button pe-action-button--primary"
           disabled={!canEditLayer}
-          onClick={() => !isAdjustmentLayer && dispatch({ type: 'COMMIT_ADJUSTMENT' })}
+          onClick={applyAdjustments}
         >
           {isAdjustmentLayer ? 'Adjustment Layer Active' : 'Apply Adjustments'}
         </button>

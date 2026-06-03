@@ -183,6 +183,7 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         mutedActions: patch.mutedActions ? { ...prev.mutedActions, ...patch.mutedActions } : prev.mutedActions,
       });
       localStorage.setItem(LOGGER_SETTINGS_KEY, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('dawndesk_logger_settings_changed'));
       return next;
     });
   }, []);
@@ -190,6 +191,7 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const resetLoggerSettings = useCallback(() => {
     localStorage.setItem(LOGGER_SETTINGS_KEY, JSON.stringify(defaultLoggerSettings));
     setSettings(defaultLoggerSettings);
+    window.dispatchEvent(new CustomEvent('dawndesk_logger_settings_changed'));
   }, []);
 
   const clearLogs = useCallback(async () => {
@@ -218,10 +220,7 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     if (
       !currentSettings.enabled ||
-      !currentSettings.levels[level] ||
-      !currentSettings.channels[channel] ||
-      !currentSettings.sources[source] ||
-      currentSettings.mutedActions[action]
+      !currentSettings.channels[channel]
     ) {
       return;
     }
@@ -238,7 +237,15 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Add to state
     setLogs(prev => [entry, ...prev].slice(0, 100)); // Keep last 100
     
-    if (currentSettings.toastsEnabled && channel === 'operation' && options?.toast !== false) {
+    const canShowToast =
+      currentSettings.toastsEnabled &&
+      channel === 'operation' &&
+      options?.toast !== false &&
+      currentSettings.levels[level] &&
+      currentSettings.sources[source] &&
+      !currentSettings.mutedActions[action];
+
+    if (canShowToast) {
       const toastOptions = {
         description: message,
       };
@@ -275,29 +282,34 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   return (
     <LoggerContext.Provider value={{ logs, settings, updateLoggerSettings, resetLoggerSettings, clearLogs, logInfo, logSuccess, logWarning, logError }}>
-      <Toaster 
-        position="bottom-right" 
-        closeButton
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: '#171717',
-            color: '#ffffff',
-            border: '1px solid #262626',
-            borderRadius: '0.5rem',
-          },
-          classNames: {
-            closeButton: '!bg-transparent !border-none !text-white/70 hover:!text-yellow-300 !static !translate-x-0 !translate-y-0 transition-colors',
-            description: '!text-white/60',
-            title: '!text-yellow-300 !font-semibold',
-            icon: '!text-yellow-300',
-          }
-        }} 
-      />
       {children}
     </LoggerContext.Provider>
   );
 };
+
+export function AppToaster() {
+  return (
+    <Toaster
+      position="bottom-right"
+      closeButton
+      theme="dark"
+      toastOptions={{
+        style: {
+          background: '#171717',
+          color: '#ffffff',
+          border: '1px solid #262626',
+          borderRadius: '0.5rem',
+        },
+        classNames: {
+          closeButton: '!bg-transparent !border-none !text-white/70 hover:!text-yellow-300 !static !translate-x-0 !translate-y-0 transition-colors',
+          description: '!text-white/60',
+          title: '!text-yellow-300 !font-semibold',
+          icon: '!text-yellow-300',
+        }
+      }}
+    />
+  );
+}
 
 export const useAppLogger = () => {
   const context = useContext(LoggerContext);

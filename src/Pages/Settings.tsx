@@ -98,7 +98,7 @@ export default function Settings() {
         setSettings(nextSettings);
         logger.updateLoggerSettings({
           toastsEnabled: nextSettings.notifications,
-          channels: { ...logger.settings.channels, operation: nextSettings.notifications },
+          channels: { ...logger.settings.channels, operation: true },
         });
       } catch (e) {
         console.error(e);
@@ -157,7 +157,7 @@ export default function Settings() {
     if (key === "notifications" && typeof value === "boolean") {
       logger.updateLoggerSettings({
         toastsEnabled: value,
-        channels: { ...logger.settings.channels, operation: value },
+        channels: { ...logger.settings.channels, operation: true },
       });
       logSuccess("Settings", value ? "Operation notifications enabled" : "Operation notifications disabled", { source: "settings" });
       return;
@@ -297,9 +297,9 @@ export default function Settings() {
                 <h2 className="dd-page-title mt-2">{TABS.find((tab) => tab.id === activeTab)?.label}</h2>
                 <p className="dd-body-lg max-w-2xl mt-2">Tune the desktop shell, privacy posture, and AI defaults from one place.</p>
               </div>
-              <div className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-lg border border-neutral-800 bg-neutral-950/45 px-3 text-xs font-bold text-white/70 lg:self-auto">
+              <div className="inline-flex shrink-0 items-center gap-2 self-start text-xs font-semibold text-white/55 lg:self-auto" aria-live="polite">
                 {saved ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Save className="h-3.5 w-3.5 text-yellow-400" />}
-                <span>{saved ? "Saved" : "Auto-save on"}</span>
+                <span>{saved ? "Saved" : "Changes save automatically"}</span>
               </div>
             </div>
           </section>
@@ -478,29 +478,52 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
     setAiSettings((current) => current ? { ...current, [provider]: { ...current[provider], ...patch } } : current);
   };
 
+  const saveSettings = async (settings: AiSettings, successMessage: string) => {
+    const settingsForRelease = {
+      ...settings,
+      default_provider: "ollama",
+      ollama: {
+        ...settings.ollama,
+        ollama_mode: "cloud" as const,
+        model: settings.ollama.model?.includes("gpt-oss") ? settings.ollama.model : "gpt-oss:120b",
+      },
+    };
+    const configuredProviders = getConfiguredTextProviders(settingsForRelease);
+    const currentDefault = settings.default_provider as TextAiProvider | undefined;
+    const settingsToSave = configuredProviders.length > 0 && (!currentDefault || !configuredProviders.includes(currentDefault))
+      ? { ...settingsForRelease, default_provider: configuredProviders[0] }
+      : settingsForRelease;
+    await saveAiSettings(settingsToSave);
+    setAiSettings(settingsToSave);
+    onSaved();
+    logSuccess("AI settings saved", successMessage, { source: "settings" });
+  };
+
   const handleSave = async () => {
     if (!aiSettings) return;
     setSaving(true);
     setError("");
     try {
-      const settingsForRelease = {
+      await saveSettings(aiSettings, "Provider keys and model defaults were saved to system settings.");
+    } catch (err) {
+      setError(String(err));
+      logError("AI settings save failed", String(err), { source: "settings" });
+    }
+    setSaving(false);
+  };
+
+  const handleDeleteApiKey = async (provider: AiProvider) => {
+    if (!aiSettings || !hasApiKey(aiSettings[provider].api_key)) return;
+    setSaving(true);
+    setError("");
+    try {
+      const nextSettings = {
         ...aiSettings,
-        default_provider: "ollama",
-        ollama: {
-          ...aiSettings.ollama,
-          ollama_mode: "cloud",
-          model: aiSettings.ollama.model?.includes("gpt-oss") ? aiSettings.ollama.model : "gpt-oss:120b",
-        },
+        [provider]: { ...aiSettings[provider], api_key: "" },
       };
-      const configuredProviders = getConfiguredTextProviders(settingsForRelease);
-      const currentDefault = aiSettings.default_provider as TextAiProvider | undefined;
-      const settingsToSave = configuredProviders.length > 0 && (!currentDefault || !configuredProviders.includes(currentDefault))
-        ? { ...settingsForRelease, default_provider: configuredProviders[0] }
-        : settingsForRelease;
-      await saveAiSettings(settingsToSave);
-      setAiSettings(settingsToSave);
-      onSaved();
-      logSuccess("AI settings saved", "Provider keys and model defaults were saved to system settings.", { source: "settings" });
+      await saveSettings(nextSettings, `${AI_PROVIDER_HELP[provider].title} API key was deleted.`);
+      setVerifyStatus((current) => ({ ...current, [provider]: undefined }));
+      setVisibleKeys((current) => ({ ...current, [provider]: false }));
     } catch (err) {
       setError(String(err));
       logError("AI settings save failed", String(err), { source: "settings" });
@@ -692,6 +715,15 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
                           >
                             {visibleKeys[provider] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
+                          <button
+                            type="button"
+                            title="Delete API key"
+                            onClick={() => void handleDeleteApiKey(provider)}
+                            disabled={saving || !hasApiKey(aiSettings[provider].api_key)}
+                            className="dd-icon-btn h-11 w-11 border border-red-500/25 bg-red-500/5 text-red-300 hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:bg-neutral-950 disabled:text-white/25"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </label>
                     )}
@@ -813,6 +845,15 @@ function AiSettingsPanel({ onSaved }: { onSaved: () => void }) {
                       className="dd-icon-btn h-11 w-11 border border-neutral-800 bg-neutral-950"
                     >
                       {visibleKeys.seedream ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete API key"
+                      onClick={() => void handleDeleteApiKey("seedream")}
+                      disabled={saving || !hasApiKey(aiSettings.seedream.api_key)}
+                      className="dd-icon-btn h-11 w-11 border border-red-500/25 bg-red-500/5 text-red-300 hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:bg-neutral-950 disabled:text-white/25"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </label>
@@ -1069,8 +1110,8 @@ function LoggerSettingsPanel({ onSaved }: { onSaved: () => void }) {
           icon={<Bell />}
           title="Operation Toasts"
           text="Show toast feedback when DawnDesk performs app operations such as save, import, export, apply effects, or errors."
-          checked={settings.enabled && settings.toastsEnabled && settings.channels.operation}
-          onChange={(value) => update({ enabled: value, toastsEnabled: value, channels: { ...settings.channels, operation: value } })}
+          checked={settings.enabled && settings.toastsEnabled}
+          onChange={(value) => update({ enabled: true, toastsEnabled: value, channels: { ...settings.channels, operation: true } })}
         />
         <SettingToggle
           icon={<Info />}
@@ -1195,15 +1236,15 @@ function SettingInlineToggle({ label, checked, onChange }: { label: string; chec
 function SettingToggle({ icon, title, text, checked, onChange }: { icon: ReactNode; title: string; text: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
     <div className="dd-card">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex gap-4">
-          <span className="dd-icon-box">{icon}</span>
-          <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="dd-icon-box shrink-0">{icon}</span>
+          <div className="min-w-0">
             <h3 className="dd-card-title">{title}</h3>
             <p className="mt-1 dd-subtext">{text}</p>
           </div>
         </div>
-        <label className="relative inline-flex cursor-pointer items-center">
+        <label className="relative inline-flex shrink-0 cursor-pointer items-center">
           <input type="checkbox" className="peer sr-only" checked={checked} onChange={(event) => onChange(event.target.checked)} />
           <div className="h-6 w-11 rounded-full bg-neutral-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-neutral-500 after:bg-white after:transition-all after:content-[''] peer-checked:bg-yellow-400 peer-checked:after:translate-x-full peer-checked:after:border-white" />
         </label>

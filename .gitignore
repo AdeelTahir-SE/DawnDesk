@@ -28,3 +28,6 @@ vite.config.d.ts
 *.sln
 *.sw?
 .env
+
+# Website content
+dawndesk-website-content/

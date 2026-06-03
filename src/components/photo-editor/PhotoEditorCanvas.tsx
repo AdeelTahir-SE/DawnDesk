@@ -325,16 +325,40 @@ export default function PhotoEditorCanvas() {
 
       if (e.button !== 0) return;
 
-      if (state.activeTool === 'move' && editImageData && activeLayerBounds) {
-        if (pointInBounds(coords, activeLayerBounds)) {
+      if (state.activeTool === 'move') {
+        // Auto-select: pick topmost visible layer under cursor
+        if (state.autoSelect && activeDocument) {
+          for (let i = 0; i < state.layers.length; i++) {
+            const layer = state.layers[i];
+            if (!layer.visible || !layer.imageData) continue;
+            const px = Math.floor(coords.x);
+            const py = Math.floor(coords.y);
+            if (px < 0 || py < 0 || px >= layer.imageData.width || py >= layer.imageData.height) continue;
+            const idx = (py * layer.imageData.width + px) * 4;
+            if (layer.imageData.data[idx + 3] > 0) {
+              if (layer.id !== state.activeLayerId) {
+                dispatch({ type: 'SET_ACTIVE_LAYER', payload: layer.id });
+              }
+              break;
+            }
+          }
+        }
+
+        const currentEditLayer = state.autoSelect
+          ? state.layers.find((l) => !l.locked && l.visible && l.imageData)
+          : editableLayer;
+        const currentEditImageData = currentEditLayer?.imageData ?? editImageData;
+        const currentBounds = currentEditImageData ? getLayerBounds(currentEditImageData) : activeLayerBounds;
+
+        if (currentEditImageData && currentBounds && pointInBounds(coords, currentBounds)) {
           transformDrag.current = {
             mode: 'move',
             start: coords,
-            originalBounds: activeLayerBounds,
-            currentBounds: activeLayerBounds,
-            imageData: cloneImageData(editImageData),
+            originalBounds: currentBounds,
+            currentBounds: currentBounds,
+            imageData: cloneImageData(currentEditImageData),
           };
-          setPreviewLayerBounds(activeLayerBounds);
+          setPreviewLayerBounds(currentBounds);
         }
         return;
       }
@@ -813,7 +837,7 @@ export default function PhotoEditorCanvas() {
               }}
             />
 
-            {state.activeTool === 'move' && activeLayerBounds && editableLayer && (
+            {state.activeTool === 'move' && state.showTransformControls && activeLayerBounds && editableLayer && (
               <div
                 className="pe-layer-transform"
                 style={{

@@ -194,10 +194,6 @@ export default function SettingsView() {
                 <Download className="w-5 h-5 text-brand-text-secondary" />
                 <span className="text-sm font-medium text-brand-text">Export to CSV</span>
               </button>
-              <button className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-brand-error/30 bg-brand-error/5 hover:bg-brand-error/10 transition-colors group shadow-sm">
-                <Shield className="w-5 h-5 text-brand-error/70 group-hover:text-brand-error" />
-                <span className="text-sm font-medium text-brand-error">Reset All Data</span>
-              </button>
             </div>
             {exportStatus && <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">{exportStatus}</div>}
 

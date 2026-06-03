@@ -341,6 +341,14 @@ export default function VideoEditorOnboarding({ children }: { children: React.Re
       {/* Left Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#111113] via-[#111113]/90 to-transparent w-[75%]" />
       <div className="absolute inset-0 bg-black/30" />
+
+      {/* Top Right Skip Button */}
+      <button
+        onClick={handleComplete}
+        className="absolute top-8 right-8 px-5 py-2 rounded-lg bg-black/30 hover:bg-black/50 backdrop-blur-md text-white/90 text-sm font-medium transition-all border border-white/10 z-50 hover:text-white"
+      >
+        Skip
+      </button>
       
       {/* Content Container */}
       <div className="relative z-10 flex flex-col h-full w-full px-8 sm:px-16 pt-8 pb-8 justify-between">

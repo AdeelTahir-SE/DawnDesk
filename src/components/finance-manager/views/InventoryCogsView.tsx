@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { invoke } from "../../../lib/financeSupabaseInvoke";
-import { Plus, Package, Search, BarChart, Loader2, X, RefreshCw } from "lucide-react";
+import { Plus, Package, Search, BarChart, Loader2, X } from "lucide-react";
 
 export type InventoryItem = {
   id: number;
@@ -53,7 +53,7 @@ export default function InventoryCOGSView() {
               Inventory & COGS
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-white/60">
-              Track stock levels, calculate Cost of Goods Sold, and manage multiple warehouses.
+              Track stock levels and calculate simple cost and margin metrics.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -75,7 +75,6 @@ export default function InventoryCOGSView() {
         <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-neutral-800">
           <button onClick={() => setActiveTab("items")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "items" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Inventory List</button>
           <button onClick={() => setActiveTab("cogs")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "cogs" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>COGS Analysis</button>
-          <button onClick={() => setActiveTab("valuation")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "valuation" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Valuation (FIFO/LIFO)</button>
         </div>
 
         <div className="mt-6">
@@ -85,7 +84,6 @@ export default function InventoryCOGSView() {
             <>
               {activeTab === "items" && <InventoryTable items={filteredItems} />}
               {activeTab === "cogs" && <COGSView items={filteredItems} />}
-              {activeTab === "valuation" && <ValuationView items={filteredItems} />}
             </>
           )}
         </div>
@@ -189,34 +187,6 @@ function COGSView({ items }: { items: InventoryItem[] }) {
             })}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-function ValuationView({ items }: { items: InventoryItem[] }) {
-  const [method, setMethod] = useState("FIFO");
-  const totalValue = items.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0);
-  return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6 text-center">
-      <RefreshCw className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Inventory Valuation</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Current valuation is calculated from on-hand quantity and unit cost. FIFO/LIFO layers are not created until purchase lots are recorded.</p>
-      <div className="mt-6 flex justify-center gap-2">
-        {["FIFO", "LIFO", "Weighted Average"].map((option) => (
-          <button
-            key={option}
-            onClick={() => setMethod(option)}
-            className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${method === option ? "bg-yellow-400 text-black" : "bg-neutral-800 text-white hover:bg-neutral-700"}`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-      <div className="mx-auto mt-6 max-w-sm rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{method} Book Value</p>
-        <p className="mt-2 text-3xl font-black text-white">${totalValue.toFixed(2)}</p>
-        <p className="mt-1 text-xs text-white/40">{items.length} inventory items included</p>
       </div>
     </div>
   );

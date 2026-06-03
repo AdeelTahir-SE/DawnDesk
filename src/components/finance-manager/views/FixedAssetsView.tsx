@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "../../../lib/financeSupabaseInvoke";
-import { Plus, MonitorSmartphone, Calculator, Search, Loader2, X, AlertTriangle } from "lucide-react";
+import { Plus, MonitorSmartphone, Calculator, Search, Loader2, X } from "lucide-react";
 
 export type FixedAsset = {
   id: number;
@@ -65,7 +65,6 @@ export default function FixedAssetsView() {
         <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-neutral-800">
           <button onClick={() => setActiveTab("assets")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "assets" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Asset Register</button>
           <button onClick={() => setActiveTab("depreciation")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "depreciation" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Depreciation Schedules</button>
-          <button onClick={() => setActiveTab("disposals")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "disposals" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Disposals</button>
         </div>
 
         <div className="mt-6">
@@ -75,7 +74,6 @@ export default function FixedAssetsView() {
             <>
               {activeTab === "assets" && <AssetsTable assets={assets} />}
               {activeTab === "depreciation" && <DepreciationView assets={assets} />}
-              {activeTab === "disposals" && <DisposalsView assets={assets} />}
             </>
           )}
         </div>
@@ -168,31 +166,6 @@ function DepreciationView({ assets }: { assets: FixedAsset[] }) {
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function DisposalsView({ assets }: { assets: FixedAsset[] }) {
-  const inactiveAssets = assets.filter((asset) => asset.status.toLowerCase() !== "active");
-
-  return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50 px-6">
-      <AlertTriangle className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">Asset Disposals & Write-offs</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Disposals are based on assets whose status is no longer Active.</p>
-      <div className="mx-auto mt-6 grid max-w-md grid-cols-2 gap-3">
-        <AssetMetric label="Inactive Assets" value={inactiveAssets.length.toString()} />
-        <AssetMetric label="Current Assets" value={(assets.length - inactiveAssets.length).toString()} />
-      </div>
-    </div>
-  );
-}
-
-function AssetMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
-      <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }

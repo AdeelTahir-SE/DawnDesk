@@ -7,7 +7,6 @@ import {
   Code2,
   FolderKanban,
   LayoutTemplate,
-  Plus,
   Sparkles,
   Trash2,
   Users,
@@ -25,7 +24,6 @@ interface NoteTemplateItem {
 interface Props {
   templates: NoteTemplateItem[];
   onApplyTemplate: (content: string) => void;
-  onCreateTemplate: () => void;
   onDeleteTemplate: (templateId: number) => void;
 }
 
@@ -116,7 +114,6 @@ function getCategoryColor(category: string): string {
 export default function TemplatesView({
   templates,
   onApplyTemplate,
-  onCreateTemplate,
   onDeleteTemplate,
 }: Props) {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -160,13 +157,6 @@ export default function TemplatesView({
             Start with a structure. Customize to fit your needs.
           </p>
         </div>
-        <button
-          onClick={onCreateTemplate}
-          className="flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-neutral-950 hover:bg-yellow-300 transition-transform active:scale-95 shadow-[0_0_20px_rgba(247,201,72,0.25)]"
-        >
-          <Plus className="h-5 w-5" />
-          Create Template
-        </button>
       </div>
 
       {/* Category Tabs */}
@@ -195,7 +185,7 @@ export default function TemplatesView({
           <LayoutTemplate className="mb-4 h-12 w-12 text-white/20" />
           <h3 className="text-lg font-bold text-white">No templates found</h3>
           <p className="mt-2 text-sm text-white/40">
-            Create a custom template to get started.
+            No templates match this category.
           </p>
         </div>
       ) : (

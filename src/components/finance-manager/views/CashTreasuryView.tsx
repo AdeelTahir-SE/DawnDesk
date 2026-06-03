@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "../../../lib/financeSupabaseInvoke";
-import { Landmark, RefreshCw, MoreHorizontal, Link, ArrowRightLeft, Plus, Loader2, X, Activity } from "lucide-react";
+import { Landmark, RefreshCw, MoreHorizontal, ArrowRightLeft, Plus, Loader2, X, Activity } from "lucide-react";
 
 export type AccountItem = {
   id: number;
@@ -40,7 +40,6 @@ export default function CashTreasuryView() {
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [bankStatus, setBankStatus] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -80,19 +79,11 @@ export default function CashTreasuryView() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setBankStatus("No live bank connector is configured yet. Add bank accounts manually, then use transactions to keep balances current.")} className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800/80">
-              <Link className="h-4 w-4" /> Connect Bank
-            </button>
             <button onClick={() => setShowModal(true)} className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-bold text-black transition-colors hover:bg-yellow-300">
               <Plus className="h-4 w-4" /> Add Account
             </button>
           </div>
         </div>
-        {bankStatus && (
-          <div className="mt-4 rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">
-            {bankStatus}
-          </div>
-        )}
 
         <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-neutral-800">
           <button onClick={() => setActiveTab("accounts")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "accounts" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Bank Accounts</button>

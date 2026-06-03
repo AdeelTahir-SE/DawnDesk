@@ -566,7 +566,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
                   <Users className="w-4 h-4" /> Project Members
                 </h3>
                 <p className="text-xs text-white/40 mt-1">
-                  Projects can include multiple users with Owner, Editor, or Viewer access.
+                  Projects can include multiple users with Owner or Editor access.
                 </p>
               </div>
               {!project.supabase_project_id && (
@@ -600,8 +600,7 @@ function ProjectSettingsInner({ project, onProjectDeleted, onProjectUpdated }: P
                     onChange={(event) => setInviteRole(event.target.value as ProjectMember["role"])}
                     className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-yellow-400/60"
                   >
-                    <option value="Editor">Editor</option>
-                    <option value="Viewer">Viewer</option>
+                    <option value="Editor">Full access</option>
                   </select>
                   <button type="submit" disabled={inviting} className="dd-btn-primary">
                     {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

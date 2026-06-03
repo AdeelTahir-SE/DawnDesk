@@ -345,6 +345,13 @@
     @apply flex justify-end gap-3 border-t border-neutral-800 pt-5;
   }
 
+  :fullscreen .dd-modal-overlay,
+  :fullscreen .pe-modal-backdrop,
+  :-webkit-full-screen .dd-modal-overlay,
+  :-webkit-full-screen .pe-modal-backdrop {
+    z-index: 2147483647;
+  }
+
   /* ─── Dividers ───────────────────────────────────────────────────────── */
 
   .dd-divider {

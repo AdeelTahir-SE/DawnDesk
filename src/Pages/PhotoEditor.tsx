@@ -5,7 +5,7 @@ import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext'
 import { openImageFromDisk, calculateFitZoom, loadImageFile } from '../engine/photo-editor/importImage';
 import { exportBatchToFiles, exportImageToFile, copyImageToClipboard } from '../engine/photo-editor/exportImage';
 import { applyAllAdjustments } from '../engine/photo-editor/filters';
-import { saveProject, updateProject, loadProject, exportProjectAsFile, type LoadedProject } from '../engine/photo-editor/projectFile';
+import { saveProject, updateProject, loadProject, exportProjectAsFile, getProjectRegistry, deleteProject, type LoadedProject, type ProjectEntry } from '../engine/photo-editor/projectFile';
 import PhotoEditorMenuBar from '../components/photo-editor/PhotoEditorMenuBar';
 import PhotoEditorToolbar from '../components/photo-editor/PhotoEditorToolbar';
 import PhotoEditorOptionsBar from '../components/photo-editor/PhotoEditorOptionsBar';
@@ -16,7 +16,7 @@ import StatusBar from '../components/photo-editor/StatusBar';
 import FilmStrip from '../components/photo-editor/FilmStrip';
 import '../components/photo-editor/photo-editor.css';
 import PhotoEditorOnboarding from '../components/photo-editor/PhotoEditorOnboarding';
-import { X } from 'lucide-react';
+import { X, Trash2, FolderOpen } from 'lucide-react';
 
 // ─── Helper: create blank ImageData ──────────────────────────────────────────
 function makeBlankDocument(name: string, width: number, height: number, dpi: number, bg: 'white' | 'black' | 'transparent') {
@@ -53,15 +53,12 @@ function makeBlankDocument(name: string, width: number, height: number, dpi: num
 
 function PhotoEditorInner() {
   const { state, dispatch, activeDocument } = useEditor();
-  const { logInfo: logInfoBase, logSuccess: logSuccessBase, logError: logErrorBase } = useAppLogger();
-  const logInfo = useCallback((action: string, message: string) => {
-    logInfoBase(action, message, { source: 'photo-editor', toast: false });
-  }, [logInfoBase]);
-  const logSuccess = useCallback((action: string, message: string) => {
-    logSuccessBase(action, message, { source: 'photo-editor', toast: false });
+  const { logSuccess: logSuccessBase, logError: logErrorBase } = useAppLogger();
+  const logSuccess = useCallback((action: string, message: string, options?: Parameters<typeof logSuccessBase>[2]) => {
+    logSuccessBase(action, message, { source: 'photo-editor', ...options });
   }, [logSuccessBase]);
-  const logError = useCallback((action: string, message: string) => {
-    logErrorBase(action, message, { source: 'photo-editor', toast: false });
+  const logError = useCallback((action: string, message: string, options?: Parameters<typeof logErrorBase>[2]) => {
+    logErrorBase(action, message, { source: 'photo-editor', ...options });
   }, [logErrorBase]);
   const navigate = useNavigate();
   const location = useLocation();
@@ -75,6 +72,8 @@ function PhotoEditorInner() {
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(null);
   const [resizeValues, setResizeValues] = useState({ width: 0, height: 0, lockRatio: true });
   const [panelWidths, setPanelWidths] = useState({ left: 140, right: 300 });
+  const [showProjectsDialog, setShowProjectsDialog] = useState(false);
+  const [projectsList, setProjectsList] = useState<ProjectEntry[]>([]);
   const [exportPresets, setExportPresets] = useState<Array<{ name: string; format: 'png' | 'jpeg' | 'webp' | 'svg'; quality: number; scale: number }>>(() => {
     try {
       return JSON.parse(localStorage.getItem('dawndesk.photoEditor.exportPresets') ?? '[]');
@@ -555,7 +554,10 @@ function PhotoEditorInner() {
         onSaveProject={handleSaveProject}
         onSaveProjectAs={handleSaveProjectAs}
         onExportProjectFile={handleExportProjectFile}
-        onOpenProjects={() => navigate('/project-manager')}
+        onOpenProjects={() => {
+          setProjectsList(getProjectRegistry());
+          setShowProjectsDialog(true);
+        }}
         onOpenAiPanel={() => dispatch({ type: 'SET_RIGHT_TAB', payload: 'ai' })}
         currentProjectName={currentProjectName}
       />
@@ -596,6 +598,7 @@ function PhotoEditorInner() {
 
       {/* Bottom filmstrip */}
       <FilmStrip onOpenImage={handleOpenImage} />
+
 
       {showExportDialog && activeDocument && (
         <div className="pe-modal-backdrop" onMouseDown={() => setShowExportDialog(false)}>
@@ -787,6 +790,107 @@ function PhotoEditorInner() {
               >
                 Save
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Projects Dialog */}
+      {showProjectsDialog && (
+        <div className="pe-modal-backdrop" onMouseDown={() => setShowProjectsDialog(false)}>
+          <div className="pe-modal" onMouseDown={(e) => e.stopPropagation()} style={{ minWidth: 480, maxWidth: 600 }}>
+            <div className="pe-modal__header">
+              <strong>Photo Editor Projects</strong>
+              <button className="pe-modal__close" onClick={() => setShowProjectsDialog(false)}><X className="w-4 h-4" strokeWidth={2} /></button>
+            </div>
+            <div style={{ maxHeight: 400, overflowY: 'auto', padding: '8px 0' }}>
+              {projectsList.length === 0 ? (
+                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--pe-text-muted)', fontSize: 13 }}>
+                  No saved projects yet. Use File → Save Project to create one.
+                </div>
+              ) : (
+                projectsList.map((project) => (
+                  <div
+                    key={project.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--pe-border-subtle)',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--pe-bg-hover)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+                    onClick={async () => {
+                      try {
+                        const loaded = await loadProject(project.id);
+                        dispatch({ type: 'OPEN_DOCUMENT', payload: loaded.document });
+                        dispatch({ type: 'RESTORE_PROJECT_LAYERS', payload: { layers: loaded.layers, activeLayerId: loaded.activeLayerId } });
+                        if (loaded.foregroundColor) dispatch({ type: 'SET_FOREGROUND_COLOR', payload: loaded.foregroundColor });
+                        if (loaded.backgroundColor) dispatch({ type: 'SET_BACKGROUND_COLOR', payload: loaded.backgroundColor });
+                        setCurrentProjectId(project.id);
+                        setCurrentProjectName(project.name);
+                        setSaveProjectName(project.name);
+                        setShowProjectsDialog(false);
+                        logSuccess('Photo project opened', project.name);
+                      } catch (err) {
+                        console.error('Failed to load project:', err);
+                        logError('Photo project open failed', String(err));
+                      }
+                    }}
+                  >
+                    {/* Thumbnail */}
+                    <div style={{
+                      width: 56,
+                      height: 42,
+                      borderRadius: 6,
+                      border: '1px solid var(--pe-border)',
+                      background: 'var(--pe-bg-input)',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      {project.thumbnail ? (
+                        <img src={project.thumbnail} alt={project.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <FolderOpen size={18} style={{ color: 'var(--pe-text-muted)' }} />
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--pe-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {project.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--pe-text-muted)', marginTop: 2 }}>
+                        {project.width} × {project.height} px · {new Date(project.updatedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    {/* Delete button */}
+                    <button
+                      className="pe-modal__close"
+                      title="Delete project"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Delete project "${project.name}"?`)) {
+                          deleteProject(project.id);
+                          setProjectsList((prev) => prev.filter((p) => p.id !== project.id));
+                          if (currentProjectId === project.id) {
+                            setCurrentProjectId(null);
+                            setCurrentProjectName(null);
+                          }
+                        }
+                      }}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <Trash2 className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

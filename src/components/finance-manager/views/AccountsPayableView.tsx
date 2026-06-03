@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "../../../lib/financeSupabaseInvoke";
-import { Plus, Search, ArrowUpRight, Receipt, CheckCircle2, Clock, FileCheck, ShieldAlert, UploadCloud, Loader2, X } from "lucide-react";
+import { Plus, Search, ArrowUpRight, Receipt, CheckCircle2, Clock, FileCheck, ShieldAlert, Loader2, X } from "lucide-react";
 
 export type VendorBill = {
   id: number;
@@ -45,7 +45,7 @@ export default function AccountsPayableView() {
               Accounts Payable
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-white/60">
-              Manage vendor bills, scheduled payment runs, 3-way matching, and electronic payments.
+              Manage vendor bills, scheduled payment runs, 3-way matching, and AP aging.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -68,7 +68,6 @@ export default function AccountsPayableView() {
           <button onClick={() => setActiveTab("runs")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "runs" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Payment Runs</button>
           <button onClick={() => setActiveTab("matching")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "matching" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>3-Way Matching</button>
           <button onClick={() => setActiveTab("aging")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "aging" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>AP Aging</button>
-          <button onClick={() => setActiveTab("electronic")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "electronic" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Electronic Payments</button>
         </div>
 
         <div className="mt-6">
@@ -80,7 +79,6 @@ export default function AccountsPayableView() {
               {activeTab === "runs" && <PaymentRunsTable bills={bills} />}
               {activeTab === "matching" && <ThreeWayMatching bills={bills} />}
               {activeTab === "aging" && <APAging bills={bills} />}
-              {activeTab === "electronic" && <ElectronicPayments bills={bills} />}
             </>
           )}
         </div>
@@ -236,29 +234,6 @@ function APAging({ bills }: { bills: VendorBill[] }) {
             <p className="mt-1 text-xs text-white/40">{bucket.count} bills</p>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function ElectronicPayments({ bills }: { bills: VendorBill[] }) {
-  const payable = bills.filter((bill) => bill.status.toLowerCase() !== "paid");
-  const total = payable.reduce((sum, bill) => sum + bill.total_amount, 0);
-
-  return (
-    <div className="text-center py-16 rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <UploadCloud className="h-10 w-10 text-white/20 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white">ACH / Wire Transfers</h3>
-      <p className="text-sm text-white/50 max-w-md mx-auto mt-2">Electronic payment setup needs a connected bank account. Current payable batch is shown from open vendor bills.</p>
-      <div className="mx-auto mt-6 grid max-w-md grid-cols-2 gap-3">
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Bills Ready</p>
-          <p className="mt-2 text-2xl font-black text-white">{payable.length}</p>
-        </div>
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Batch Total</p>
-          <p className="mt-2 text-2xl font-black text-white">${total.toFixed(2)}</p>
-        </div>
       </div>
     </div>
   );

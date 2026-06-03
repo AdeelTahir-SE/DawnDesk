@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { 
-  Image as ImageIcon, Wand2, Layers, GraduationCap, ArrowRight,
+  Image as ImageIcon, Wand2, Layers, ArrowRight,
   Sparkles, SlidersHorizontal, Palette, Settings2, Eye,
   FolderKanban, PlaySquare, Lightbulb, 
   Check, Play, ChevronRight 
@@ -314,7 +314,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
               <div className="flex flex-col items-start gap-4 mt-2">
                 <button onClick={nextStep} className="flex items-center justify-between w-[340px] bg-[#facc15] hover:bg-[#fbbf24] text-black font-semibold py-4 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yellow-500/20 group">
                   <div className="flex items-center gap-4">
-                    <GraduationCap className="w-6 h-6 opacity-80" strokeWidth={2.5} />
+                    <ImageIcon className="w-6 h-6 opacity-80" strokeWidth={2.5} />
                     <span className="text-lg tracking-wide">Start Photo Editing</span>
                   </div>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

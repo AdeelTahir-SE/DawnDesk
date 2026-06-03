@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { invoke } from "../../../lib/financeSupabaseInvoke";
-import { Plus, ShoppingCart, Truck, ShieldCheck, Search, Loader2, X, ClipboardCheck } from "lucide-react";
+import { Plus, ShoppingCart, Truck, Search, Loader2, X, ClipboardCheck } from "lucide-react";
 
 export type PurchaseOrder = {
   id: number;
@@ -66,7 +66,7 @@ export default function ProcurementView() {
               Procurement & Purchasing
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-white/60">
-              Manage purchase orders, vendor approvals, and automated 3-way matching.
+              Manage purchase orders and compare vendor bills against matching POs.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -87,7 +87,6 @@ export default function ProcurementView() {
 
         <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-neutral-800">
           <button onClick={() => setActiveTab("pos")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "pos" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Purchase Orders</button>
-          <button onClick={() => setActiveTab("approvals")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "approvals" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Approval Workflows</button>
           <button onClick={() => setActiveTab("matching")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "matching" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>3-Way Matching</button>
         </div>
 
@@ -97,7 +96,6 @@ export default function ProcurementView() {
           ) : (
             <>
               {activeTab === "pos" && <PurchaseOrdersTable pos={filteredPos} />}
-              {activeTab === "approvals" && <ApprovalsView pos={filteredPos} />}
               {activeTab === "matching" && <ThreeWayMatchingView pos={filteredPos} bills={bills} />}
             </>
           )}
@@ -148,47 +146,6 @@ function PurchaseOrdersTable({ pos }: { pos: PurchaseOrder[] }) {
   );
 }
 
-function ApprovalsView({ pos }: { pos: PurchaseOrder[] }) {
-  const pending = pos.filter((po) => !["approved", "paid", "closed"].includes(po.status.toLowerCase()));
-  const total = pending.reduce((sum, po) => sum + po.total_amount, 0);
-
-  return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-6">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-5 w-5 text-yellow-400" />
-        <h3 className="text-lg font-bold text-white">Pending Approvals</h3>
-      </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        <ProcurementMetric label="Pending POs" value={pending.length.toString()} />
-        <ProcurementMetric label="Pending Amount" value={`$${total.toFixed(2)}`} />
-      </div>
-      <div className="mt-6 overflow-x-auto rounded-xl border border-neutral-800">
-        <table className="w-full text-left text-sm text-white/80">
-          <thead className="border-b border-neutral-800 bg-neutral-900/50 text-xs uppercase tracking-wider text-white/50">
-            <tr>
-              <th className="px-6 py-4 font-semibold">PO</th>
-              <th className="px-6 py-4 font-semibold">Vendor</th>
-              <th className="px-6 py-4 font-semibold text-right">Amount</th>
-              <th className="px-6 py-4 font-semibold">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-800">
-            {pending.length === 0 && <tr><td colSpan={4} className="px-6 py-8 text-center text-white/40">No purchase orders require approval.</td></tr>}
-            {pending.map((po) => (
-              <tr key={po.id}>
-                <td className="px-6 py-4 font-mono text-white">PO-{po.id.toString().padStart(5, "0")}</td>
-                <td className="px-6 py-4 font-bold text-white">{po.vendor_name}</td>
-                <td className="px-6 py-4 text-right font-mono">${po.total_amount.toFixed(2)}</td>
-                <td className="px-6 py-4 text-yellow-300">{po.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function ThreeWayMatchingView({ pos, bills }: { pos: PurchaseOrder[]; bills: VendorBill[] }) {
   const rows = bills.map((bill) => {
     const po = pos.find((candidate) => candidate.vendor_name.toLowerCase() === bill.vendor_name.toLowerCase());
@@ -229,15 +186,6 @@ function ThreeWayMatchingView({ pos, bills }: { pos: PurchaseOrder[]; bills: Ven
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function ProcurementMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">{label}</p>
-      <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }

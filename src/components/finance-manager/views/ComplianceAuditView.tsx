@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "../../../lib/financeSupabaseInvoke";
-import { Download, FileJson, Plus, ShieldAlert, Key, UserCheck, Loader2, X, Lock } from "lucide-react";
+import { Download, FileJson, Plus, ShieldAlert, UserCheck, Loader2, X, Lock } from "lucide-react";
 import { exportTextFile, toJsonExport } from "../../../utils/exportFile";
 
 export type AuditLog = {
@@ -36,7 +36,6 @@ type ComplianceEvidencePackage = {
 export default function ComplianceAuditView() {
   const [activeTab, setActiveTab] = useState("logs");
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [roles, setRoles] = useState<ComplianceRole[]>([]);
   const [evidence, setEvidence] = useState<ComplianceEvidencePackage | null>(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -46,13 +45,11 @@ export default function ComplianceAuditView() {
     setLoading(true);
     setError("");
     try {
-      const [auditLogs, complianceRoles, evidencePackage] = await Promise.all([
+      const [auditLogs, evidencePackage] = await Promise.all([
         invoke<AuditLog[]>("get_audit_logs"),
-        invoke<ComplianceRole[]>("get_compliance_roles"),
         invoke<ComplianceEvidencePackage>("get_compliance_evidence"),
       ]);
       setLogs(auditLogs);
-      setRoles(complianceRoles);
       setEvidence(evidencePackage);
     } catch (e) {
       console.error(e);
@@ -76,7 +73,7 @@ export default function ComplianceAuditView() {
               Compliance & Audit
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-white/60">
-              Immutable audit trails, role-based access control, and SOX compliance reporting.
+              Record audit events and export local compliance evidence.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -88,7 +85,6 @@ export default function ComplianceAuditView() {
 
         <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-neutral-800">
           <button onClick={() => setActiveTab("logs")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "logs" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Audit Logs</button>
-          <button onClick={() => setActiveTab("rbac")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "rbac" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>Roles & Permissions</button>
           <button onClick={() => setActiveTab("soc2")} className={`pb-3 text-sm font-bold transition-colors ${activeTab === "soc2" ? "border-b-2 border-yellow-400 text-yellow-400" : "border-b-2 border-transparent text-white/50 hover:text-white"}`}>SOC2 / SOX Evidence</button>
         </div>
 
@@ -100,7 +96,6 @@ export default function ComplianceAuditView() {
           ) : (
             <>
               {activeTab === "logs" && <AuditLogsTable logs={logs} />}
-              {activeTab === "rbac" && <RBACView roles={roles} />}
               {activeTab === "soc2" && <EvidenceView evidence={evidence} />}
             </>
           )}
@@ -110,15 +105,6 @@ export default function ComplianceAuditView() {
       {showModal && <CreateLogModal onClose={() => setShowModal(false)} onSaved={loadData} />}
     </div>
   );
-}
-
-function parsePermissions(role: ComplianceRole) {
-  try {
-    const permissions = JSON.parse(role.permissions_json);
-    return Array.isArray(permissions) ? permissions.map(String) : [];
-  } catch {
-    return [];
-  }
 }
 
 function AuditLogsTable({ logs }: { logs: AuditLog[] }) {
@@ -150,46 +136,6 @@ function AuditLogsTable({ logs }: { logs: AuditLog[] }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function RBACView({ roles }: { roles: ComplianceRole[] }) {
-  return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
-        <div>
-          <h3 className="flex items-center gap-2 text-lg font-bold text-white">
-            <Key className="h-5 w-5 text-yellow-400" />
-            Role-Based Access Control
-          </h3>
-          <p className="mt-1 text-sm text-white/50">System roles persisted in the local finance database.</p>
-        </div>
-        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1 text-xs font-bold text-white/60">
-          {roles.length} roles
-        </span>
-      </div>
-      <div className="divide-y divide-neutral-800">
-        {roles.length === 0 && <div className="px-6 py-8 text-center text-sm text-white/40">No compliance roles configured.</div>}
-        {roles.map((role) => (
-          <div key={role.id} className="grid gap-4 px-6 py-5 lg:grid-cols-[0.8fr_1.3fr]">
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="font-bold text-white">{role.name}</p>
-                {role.is_system && <span className="rounded-full bg-yellow-400/10 px-2 py-0.5 text-[11px] font-bold uppercase text-yellow-300">System</span>}
-              </div>
-              <p className="mt-1 text-sm text-white/50">{role.description}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {parsePermissions(role).map((permission) => (
-                <span key={permission} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs font-mono text-white/60">
-                  {permission}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

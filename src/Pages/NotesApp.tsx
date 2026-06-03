@@ -425,16 +425,6 @@ export default function NotesApp() {
     } catch {}
   };
 
-  const handleCreateTemplate = async () => {
-    if (!activeNote) return;
-    try {
-      await invoke("notes_create_template", {
-        input: { name: activeNote.title, category: "Custom", content: activeNote.content, icon: "" },
-      });
-      await fetchTemplates();
-    } catch {}
-  };
-
   const handleDeleteTemplate = async (id: number) => {
     try {
       await invoke("notes_delete_template", { id });
@@ -657,7 +647,6 @@ export default function NotesApp() {
           <TemplatesView
             templates={templates}
             onApplyTemplate={handleApplyTemplate}
-            onCreateTemplate={handleCreateTemplate}
             onDeleteTemplate={handleDeleteTemplate}
           />
         );

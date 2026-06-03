@@ -145,7 +145,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
       features: [
         { icon: <Lightbulb className="h-5 w-5 text-yellow-400" />, title: "Capture Ideas", desc: "Edit notes with rich blocks, code, tables, and checklists." },
         { icon: <Bookmark className="h-5 w-5 text-yellow-400" />, title: "Organize Everything", desc: "Notebooks, tags, and favorites keep notes findable." },
-        { icon: <Activity className="h-5 w-5 text-yellow-400" />, title: "Link Knowledge", desc: "Wiki-style linking, backlinks, and graph view." },
+        { icon: <LayoutList className="h-5 w-5 text-yellow-400" />, title: "Plan Tasks", desc: "Track note tasks and daily work without leaving your workspace." },
         { icon: <Database className="h-5 w-5 text-yellow-400" />, title: "Manage Locally", desc: "Notes are stored through DawnDesk's local notes workspace." },
       ],
       buttonText: "Open Notes",
