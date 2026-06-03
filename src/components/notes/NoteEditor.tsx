@@ -4,7 +4,7 @@ import {
   useEffect,
   useCallback,
 } from "react";
-import { StickyNote, Maximize2, Minimize2, AlignCenter, Bot, Image as ImageIcon, Link2, Loader2, X } from "lucide-react";
+import { StickyNote, Maximize2, Minimize2, AlignCenter, Bot, Image as ImageIcon, Link2, Loader2, Save, X } from "lucide-react";
 import EditorToolbar from "./EditorToolbar";
 import EditorStatusBar from "./EditorStatusBar";
 import { generateText } from "../../lib/aiTextGeneration";
@@ -205,6 +205,15 @@ export default function NoteEditor({
       } else if (ctrl && !e.shiftKey && e.key === "u") {
         e.preventDefault();
         document.execCommand("underline");
+      } else if (ctrl && !e.shiftKey && e.key === "s") {
+        e.preventDefault();
+        if (note) {
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          const content = editorRef.current?.innerHTML || "";
+          onSave({ title, content });
+          setLastSaved(new Date());
+          logSuccess("Note saved", "Note saved manually via shortcut.", { source: "notes" });
+        }
       } else if (ctrl && e.shiftKey && e.key === "S") {
         e.preventDefault();
         document.execCommand("strikethrough");
@@ -221,7 +230,7 @@ export default function NoteEditor({
         }
       }
     },
-    []
+    [note, onSave, title, logSuccess]
   );
 
   // Toolbar command handler
@@ -471,20 +480,39 @@ export default function NoteEditor({
             <EditorToolbar onCommand={handleCommand} editorRef={editorRef} />
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
-            {/* Typewriter mode */}
-            <button
-              type="button"
-              onClick={() => {
-                setAiError("");
-                setShowAiModal(true);
-              }}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-yellow-400/25 bg-yellow-400/10 px-2.5 text-xs font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20"
-              title="AI note tools"
-            >
-              <Bot className="h-4 w-4" />
-              AI
-            </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Save and AI Stack */}
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!note) return;
+                  if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+                  const content = editorRef.current?.innerHTML || "";
+                  onSave({ title, content });
+                  setLastSaved(new Date());
+                  logSuccess("Note saved", "Note saved manually.", { source: "notes" });
+                }}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 text-xs font-bold text-white transition-colors hover:bg-neutral-700"
+                title="Save note (Auto-saves automatically)"
+              >
+                <Save className="h-4 w-4" />
+                Save
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAiError("");
+                  setShowAiModal(true);
+                }}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-yellow-400/25 bg-yellow-400/10 px-2.5 text-xs font-bold text-yellow-300 transition-colors hover:bg-yellow-400/20"
+                title="AI note tools"
+              >
+                <Bot className="h-4 w-4" />
+                AI
+              </button>
+            </div>
 
             <button
               type="button"

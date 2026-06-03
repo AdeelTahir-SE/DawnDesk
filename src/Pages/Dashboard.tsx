@@ -15,7 +15,6 @@ import {
   StickyNote,
   Terminal,
   Video,
-  Workflow,
   Wrench,
 } from "lucide-react";
 import { readTextFile, BaseDirectory, exists } from "@tauri-apps/plugin-fs";
@@ -63,12 +62,6 @@ const quickTools = [
     text: "Edit images with layers, filters, effects, and export tools.",
     to: "/photo-editor",
     icon: ImageIcon,
-  },
-  {
-    title: "Workflow Builder",
-    text: "Connect typed nodes into local automations and reusable flows.",
-    to: "/workflow",
-    icon: Workflow,
   },
 ];
 

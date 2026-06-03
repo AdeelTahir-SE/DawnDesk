@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { get, set } from "idb-keyval";
 import { BarChart3, Bot, Check, ChevronRight, Clipboard, CloudUpload, Copy, Download, Edit, FileQuestion, Globe2, Hash, Heart, Home, Image, MessageSquareText, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, UserCircle, Variable, X } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
 import ConnectionErrorModal from "../components/ConnectionErrorModal";
@@ -289,22 +290,32 @@ export default function PromptManager() {
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    const stored = localStorage.getItem("dawndesk_prompts");
-    if (stored) {
+    async function loadPrompts() {
       try {
-        const storedPrompts = JSON.parse(stored);
-        const nextPrompts = Array.isArray(storedPrompts) ? removeSeededPrompts(storedPrompts) : [];
-        setPrompts(nextPrompts);
-        localStorage.setItem("dawndesk_prompts", JSON.stringify(nextPrompts));
+        let stored = await get("dawndesk_prompts");
+        
+        // Migration from localStorage if IDB is empty
+        if (!stored) {
+          const legacy = localStorage.getItem("dawndesk_prompts");
+          if (legacy) {
+            stored = JSON.parse(legacy);
+            await set("dawndesk_prompts", stored);
+          }
+        }
+
+        if (stored) {
+          const storedPrompts = Array.isArray(stored) ? stored : [];
+          const nextPrompts = removeSeededPrompts(storedPrompts);
+          setPrompts(nextPrompts);
+        } else {
+          setPrompts([]);
+        }
       } catch (e) {
         console.error("Failed to parse stored prompts, starting with an empty prompt library", e);
         setPrompts([]);
-        localStorage.setItem("dawndesk_prompts", JSON.stringify([]));
       }
-    } else {
-      setPrompts([]);
-      localStorage.setItem("dawndesk_prompts", JSON.stringify([]));
     }
+    void loadPrompts();
   }, []);
 
   const mergeHubPrompts = (current: PromptHubPrompt[], incoming: PromptHubPrompt[]) => {
@@ -391,7 +402,9 @@ export default function PromptManager() {
 
   const savePrompts = (nextPrompts: Prompt[]) => {
     setPrompts(nextPrompts);
-    localStorage.setItem("dawndesk_prompts", JSON.stringify(nextPrompts));
+    set("dawndesk_prompts", nextPrompts).catch(e => {
+      console.error("Failed to save prompts to IndexedDB", e);
+    });
   };
 
   const categories = useMemo(() => ["All", ...Array.from(new Set(prompts.map((prompt) => prompt.category)))], [prompts]);
