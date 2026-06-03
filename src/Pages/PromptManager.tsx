@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Bot, Check, ChevronRight, CloudUpload, Copy, Download, Edit, FileQuestion, Globe2, Hash, Heart, Home, Image, MessageSquareText, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, UserCircle, Variable, X } from "lucide-react";
+import { BarChart3, Bot, Check, ChevronRight, Clipboard, CloudUpload, Copy, Download, Edit, FileQuestion, Globe2, Hash, Heart, Home, Image, MessageSquareText, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, UserCircle, Variable, X } from "lucide-react";
 import WelcomeScreen from "../components/WelcomeScreen";
 import ConnectionErrorModal from "../components/ConnectionErrorModal";
 import { useAppLogger } from "../utils/LoggerContext";
@@ -86,6 +86,144 @@ const getPromptHubErrorMessage = (error: unknown) => {
 
 const formatHubDate = (value: string) =>
   new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+
+/* ---------- Image helpers ---------- */
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+const tryUrlToDataUrl = async (url: string): Promise<string> => {
+  // Already a data URL — return as-is
+  if (url.startsWith("data:")) return url;
+  // Not a remote URL — return as-is
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return url;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    const blob = await res.blob();
+    if (blob.size === 0 || !blob.type.startsWith("image/")) return url;
+    return await fileToDataUrl(new File([blob], "image", { type: blob.type }));
+  } catch {
+    return url; // keep original if conversion fails
+  }
+};
+
+/* ---------- Robust image component ---------- */
+function ProxiedImage({
+  src,
+  alt,
+  className,
+  variant = "dark",
+}: {
+  src: string | undefined;
+  alt: string;
+  className?: string;
+  variant?: "dark" | "light";
+}) {
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const revokeRef = useRef<string | null>(null);
+  const triedFetchRef = useRef(false);
+
+  // Reset state when src changes
+  useEffect(() => {
+    setFailed(false);
+    triedFetchRef.current = false;
+    // Clean up old object URL
+    if (revokeRef.current) {
+      URL.revokeObjectURL(revokeRef.current);
+      revokeRef.current = null;
+    }
+
+    const url = src?.trim();
+    if (!url) {
+      setResolvedSrc(null);
+      return;
+    }
+
+    // Data URLs and blob URLs can be used directly
+    if (url.startsWith("data:") || url.startsWith("blob:")) {
+      setResolvedSrc(url);
+      return;
+    }
+
+    // For http(s) URLs try direct first (set as initial src)
+    setResolvedSrc(url);
+
+    return () => {
+      if (revokeRef.current) {
+        URL.revokeObjectURL(revokeRef.current);
+        revokeRef.current = null;
+      }
+    };
+  }, [src]);
+
+  const handleError = useCallback(() => {
+    const url = src?.trim();
+    if (!url || triedFetchRef.current) {
+      setFailed(true);
+      return;
+    }
+    // Only attempt fetch fallback for http(s) URLs
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      setFailed(true);
+      return;
+    }
+    triedFetchRef.current = true;
+
+    // Try normal fetch first (works in Tauri since CSP is disabled),
+    // then fall back to no-cors opaque response as last resort
+    fetch(url)
+      .then((res) => {
+        if (res.ok) return res.blob();
+        throw new Error("cors fetch failed");
+      })
+      .catch(() =>
+        fetch(url, { mode: "no-cors" }).then((res) => res.blob())
+      )
+      .then((blob) => {
+        if (!blob || blob.size === 0) throw new Error("empty blob");
+        const objectUrl = URL.createObjectURL(blob);
+        revokeRef.current = objectUrl;
+        setResolvedSrc(objectUrl);
+      })
+      .catch(() => {
+        setFailed(true);
+      });
+  }, [src]);
+
+  if (!resolvedSrc || failed) {
+    const fallbackBg = variant === "light" ? "bg-neutral-100 text-neutral-400" : "bg-neutral-900/50 text-white/25";
+    const fallbackText = variant === "light" ? "text-neutral-400" : "text-white/35";
+    return (
+      <div
+        className={`flex items-center justify-center ${fallbackBg} ${className ?? ""}`}
+        style={{ minHeight: 80 }}
+      >
+        <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
+          <Image className="h-8 w-8" />
+          <span className={`text-xs font-semibold ${fallbackText}`}>
+            {failed ? "Image could not be loaded" : "No image"}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={resolvedSrc}
+      alt={alt}
+      className={className}
+      onError={handleError}
+      referrerPolicy="no-referrer"
+    />
+  );
+}
 
 const PROMPT_HUB_PAGE_SIZE = 24;
 const PROMPT_HUB_CACHE_KEY = "dawndesk_prompt_hub_cache_v1";
@@ -368,11 +506,14 @@ export default function PromptManager() {
       return;
     }
 
+    const rawImageUrl = hubPrompt.output_json?.imageUrl || "";
+    // Convert remote image to embedded data URL so it always displays locally
+    const imageUrl = rawImageUrl ? await tryUrlToDataUrl(rawImageUrl) : "";
     const output = hubPrompt.output_json
       ? {
           model: hubPrompt.output_json.model || hubPrompt.model || "",
           text: hubPrompt.output_json.text || "",
-          imageUrl: hubPrompt.output_json.imageUrl || "",
+          imageUrl,
         }
       : undefined;
     const authorName = getPromptHubAuthor(hubPrompt);
@@ -452,6 +593,37 @@ export default function PromptManager() {
     setFormOutputImageUrl(prompt.output?.imageUrl ?? "");
     setFormError("");
     setIsModalOpen(true);
+  };
+
+  const handleImageFileSelect = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setFormError("Selected file is not an image.");
+      return;
+    }
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setFormOutputImageUrl(dataUrl);
+    } catch {
+      setFormError("Failed to read the image file.");
+    }
+  };
+
+  const handlePasteImageFromClipboard = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith("image/"));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const dataUrl = await fileToDataUrl(new File([blob], "pasted-image", { type: imageType }));
+          setFormOutputImageUrl(dataUrl);
+          return;
+        }
+      }
+      setFormError("No image found in clipboard. Try copying an image first.");
+    } catch {
+      setFormError("Could not access clipboard. Please allow clipboard permissions or use Upload instead.");
+    }
   };
 
   const handleSavePrompt = (event: React.FormEvent) => {
@@ -817,10 +989,11 @@ export default function PromptManager() {
                         className="prompt-hub-card mb-4 block w-full break-inside-avoid overflow-hidden rounded-3xl bg-white text-left shadow-sm ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-xl"
                       >
                         {hasImage ? (
-                          <img
+                          <ProxiedImage
                             src={output?.imageUrl}
                             alt={`${prompt.title} output`}
                             className="h-auto w-full bg-neutral-100 object-contain"
+                            variant="light"
                           />
                         ) : (
                           <div className={`${visualHeights[index % visualHeights.length]} flex flex-col justify-between bg-gradient-to-br from-neutral-950 via-neutral-800 to-yellow-500 p-5 text-white`}>
@@ -881,10 +1054,11 @@ export default function PromptManager() {
                 <div className="flex w-full max-w-4xl items-center justify-center gap-5">
                   <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl">
                     {selectedHubPrompt.output_json?.imageUrl ? (
-                      <img
+                      <ProxiedImage
                         src={selectedHubPrompt.output_json.imageUrl}
                         alt={`${selectedHubPrompt.title} output`}
                         className="max-h-[78vh] w-full object-contain"
+                        variant="light"
                       />
                     ) : (
                       <div className="min-h-[520px] bg-gradient-to-br from-neutral-950 via-neutral-800 to-yellow-500 p-10 text-white">
@@ -1205,10 +1379,10 @@ export default function PromptManager() {
                                 <p className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3 text-sm text-white/35">No text output saved.</p>
                                 )}
                                 {hasOutputImage && (
-                                  <img
+                                  <ProxiedImage
                                     src={prompt.output?.imageUrl}
                                     alt={`${prompt.title} output`}
-                                  className="h-28 w-full rounded-lg border border-neutral-700 object-cover"
+                                    className="h-28 w-full rounded-lg border border-neutral-700 object-cover"
                                   />
                                 )}
                               </div>
@@ -1312,16 +1486,48 @@ export default function PromptManager() {
                         className="dd-input"
                       />
                     </label>
-                    <label className="flex flex-col gap-2">
-                      <span className="dd-form-label">Output Image URL or Data URL</span>
-                      <input
-                        type="text"
-                        value={formOutputImageUrl}
-                        onChange={(event) => setFormOutputImageUrl(event.target.value)}
-                        placeholder="https://... or data:image/png;base64,..."
-                        className="dd-input"
-                      />
-                    </label>
+                    <div className="flex flex-col gap-2">
+                      <span className="dd-form-label">Output Image</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-bold text-white/70 transition-colors hover:border-neutral-600 hover:text-white">
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) void handleImageFileSelect(file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => void handlePasteImageFromClipboard()}
+                          className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-bold text-white/70 transition-colors hover:border-neutral-600 hover:text-white"
+                        >
+                          <Clipboard className="h-3.5 w-3.5" />
+                          Paste from Clipboard
+                        </button>
+                        {formOutputImageUrl.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setFormOutputImageUrl("")}
+                            className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300 transition-colors hover:bg-red-500/20"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      {formOutputImageUrl.trim() ? (
+                        <p className="text-[11px] font-semibold text-green-400/70">✓ Image embedded — will display reliably everywhere.</p>
+                      ) : (
+                        <p className="text-[11px] text-white/35">Upload a file or paste an image from clipboard.</p>
+                      )}
+                    </div>
                   </div>
 
                   <label className="mt-4 flex flex-col gap-2">
@@ -1337,7 +1543,7 @@ export default function PromptManager() {
 
                   {formOutputImageUrl.trim() && (
                     <div className="mt-4 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950">
-                      <img src={formOutputImageUrl.trim()} alt="Output preview" className="max-h-56 w-full object-contain" />
+                      <ProxiedImage src={formOutputImageUrl.trim()} alt="Output preview" className="max-h-56 w-full object-contain" />
                     </div>
                   )}
                 </div>

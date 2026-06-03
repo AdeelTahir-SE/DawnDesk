@@ -1005,6 +1005,49 @@ export async function listPromptHubPromptsPage({
   };
 }
 
+const PROMPT_HUB_IMAGE_BUCKET = "prompt-hub-images";
+
+/**
+ * Upload a data URL image to Supabase Storage and return the public URL.
+ * Images are stored under `{userId}/{timestamp}-{random}.{ext}`.
+ */
+async function uploadPromptHubImage(dataUrl: string): Promise<string> {
+  const client = requireSupabase();
+  const user = await getCurrentUser();
+
+  // Parse the data URL: data:image/png;base64,iVBOR...
+  const match = dataUrl.match(/^data:(image\/(\w+));base64,(.+)$/);
+  if (!match) throw new Error("Invalid image data URL");
+
+  const mimeType = match[1]; // e.g. "image/png"
+  const ext = match[2] === "jpeg" ? "jpg" : match[2]; // normalize jpeg → jpg
+  const base64Data = match[3];
+
+  // Convert base64 to Uint8Array
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const { error } = await client.storage
+    .from(PROMPT_HUB_IMAGE_BUCKET)
+    .upload(fileName, bytes, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (error) throw new Error(`Image upload failed: ${error.message}`);
+
+  const { data: urlData } = client.storage
+    .from(PROMPT_HUB_IMAGE_BUCKET)
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
+}
+
 export async function publishPromptToHub(input: {
   title: string;
   category: string;
@@ -1015,7 +1058,17 @@ export async function publishPromptToHub(input: {
   const user = await getCurrentUser();
   await ensureUserProfile(user);
 
-  const output = input.output ?? null;
+  // Upload embedded image to storage if present
+  let output: PromptHubOutput | null = input.output ? { ...input.output } : null;
+  if (output?.imageUrl?.startsWith("data:")) {
+    try {
+      const publicUrl = await uploadPromptHubImage(output.imageUrl);
+      output = { ...output, imageUrl: publicUrl };
+    } catch {
+      // If storage upload fails, keep the data URL as fallback
+    }
+  }
+
   const { error } = await client.from("prompt_hub_prompts").insert({
     author_id: user.id,
     title: input.title,
