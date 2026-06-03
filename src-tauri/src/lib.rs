@@ -84,9 +84,242 @@ struct AiGeneratedImage {
     data_url: String,
 }
 
+#[derive(Clone)]
+struct PdfLine {
+    x: f32,
+    y: f32,
+    font: &'static str,
+    size: f32,
+    text: String,
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+fn strip_markdown_inline(value: &str) -> String {
+    value
+        .replace("**", "")
+        .replace("__", "")
+        .replace('*', "")
+        .replace('_', "")
+        .replace('`', "")
+}
+
+fn wrap_pdf_text(text: &str, size: f32, max_width: f32) -> Vec<String> {
+    let max_chars = ((max_width / (size * 0.52)).floor() as usize).max(12);
+    let mut lines = Vec::new();
+    let mut current = String::new();
+
+    for word in text.split_whitespace() {
+        let separator = if current.is_empty() { 0 } else { 1 };
+        if !current.is_empty() && current.len() + separator + word.len() > max_chars {
+            lines.push(current);
+            current = String::new();
+        }
+
+        if word.len() > max_chars {
+            if !current.is_empty() {
+                lines.push(current);
+                current = String::new();
+            }
+            let mut start = 0;
+            while start < word.len() {
+                let end = (start + max_chars).min(word.len());
+                lines.push(word[start..end].to_string());
+                start = end;
+            }
+            continue;
+        }
+
+        if !current.is_empty() {
+            current.push(' ');
+        }
+        current.push_str(word);
+    }
+
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+fn push_pdf_line(
+    pages: &mut Vec<Vec<PdfLine>>,
+    y: &mut f32,
+    x: f32,
+    font: &'static str,
+    size: f32,
+    leading: f32,
+    text: String,
+) {
+    const PAGE_HEIGHT: f32 = 842.0;
+    const MARGIN: f32 = 54.0;
+    const BOTTOM_MARGIN: f32 = 54.0;
+
+    if *y < BOTTOM_MARGIN + leading {
+        pages.push(Vec::new());
+        *y = PAGE_HEIGHT - MARGIN;
+    }
+
+    if let Some(page) = pages.last_mut() {
+        page.push(PdfLine { x, y: *y, font, size, text });
+    }
+    *y -= leading;
+}
+
+fn push_pdf_block(
+    pages: &mut Vec<Vec<PdfLine>>,
+    y: &mut f32,
+    x: f32,
+    max_width: f32,
+    font: &'static str,
+    size: f32,
+    leading: f32,
+    after: f32,
+    text: &str,
+) {
+    for line in wrap_pdf_text(text, size, max_width) {
+        push_pdf_line(pages, y, x, font, size, leading, line);
+    }
+    *y -= after;
+}
+
+fn escape_pdf_text(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace('\r', " ")
+        .replace('\n', " ")
+}
+
+fn pdf_stream_for_page(lines: &[PdfLine]) -> String {
+    let mut stream = String::from("BT\n");
+    for line in lines {
+        stream.push_str(&format!(
+            "/{} {} Tf\n1 0 0 1 {:.2} {:.2} Tm\n({}) Tj\n",
+            line.font,
+            line.size,
+            line.x,
+            line.y,
+            escape_pdf_text(&line.text)
+        ));
+    }
+    stream.push_str("ET\n");
+    stream
+}
+
+fn build_markdown_pdf(markdown: &str) -> Vec<u8> {
+    const PAGE_WIDTH: f32 = 595.0;
+    const PAGE_HEIGHT: f32 = 842.0;
+    const MARGIN: f32 = 54.0;
+
+    let mut pages = vec![Vec::new()];
+    let mut y = PAGE_HEIGHT - MARGIN;
+    let body_width = PAGE_WIDTH - (MARGIN * 2.0);
+
+    for block in markdown.split("\n\n") {
+        let trimmed = block.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some(text) = trimmed.strip_prefix("# ") {
+            push_pdf_block(&mut pages, &mut y, MARGIN, body_width, "F2", 24.0, 30.0, 12.0, &strip_markdown_inline(text));
+        } else if let Some(text) = trimmed.strip_prefix("## ") {
+            push_pdf_block(&mut pages, &mut y, MARGIN, body_width, "F2", 18.0, 24.0, 8.0, &strip_markdown_inline(text));
+        } else if let Some(text) = trimmed.strip_prefix("### ") {
+            push_pdf_block(&mut pages, &mut y, MARGIN, body_width, "F2", 14.0, 20.0, 6.0, &strip_markdown_inline(text));
+        } else if trimmed.lines().all(|line| line.trim_start().starts_with("- ")) {
+            for line in trimmed.lines() {
+                let item = line.trim_start().trim_start_matches("- ").trim();
+                push_pdf_block(
+                    &mut pages,
+                    &mut y,
+                    MARGIN + 18.0,
+                    body_width - 18.0,
+                    "F1",
+                    11.0,
+                    16.0,
+                    2.0,
+                    &format!("- {}", strip_markdown_inline(item)),
+                );
+            }
+            y -= 6.0;
+        } else {
+            let paragraph = strip_markdown_inline(&trimmed.replace('\n', " "));
+            push_pdf_block(&mut pages, &mut y, MARGIN, body_width, "F1", 11.0, 17.0, 8.0, &paragraph);
+        }
+    }
+
+    if pages.last().is_some_and(|page| page.is_empty()) && pages.len() > 1 {
+        pages.pop();
+    }
+
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        String::new(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>".to_string(),
+    ];
+    let mut page_object_ids = Vec::new();
+
+    for page in &pages {
+        let stream = pdf_stream_for_page(page);
+        let content_id = objects.len() + 1;
+        objects.push(format!("<< /Length {} >>\nstream\n{}endstream", stream.as_bytes().len(), stream));
+        let page_id = objects.len() + 1;
+        page_object_ids.push(page_id);
+        objects.push(format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.0} {:.0}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents {} 0 R >>",
+            PAGE_WIDTH, PAGE_HEIGHT, content_id
+        ));
+    }
+
+    let kids = page_object_ids
+        .iter()
+        .map(|id| format!("{} 0 R", id))
+        .collect::<Vec<_>>()
+        .join(" ");
+    objects[1] = format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids, page_object_ids.len());
+
+    let mut pdf = String::from("%PDF-1.4\n");
+    let mut offsets = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.push_str(&format!("{} 0 obj\n{}\nendobj\n", index + 1, object));
+    }
+
+    let xref_start = pdf.len();
+    pdf.push_str(&format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1));
+    for offset in offsets {
+        pdf.push_str(&format!("{:010} 00000 n \n", offset));
+    }
+    pdf.push_str(&format!(
+        "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF",
+        objects.len() + 1,
+        xref_start
+    ));
+    pdf.into_bytes()
+}
+
+#[tauri::command]
+fn export_markdown_pdf(markdown: String, path: String) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    if path.extension().and_then(|extension| extension.to_str()) != Some("pdf") {
+        return Err("Choose a .pdf output path.".to_string());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    fs::write(&path, build_markdown_pdf(&markdown)).map_err(|error| error.to_string())?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 fn auth_deep_link_from_args(args: impl IntoIterator<Item = String>) -> Option<String> {
@@ -658,6 +891,7 @@ pub fn run() {
             set_hardware_acceleration,
             get_ai_settings,
             set_ai_settings,
+            export_markdown_pdf,
             ai_list_ollama_models,
             ai_verify_provider,
             ai_generate_text,

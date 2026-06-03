@@ -36,23 +36,20 @@ export default function AppShell() {
   const activeSubAppLabel = SUB_APP_LABELS[location.pathname] ?? "DawnDesk";
 
   useEffect(() => {
-    const syncFullscreenState = () => {
-      setIsAppFullscreen(document.fullscreenElement === appContentRef.current);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsAppFullscreen(false);
     };
 
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const openAppFullscreen = async () => {
-    if (!appContentRef.current || !appContentRef.current.requestFullscreen) return;
-    await appContentRef.current.requestFullscreen();
+  const openAppFullscreen = () => {
+    setIsAppFullscreen(true);
   };
 
-  const exitAppFullscreen = async () => {
-    if (document.fullscreenElement && document.exitFullscreen) {
-      await document.exitFullscreen();
-    }
+  const exitAppFullscreen = () => {
+    setIsAppFullscreen(false);
   };
 
   return (
@@ -71,7 +68,7 @@ export default function AppShell() {
         ref={appContentRef}
         className={
           isAppFullscreen
-            ? "flex h-screen flex-col overflow-hidden bg-neutral-950 text-white"
+            ? "dd-app-fullscreen fixed inset-0 z-[100] flex h-screen flex-col overflow-hidden bg-neutral-950 text-white"
             : `pt-16 pl-20 transition-all duration-300 ${showItems ? "md:pl-44" : "md:pl-20"}`
         }
       >
@@ -80,7 +77,7 @@ export default function AppShell() {
             <span className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">{activeSubAppLabel}</span>
             <button
               type="button"
-              onClick={() => void exitAppFullscreen()}
+              onClick={exitAppFullscreen}
               className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-bold text-white/75 transition-colors hover:bg-neutral-800 hover:text-white"
               title="Exit app fullscreen"
             >
@@ -90,7 +87,7 @@ export default function AppShell() {
           </div>
         )}
         {/* decide padding of outlet in here */}
-        <div className={isAppFullscreen ? "min-h-0 flex-1 overflow-hidden" : ""}> 
+        <div className={isAppFullscreen ? "relative min-h-0 flex-1 overflow-visible" : ""}>
           <Outlet />
         </div>
         <AppToaster />

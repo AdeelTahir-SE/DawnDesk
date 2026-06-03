@@ -9,6 +9,8 @@ import bgNightSky from "../../assets/bg-night-sky.png";
 import bgOcean from "../../assets/bg-ocean.png";
 import bgForest from "../../assets/bg-forest.png";
 
+const PHOTO_EDITOR_ONBOARDING_KEY = "onboarded_photo-editor";
+
 export default function PhotoEditorOnboarding({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -18,13 +20,12 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
   const currentBg = bgImages[step % bgImages.length];
 
   useEffect(() => {
-    // FORCE ONBOARDING FOR TESTING
-    setShowOnboarding(true);
+    setShowOnboarding(localStorage.getItem(PHOTO_EDITOR_ONBOARDING_KEY) !== "true");
     setLoading(false);
   }, []);
 
   const handleComplete = () => {
-    localStorage.setItem(`onboarded_photo-editor`, "true");
+    localStorage.setItem(PHOTO_EDITOR_ONBOARDING_KEY, "true");
     setShowOnboarding(false);
   };
 

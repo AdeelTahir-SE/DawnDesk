@@ -413,7 +413,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         id: `background-${action.payload.id}`,
         name: 'Background',
         visible: true,
-        locked: true,
+        locked: false,
         opacity: 100,
         blendMode: 'normal',
         thumbnail: action.payload.thumbnail,

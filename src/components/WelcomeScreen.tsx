@@ -48,8 +48,7 @@ export default function WelcomeScreen({ appKey, title, description, children }: 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Always show welcome screen as requested
-    setShowWelcome(true);
+    setShowWelcome(localStorage.getItem(`welcomed_${appKey}`) !== "true");
     setLoading(false);
   }, [appKey]);
 

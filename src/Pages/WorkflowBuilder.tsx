@@ -1278,9 +1278,12 @@ export default function WorkflowBuilder() {
   });
 
   useEffect(() => {
-    const syncFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsFullscreen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   useEffect(() => {
@@ -2087,11 +2090,7 @@ export default function WorkflowBuilder() {
   };
 
   const toggleFullscreen = async () => {
-    if (!document.fullscreenElement && rootRef.current?.requestFullscreen) {
-      await rootRef.current.requestFullscreen();
-      return;
-    }
-    if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+    setIsFullscreen((current) => !current);
   };
 
   const renderNodeConfiguration = (node: WorkflowNode) => {

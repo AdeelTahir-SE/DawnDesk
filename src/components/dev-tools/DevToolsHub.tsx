@@ -1,11 +1,14 @@
 import { ChangeEvent, ReactNode, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   Copy,
   Download,
   FileUp,
   Grid2X2,
   Layers3,
-  Play,
+  Printer,
   Search,
 } from "lucide-react";
 import { devTools } from "./devToolsList";
@@ -107,6 +110,30 @@ function downloadText(filename: string, content: string, type = "text/plain") {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+async function saveTextFile({
+  title,
+  defaultPath,
+  contents,
+  filters,
+}: {
+  title: string;
+  defaultPath: string;
+  contents: string;
+  filters: { name: string; extensions: string[] }[];
+}) {
+  const path = await save({
+    title,
+    defaultPath,
+    filters,
+    canCreateDirectories: true,
+  });
+
+  if (!path) return null;
+
+  await writeTextFile(path, contents);
+  return path;
 }
 
 function escapeHtml(value: string) {
@@ -420,31 +447,65 @@ function RegexTester() {
 
 function MarkdownPdf() {
   const [markdown, setMarkdown] = useState("# DawnDesk Report\n\nWrite **Markdown**, export styled HTML, then print to PDF.");
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
   const html = markdownToHtml(markdown);
   const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>DawnDesk Markdown Export</title><style>body{font-family:Inter,Arial,sans-serif;max-width:760px;margin:48px auto;line-height:1.65;color:#171717}h1,h2,h3{line-height:1.2}code{background:#eee;padding:2px 5px;border-radius:4px}</style></head><body>${html}</body></html>`;
 
+  async function savePdf() {
+    const path = await save({
+      title: "Save Markdown PDF",
+      defaultPath: "markdown-export.pdf",
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+      canCreateDirectories: true,
+    });
+
+    if (!path) return;
+
+    setExporting(true);
+    setExportMessage("");
+    try {
+      const writtenPath = await invoke<string>("export_markdown_pdf", { markdown, path });
+      setExportMessage(`Saved PDF to ${writtenPath}`);
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function saveHtml() {
+    setExporting(true);
+    setExportMessage("");
+    try {
+      const path = await saveTextFile({
+        title: "Save Markdown HTML",
+        defaultPath: "markdown-export.html",
+        contents: documentHtml,
+        filters: [{ name: "HTML", extensions: ["html", "htm"] }],
+      });
+      if (path) setExportMessage(`Saved HTML to ${path}`);
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
-    <Panel title="Markdown to Styled PDF" description="Draft Markdown, preview the styled document, and export printable HTML for PDF output.">
+    <Panel title="Markdown to Styled PDF" description="Draft Markdown, preview the styled document, and export HTML or PDF output.">
       <Field label="Markdown">
         <Textarea value={markdown} onChange={(event) => setMarkdown(event.target.value)} />
       </Field>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => downloadText("markdown-export.html", documentHtml, "text/html")}>
-          <Download className="h-4 w-4" /> Download HTML
+        <Button onClick={saveHtml} disabled={exporting || !markdown.trim()}>
+          <Download className="h-4 w-4" /> {exporting ? "Saving..." : "Save HTML"}
         </Button>
-        <Button
-          onClick={() => {
-            const win = window.open("", "_blank");
-            if (win) {
-              win.document.write(documentHtml);
-              win.document.close();
-              win.print();
-            }
-          }}
-        >
-          <Play className="h-4 w-4" /> Print PDF
+        <Button onClick={savePdf} disabled={exporting || !markdown.trim()}>
+          <Printer className="h-4 w-4" /> {exporting ? "Saving PDF..." : "Save PDF"}
         </Button>
       </div>
+      {exportMessage && <Output>{exportMessage}</Output>}
       <div className="prose prose-invert max-w-none rounded-lg border border-neutral-800 bg-neutral-900/70 p-5" dangerouslySetInnerHTML={{ __html: html }} />
     </Panel>
   );
@@ -630,7 +691,7 @@ function QrTools() {
   }
 
   return (
-    <Panel title="QR Code Generator & Decoder" description="Create a deterministic scannable-style matrix for labels and decode real QR images when the webview supports BarcodeDetector.">
+    <Panel title="QR Preview & Decoder" description="Create a deterministic QR-style matrix for labels and decode real QR images when the webview supports BarcodeDetector.">
       <Field label="Text or URL">
         <Input value={text} onChange={(event) => setText(event.target.value)} />
       </Field>
@@ -687,6 +748,8 @@ function UnicodeBrowser() {
 function SubtitleEditor() {
   const [text, setText] = useState("1\n00:00:01,000 --> 00:00:03,000\nHello DawnDesk\n");
   const [shift, setShift] = useState(1000);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
 
   function shiftSrt() {
     const shifted = text.replace(/(\d\d):(\d\d):(\d\d),(\d\d\d)/g, (_, h, m, s, ms) => {
@@ -700,6 +763,24 @@ function SubtitleEditor() {
     setText(shifted);
   }
 
+  async function exportSrt() {
+    setExporting(true);
+    setExportMessage("");
+    try {
+      const path = await saveTextFile({
+        title: "Save SRT File",
+        defaultPath: "subtitles.srt",
+        contents: text.replace(/\r?\n/g, "\r\n").trimEnd() + "\r\n",
+        filters: [{ name: "SubRip Subtitle", extensions: ["srt"] }],
+      });
+      if (path) setExportMessage(`Saved SRT to ${path}`);
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <Panel title="Subtitle / SRT Editor" description="Edit subtitle text, shift timings, and export a clean SRT file.">
       <div className="grid gap-3 md:grid-cols-[1fr_180px]">
@@ -711,9 +792,12 @@ function SubtitleEditor() {
             <Input type="number" value={shift} onChange={(event) => setShift(Number(event.target.value))} />
           </Field>
           <Button onClick={shiftSrt}>Shift Timing</Button>
-          <Button onClick={() => downloadText("subtitles.srt", text)}>Export SRT</Button>
+          <Button onClick={exportSrt} disabled={exporting || !text.trim()}>
+            {exporting ? "Saving..." : "Export SRT"}
+          </Button>
         </div>
       </div>
+      {exportMessage && <Output>{exportMessage}</Output>}
     </Panel>
   );
 }
@@ -919,7 +1003,7 @@ function ExifTimeline() {
   }
 
   return (
-    <Panel title="Image EXIF Timeline" description="Build a quick local photo timeline from available file modification dates.">
+    <Panel title="Image Timeline" description="Build a quick local photo timeline from available file modification dates.">
       <FilePicker multiple accept="image/*" onFiles={load} />
       <Output>
         <div className="grid gap-2">
@@ -1090,7 +1174,7 @@ function TimestampEditor() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
   return (
-    <Panel title="File Timestamp Editor" description="Prepare timestamp rename/download manifests for selected files. Browser file APIs cannot mutate originals directly.">
+    <Panel title="Timestamp Manifest Builder" description="Prepare timestamp rename/download manifests for selected files. Browser file APIs cannot mutate originals directly.">
       <FilePicker multiple onFiles={setFiles} />
       <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
       <Button onClick={() => downloadText("timestamp-manifest.csv", ["file,target_date", ...files.map((file) => `${file.name},${date}`)].join("\n"), "text/csv")}>Download Manifest</Button>
@@ -1109,7 +1193,7 @@ function DnsLookup() {
   }
 
   return (
-    <Panel title="DNS Lookup & WHOIS" description="Query DNS A records through DNS-over-HTTPS and inspect the JSON response.">
+    <Panel title="DNS A Record Lookup" description="Query DNS A records through DNS-over-HTTPS and inspect the JSON response.">
       <div className="grid gap-3 md:grid-cols-[1fr_auto]">
         <Input value={domain} onChange={(event) => setDomain(event.target.value)} />
         <Button onClick={lookup}>Lookup</Button>
@@ -1189,7 +1273,7 @@ function SteganoDetector() {
   );
 }
 
-function AiOrganiser() {
+function FileOrganiser() {
   const [plan, setPlan] = useState("");
 
   function organise(files: File[]) {
@@ -1202,7 +1286,7 @@ function AiOrganiser() {
   }
 
   return (
-    <Panel title="AI File Organiser" description="Suggest a practical folder structure from file MIME types and names.">
+    <Panel title="File Organiser" description="Suggest a practical folder structure from file MIME types and names.">
       <FilePicker multiple onFiles={organise} />
       <pre className="custom-scrollbar min-h-40 overflow-auto rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white">{plan || "Choose files to generate an organisation plan."}</pre>
     </Panel>
@@ -1238,11 +1322,10 @@ function GenericLocalTool({ id }: { id: string }) {
   if (id === "api-tester") return <ApiTester />;
   if (id === "diff-patcher") return <DiffPatcher />;
   if (id === "stegano-detector") return <SteganoDetector />;
-  if (id === "ai-organiser") return <AiOrganiser />;
+  if (id === "ai-organiser") return <FileOrganiser />;
   return (
-    <Panel title="AI Handwriting Decoder" description="Preview handwriting images and prepare them for transcription workflows.">
-      <Output>Local OCR is not bundled yet, but this panel accepts note photos through the file picker for future OCR integration.</Output>
-      <FilePicker accept="image/*" onFiles={() => undefined} />
+    <Panel title="Tool unavailable" description="This utility is not registered in the current Dev Tools index.">
+      <Output>Select a tool from the index to open a working utility.</Output>
     </Panel>
   );
 }
@@ -1350,10 +1433,7 @@ export default function DevToolsHub() {
                     {tool.icon}
                   </span>
                   <span className="min-w-0">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-white/90">{tool.title}</span>
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
-                    </span>
+                    <span className="truncate text-sm font-medium text-white/90">{tool.title}</span>
                     <span className="mt-0.5 line-clamp-2 text-xs leading-5 text-white/40">{tool.description}</span>
                   </span>
                 </button>
@@ -1370,10 +1450,6 @@ export default function DevToolsHub() {
               </div>
               <h2 className="truncate text-xl font-semibold text-white">{selectedTool.title}</h2>
               <p className="mt-1 max-w-3xl text-sm text-white/45">{selectedTool.description}</p>
-            </div>
-            <div className="flex w-fit items-center gap-2 rounded-md border border-green-400/20 bg-green-400/10 px-3 py-2 text-xs font-semibold text-green-300">
-              <span className="h-2 w-2 rounded-full bg-green-300" />
-              Implemented
             </div>
           </div>
           <GenericLocalTool id={selectedTool.id} />

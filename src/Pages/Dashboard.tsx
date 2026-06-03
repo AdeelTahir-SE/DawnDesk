@@ -219,8 +219,8 @@ export default function Dashboard() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-8">
       <section className="dd-hero">
-        <p className="dd-label">Dashboard</p>
-        <h1 className="mt-2 dd-page-title">DawnDesk Command Center</h1>
+        <p className="dd-label">DawnDesk</p>
+        <h1 className="mt-2 dd-page-title">DawnDesk Dashboard</h1>
         <p className="mt-2 max-w-2xl dd-body-lg">
           Jump into active work, check your connected workspaces, and review recent app activity from one useful place.
         </p>

@@ -5,6 +5,10 @@ import { Maximize } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import type { Effect } from '../../../engine/video-editor/types';
 
+const MAX_EFFECTS_PER_PREVIEW_CLIP = 32;
+const MAX_DROP_SHADOWS_PER_PREVIEW_CLIP = 4;
+const GRAIN_CACHE_TTL_MS = 120;
+
 function paramNumber(effect: Effect, key: string, fallback: number): number {
   const value = effect.params.find(param => param.key === key)?.value;
   return typeof value === 'number' ? value : Number(value ?? fallback) || fallback;
@@ -13,6 +17,140 @@ function paramNumber(effect: Effect, key: string, fallback: number): number {
 function paramString(effect: Effect, key: string, fallback: string): string {
   const value = effect.params.find(param => param.key === key)?.value;
   return typeof value === 'string' ? value : fallback;
+}
+
+interface PreviewEffectPlan {
+  filter: string;
+  mirrorX: number;
+  mirrorY: number;
+  lensScale: number;
+  needsGrain: boolean;
+  grainAmount: number;
+  grainSize: number;
+  needsVignette: boolean;
+  vignetteAmount: number;
+  pixelateSize: number;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildPreviewEffectPlan(effects: Effect[]): PreviewEffectPlan {
+  let blur = 0;
+  let brightness = 100;
+  let contrast = 100;
+  let saturation = 100;
+  let grayscale = 0;
+  let sepia = 0;
+  let invert = 0;
+  let hueRotate = 0;
+  let mirrorX = 1;
+  let mirrorY = 1;
+  let lensScale = 1;
+  let needsGrain = false;
+  let grainAmount = 0;
+  let grainSize = 1;
+  let needsVignette = false;
+  let vignetteAmount = 0;
+  let pixelateSize = 0;
+  const dropShadows: string[] = [];
+
+  for (const fx of effects) {
+    if (!fx.enabled) continue;
+    if (dropShadows.length + 1 > MAX_EFFECTS_PER_PREVIEW_CLIP) break;
+
+    if (fx.type === 'gaussian-blur') {
+      blur = Math.max(blur, paramNumber(fx, 'radius', 0));
+    } else if (fx.type === 'radial-blur') {
+      const amount = paramNumber(fx, 'amount', 0);
+      blur = Math.max(blur, amount / 3);
+      brightness += amount * 0.15;
+    } else if (fx.type === 'directional-blur') {
+      blur = Math.max(blur, paramNumber(fx, 'amount', 0) / 4);
+    } else if (fx.type === 'sharpen') {
+      const amount = paramNumber(fx, 'amount', 50);
+      contrast += amount * 0.55;
+      saturation += amount * 0.12;
+    } else if (fx.type === 'unsharp-mask') {
+      const amount = paramNumber(fx, 'amount', 80);
+      contrast += amount * 0.35;
+      saturation += amount * 0.08;
+    } else if (fx.type === 'brightness-contrast') {
+      brightness += paramNumber(fx, 'brightness', 0);
+      contrast += paramNumber(fx, 'contrast', 0);
+    } else if (fx.type === 'grayscale') {
+      grayscale = Math.max(grayscale, paramNumber(fx, 'amount', 0));
+    } else if (fx.type === 'sepia') {
+      sepia = Math.max(sepia, paramNumber(fx, 'amount', 0));
+    } else if (fx.type === 'invert') {
+      invert = Math.max(invert, paramNumber(fx, 'amount', 0));
+    } else if (fx.type === 'chromatic-aberration' && dropShadows.length < MAX_DROP_SHADOWS_PER_PREVIEW_CLIP) {
+      const amount = paramNumber(fx, 'amount', 5);
+      dropShadows.push(`drop-shadow(${amount}px 0 rgba(255,0,0,0.35))`);
+      dropShadows.push(`drop-shadow(${-amount}px 0 rgba(0,128,255,0.35))`);
+    } else if (fx.type === 'lens-distortion') {
+      const distortion = paramNumber(fx, 'distortion', 0);
+      lensScale *= 1 + Math.abs(distortion) / 350;
+    } else if (fx.type === 'mirror') {
+      const axis = paramString(fx, 'axis', 'horizontal');
+      if (axis === 'horizontal' || axis === 'both') mirrorX *= -1;
+      if (axis === 'vertical' || axis === 'both') mirrorY *= -1;
+    } else if (fx.type === 'vignette') {
+      needsVignette = true;
+      vignetteAmount = Math.max(vignetteAmount, paramNumber(fx, 'amount', 50));
+    } else if (fx.type === 'film-grain') {
+      needsGrain = true;
+      grainAmount = Math.max(grainAmount, paramNumber(fx, 'amount', 30));
+      grainSize = Math.max(grainSize, paramNumber(fx, 'size', 1));
+    } else if (fx.type === 'glow' && dropShadows.length < MAX_DROP_SHADOWS_PER_PREVIEW_CLIP) {
+      const intensity = paramNumber(fx, 'intensity', 50);
+      const radius = paramNumber(fx, 'radius', 10);
+      brightness += intensity * 0.35;
+      saturation += intensity * 0.18;
+      dropShadows.push(`drop-shadow(0 0 ${radius}px rgba(255,255,255,0.24))`);
+    } else if (fx.type === 'pixelate') {
+      pixelateSize = Math.max(pixelateSize, paramNumber(fx, 'size', 10));
+    } else if (fx.type === 'emboss') {
+      const strength = paramNumber(fx, 'strength', 50);
+      grayscale = Math.max(grayscale, strength);
+      contrast += strength;
+      brightness += strength * 0.1;
+    } else if (fx.type === 'edge-detect') {
+      const threshold = paramNumber(fx, 'threshold', 50);
+      grayscale = 100;
+      contrast = Math.max(contrast, 160 + threshold);
+      brightness = Math.max(brightness, 80 + threshold * 0.3);
+    } else if (fx.type === 'hue-saturation') {
+      hueRotate += paramNumber(fx, 'hue', 0);
+      saturation += paramNumber(fx, 'saturation', 0);
+    }
+  }
+
+  const filters = [
+    blur > 0 ? `blur(${clampNumber(blur, 0, 80)}px)` : '',
+    `brightness(${clampNumber(brightness, 0, 300)}%)`,
+    `contrast(${clampNumber(contrast, 0, 300)}%)`,
+    `saturate(${clampNumber(saturation, 0, 300)}%)`,
+    grayscale > 0 ? `grayscale(${clampNumber(grayscale, 0, 100)}%)` : '',
+    sepia > 0 ? `sepia(${clampNumber(sepia, 0, 100)}%)` : '',
+    invert > 0 ? `invert(${clampNumber(invert, 0, 100)}%)` : '',
+    hueRotate !== 0 ? `hue-rotate(${hueRotate}deg)` : '',
+    ...dropShadows.slice(0, MAX_DROP_SHADOWS_PER_PREVIEW_CLIP),
+  ].filter(Boolean).join(' ');
+
+  return {
+    filter: filters,
+    mirrorX,
+    mirrorY,
+    lensScale: clampNumber(lensScale, 0.25, 4),
+    needsGrain,
+    grainAmount,
+    grainSize,
+    needsVignette,
+    vignetteAmount,
+    pixelateSize,
+  };
 }
 
 export default function PreviewCanvas() {
@@ -38,6 +176,15 @@ export default function PreviewCanvas() {
 
   // Cache elements to avoid reloading them on every frame
   const mediaCache = useRef<Record<string, HTMLVideoElement | HTMLImageElement | HTMLAudioElement>>({});
+  const effectPlanCache = useRef(new Map<string, { signature: string; plan: PreviewEffectPlan }>());
+  const grainCache = useRef<{
+    canvas: HTMLCanvasElement;
+    width: number;
+    height: number;
+    amount: number;
+    size: number;
+    generatedAt: number;
+  } | null>(null);
 
   useEffect(() => {
     latestStateRef.current = state;
@@ -87,6 +234,52 @@ export default function PreviewCanvas() {
         delete mediaCache.current[key];
       }
     }
+    for (const key of effectPlanCache.current.keys()) {
+      if (!currentClipIds.has(key)) effectPlanCache.current.delete(key);
+    }
+
+    const getEffectPlan = (clipId: string, effects: Effect[]) => {
+      const signature = effects.map(effect => {
+        const params = effect.params.map(param => `${param.key}:${String(param.value)}`).join(',');
+        return `${effect.id}:${effect.type}:${effect.enabled ? 1 : 0}:${params}`;
+      }).join('|');
+      const cached = effectPlanCache.current.get(clipId);
+      if (cached?.signature === signature) return cached.plan;
+      const plan = buildPreviewEffectPlan(effects);
+      effectPlanCache.current.set(clipId, { signature, plan });
+      return plan;
+    };
+
+    const getGrainCanvas = (width: number, height: number, amount: number, size: number, now: number) => {
+      const normalizedSize = Math.max(1, Math.round(size));
+      const cached = grainCache.current;
+      if (
+        cached &&
+        cached.width === width &&
+        cached.height === height &&
+        cached.amount === amount &&
+        cached.size === normalizedSize &&
+        now - cached.generatedAt < GRAIN_CACHE_TTL_MS
+      ) {
+        return cached.canvas;
+      }
+
+      const grain = cached?.canvas ?? document.createElement('canvas');
+      grain.width = width;
+      grain.height = height;
+      const grainCtx = grain.getContext('2d', { alpha: true });
+      if (!grainCtx) return grain;
+      grainCtx.clearRect(0, 0, width, height);
+      grainCtx.fillStyle = 'rgba(255,255,255,0.55)';
+      const step = Math.max(3, Math.round((12 - amount / 12) * normalizedSize));
+      for (let gy = 0; gy < height; gy += step) {
+        for (let gx = 0; gx < width; gx += step) {
+          if (Math.random() > 0.55) grainCtx.fillRect(gx, gy, normalizedSize, normalizedSize);
+        }
+      }
+      grainCache.current = { canvas: grain, width, height, amount, size: normalizedSize, generatedAt: now };
+      return grain;
+    };
 
     const getRenderTime = (now: number) => {
       const clock = clockRef.current;
@@ -180,77 +373,7 @@ export default function PreviewCanvas() {
              }
           }
 
-          // Build effect filter string
-          let filterStr = '';
-          let mirrorX = 1;
-          let mirrorY = 1;
-          let lensScale = 1;
-          let needsGrain = false;
-          let grainAmount = 0;
-          let needsVignette = false;
-          let vignetteAmount = 0;
-          let pixelateSize = 0;
-
-          for (const fx of clip.effects) {
-             if (!fx.enabled) continue;
-             if (fx.type === 'gaussian-blur') {
-                 const blurParam = paramNumber(fx, 'radius', 0);
-                 filterStr += `blur(${blurParam}px) `;
-             } else if (fx.type === 'radial-blur') {
-                 const amount = paramNumber(fx, 'amount', 0);
-                 filterStr += `blur(${amount / 3}px) brightness(${100 + amount * 0.15}%) `;
-             } else if (fx.type === 'directional-blur') {
-                 const amount = paramNumber(fx, 'amount', 0);
-                 filterStr += `blur(${amount / 4}px) `;
-             } else if (fx.type === 'sharpen') {
-                 const amount = paramNumber(fx, 'amount', 50);
-                 filterStr += `contrast(${100 + amount * 0.55}%) saturate(${100 + amount * 0.12}%) `;
-             } else if (fx.type === 'unsharp-mask') {
-                 const amount = paramNumber(fx, 'amount', 80);
-                 filterStr += `contrast(${100 + amount * 0.35}%) saturate(${100 + amount * 0.08}%) `;
-             } else if (fx.type === 'brightness-contrast') {
-                 const b = paramNumber(fx, 'brightness', 0);
-                 const c = paramNumber(fx, 'contrast', 0);
-                 filterStr += `brightness(${100 + b}%) contrast(${100 + c}%) `;
-             } else if (fx.type === 'grayscale') {
-                 const amount = paramNumber(fx, 'amount', 0);
-                 filterStr += `grayscale(${amount}%) `;
-             } else if (fx.type === 'sepia') {
-                 const amount = paramNumber(fx, 'amount', 0);
-                 filterStr += `sepia(${amount}%) `;
-             } else if (fx.type === 'invert') {
-                 const amount = paramNumber(fx, 'amount', 0);
-                 filterStr += `invert(${amount}%) `;
-             } else if (fx.type === 'chromatic-aberration') {
-                 const amount = paramNumber(fx, 'amount', 5);
-                 filterStr += `drop-shadow(${amount}px 0 rgba(255,0,0,0.35)) drop-shadow(${-amount}px 0 rgba(0,128,255,0.35)) `;
-             } else if (fx.type === 'lens-distortion') {
-                 const distortion = paramNumber(fx, 'distortion', 0);
-                 lensScale *= 1 + Math.abs(distortion) / 350;
-             } else if (fx.type === 'mirror') {
-                 const axis = paramString(fx, 'axis', 'horizontal');
-                 if (axis === 'horizontal' || axis === 'both') mirrorX *= -1;
-                 if (axis === 'vertical' || axis === 'both') mirrorY *= -1;
-             } else if (fx.type === 'vignette') {
-                 needsVignette = true;
-                 vignetteAmount = Math.max(vignetteAmount, paramNumber(fx, 'amount', 50));
-             } else if (fx.type === 'film-grain') {
-                 needsGrain = true;
-                 grainAmount = Math.max(grainAmount, paramNumber(fx, 'amount', 30));
-             } else if (fx.type === 'glow') {
-                 const intensity = paramNumber(fx, 'intensity', 50);
-                 const radius = paramNumber(fx, 'radius', 10);
-                 filterStr += `brightness(${100 + intensity * 0.35}%) saturate(${100 + intensity * 0.18}%) drop-shadow(0 0 ${radius}px rgba(255,255,255,0.24)) `;
-             } else if (fx.type === 'pixelate') {
-                 pixelateSize = Math.max(pixelateSize, paramNumber(fx, 'size', 10));
-             } else if (fx.type === 'emboss') {
-                 const strength = paramNumber(fx, 'strength', 50);
-                 filterStr += `grayscale(${strength}%) contrast(${100 + strength}%) brightness(${100 + strength * 0.1}%) `;
-             } else if (fx.type === 'edge-detect') {
-                 const threshold = paramNumber(fx, 'threshold', 50);
-                 filterStr += `grayscale(100%) contrast(${160 + threshold}%) brightness(${80 + threshold * 0.3}%) `;
-             }
-          }
+          const effectPlan = getEffectPlan(clip.id, clip.effects);
 
           const drawWithTransform = (draw: () => void) => {
             offCtx.save();
@@ -258,31 +381,26 @@ export default function PreviewCanvas() {
             if ((clip as any).blendMode && (clip as any).blendMode !== 'normal') {
                 offCtx.globalCompositeOperation = (clip as any).blendMode;
             }
-            if (filterStr) offCtx.filter = filterStr.trim();
+            if (effectPlan.filter) offCtx.filter = effectPlan.filter;
             
             offCtx.translate(w / 2 + drawX, h / 2 + drawY);
             offCtx.rotate(rotation);
-            offCtx.scale(mirrorX * lensScale, mirrorY * lensScale);
+            offCtx.scale(effectPlan.mirrorX * effectPlan.lensScale, effectPlan.mirrorY * effectPlan.lensScale);
             const previousSmoothing = offCtx.imageSmoothingEnabled;
-            if (pixelateSize > 0) offCtx.imageSmoothingEnabled = false;
+            if (effectPlan.pixelateSize > 0) offCtx.imageSmoothingEnabled = false;
             draw();
             offCtx.imageSmoothingEnabled = previousSmoothing;
-            if (needsVignette) {
+            if (effectPlan.needsVignette) {
               const gradient = offCtx.createRadialGradient(0, 0, Math.min(drawW, drawH) * 0.18, 0, 0, Math.max(drawW, drawH) * 0.62);
               gradient.addColorStop(0, 'rgba(0,0,0,0)');
-              gradient.addColorStop(1, `rgba(0,0,0,${Math.min(0.8, vignetteAmount / 100)})`);
+              gradient.addColorStop(1, `rgba(0,0,0,${Math.min(0.8, effectPlan.vignetteAmount / 100)})`);
               offCtx.fillStyle = gradient;
               offCtx.fillRect(-drawW / 2, -drawH / 2, drawW, drawH);
             }
-            if (needsGrain) {
-              offCtx.globalAlpha = Math.min(0.18, grainAmount / 450);
-              offCtx.fillStyle = 'rgba(255,255,255,0.55)';
-              const step = Math.max(3, Math.round(12 - grainAmount / 12));
-              for (let gy = -drawH / 2; gy < drawH / 2; gy += step) {
-                for (let gx = -drawW / 2; gx < drawW / 2; gx += step) {
-                  if (Math.random() > 0.55) offCtx.fillRect(gx, gy, 1, 1);
-                }
-              }
+            if (effectPlan.needsGrain) {
+              const grain = getGrainCanvas(Math.max(1, Math.round(drawW)), Math.max(1, Math.round(drawH)), effectPlan.grainAmount, effectPlan.grainSize, now);
+              offCtx.globalAlpha = Math.min(0.18, effectPlan.grainAmount / 450);
+              offCtx.drawImage(grain, -drawW / 2, -drawH / 2, drawW, drawH);
             }
             offCtx.restore();
           };

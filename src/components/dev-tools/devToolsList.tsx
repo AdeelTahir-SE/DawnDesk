@@ -1,8 +1,8 @@
 import React from "react";
-import { 
-    Type, Palette, Code, FileText, Bot, Shield, Copy, Binary, QrCode, 
+import {
+    Type, Palette, Code, FileText, Bot, Shield, Copy, Binary, QrCode,
     AtSign, Subtitles, FileSpreadsheet, Clock, Key, RefreshCw, Wifi, 
-    Link2, Calendar, Text, Image as ImageIcon, ImageMinus, PenTool, 
+    Link2, Calendar, Text, Image as ImageIcon, ImageMinus,
     Globe, Lock, Zap, Puzzle, Ghost, FolderTree 
 } from "lucide-react";
 
@@ -12,7 +12,6 @@ export interface DevTool {
     description: string;
     category: "V1 - Core Tools" | "V2 - Workflow Tools" | "V3 - Advanced Tools";
     icon: React.ReactNode;
-    isImplemented?: boolean;
 }
 
 export const devTools: DevTool[] = [
@@ -20,18 +19,16 @@ export const devTools: DevTool[] = [
     {
         id: "font-extractor",
         title: "Font Extractor",
-        description: "Extract the exact font used in any PDF or image.",
+        description: "Scan text-based PDFs, SVGs, HTML, CSS, and pasted samples for font names.",
         category: "V1 - Core Tools",
         icon: <Type className="text-white/70" />,
-        isImplemented: true,
     },
     {
         id: "color-extractor",
         title: "Color Palette Extractor",
-        description: "Pull a full color palette from any image, PDF, or screenshot.",
+        description: "Pull a dominant color palette from a local image or screenshot.",
         category: "V1 - Core Tools",
         icon: <Palette className="text-white/70" />,
-        isImplemented: true,
     },
     {
         id: "regex-tester",
@@ -39,19 +36,18 @@ export const devTools: DevTool[] = [
         description: "Write regex and see matches highlighted in real-time.",
         category: "V1 - Core Tools",
         icon: <Code className="text-white/70" />,
-        isImplemented: true,
     },
     {
         id: "markdown-pdf",
         title: "Markdown to Styled PDF",
-        description: "Convert Markdown to a beautiful typeset PDF.",
+        description: "Preview Markdown, download styled HTML, or print it as a PDF.",
         category: "V1 - Core Tools",
         icon: <FileText className="text-white/70" />,
     },
     {
         id: "ai-renamer",
-        title: "Local AI File Renamer",
-        description: "Rename hundreds of files intelligently using AI.",
+        title: "Local File Renamer",
+        description: "Generate clean date-based rename suggestions from selected files.",
         category: "V1 - Core Tools",
         icon: <Bot className="text-white/70" />,
     },
@@ -65,7 +61,7 @@ export const devTools: DevTool[] = [
     {
         id: "duplicate-finder",
         title: "Duplicate File Finder",
-        description: "Scans a folder and finds exact or near-duplicate files.",
+        description: "Hash selected files locally and find exact duplicate matches.",
         category: "V1 - Core Tools",
         icon: <Copy className="text-white/70" />,
     },
@@ -78,8 +74,8 @@ export const devTools: DevTool[] = [
     },
     {
         id: "qr-tools",
-        title: "QR Code Generator & Decoder",
-        description: "Generate and decode QR codes easily.",
+        title: "QR Preview & Decoder",
+        description: "Preview a QR-style matrix and decode QR screenshots when the webview supports it.",
         category: "V1 - Core Tools",
         icon: <QrCode className="text-white/70" />,
     },
@@ -95,14 +91,14 @@ export const devTools: DevTool[] = [
     {
         id: "subtitle-editor",
         title: "Subtitle / SRT Editor",
-        description: "Edit, shift timing, merge and re-export subtitles.",
+        description: "Edit subtitle text, shift timings, and export an SRT file.",
         category: "V2 - Workflow Tools",
         icon: <Subtitles className="text-white/70" />,
     },
     {
         id: "csv-diff",
         title: "CSV Diff Tool",
-        description: "Compare two CSV files and highlight row/column changes.",
+        description: "Compare two pasted CSV snippets line-by-line.",
         category: "V2 - Workflow Tools",
         icon: <FileSpreadsheet className="text-white/70" />,
     },
@@ -123,14 +119,14 @@ export const devTools: DevTool[] = [
     {
         id: "config-converter",
         title: "JSON / YAML / TOML",
-        description: "Convert between config file formats with validation.",
+        description: "Validate pasted JSON and convert it to JSON, YAML-like, or TOML output.",
         category: "V2 - Workflow Tools",
         icon: <RefreshCw className="text-white/70" />,
     },
     {
         id: "network-scanner",
         title: "Local Network Scanner",
-        description: "Scan your WiFi network to see all connected devices.",
+        description: "Probe a short local subnet and port list from the webview.",
         category: "V2 - Workflow Tools",
         icon: <Wifi className="text-white/70" />,
     },
@@ -143,8 +139,8 @@ export const devTools: DevTool[] = [
     },
     {
         id: "exif-timeline",
-        title: "Image EXIF Timeline",
-        description: "Load photos and plot them on a timeline by EXIF date.",
+        title: "Image Timeline",
+        description: "Build a local photo timeline from available file modification dates.",
         category: "V2 - Workflow Tools",
         icon: <Calendar className="text-white/70" />,
     },
@@ -172,37 +168,30 @@ export const devTools: DevTool[] = [
         icon: <ImageMinus className="text-white/70" />,
     },
     {
-        id: "ai-handwriting",
-        title: "AI Handwriting Decoder",
-        description: "Upload a photo of handwritten notes and get text.",
-        category: "V3 - Advanced Tools",
-        icon: <PenTool className="text-white/70" />,
-    },
-    {
         id: "link-rot",
         title: "Link Rot Checker",
-        description: "Check which hyperlinks in a document/URL are dead.",
+        description: "Check pasted URLs and flag responses or webview/CORS failures.",
         category: "V3 - Advanced Tools",
         icon: <Globe className="text-white/70" />,
     },
     {
         id: "password-auditor",
         title: "Password Auditor",
-        description: "Generate passwords and audit for strength/exposure.",
+        description: "Generate local passwords and audit pasted passwords for basic strength.",
         category: "V3 - Advanced Tools",
         icon: <Lock className="text-white/70" />,
     },
     {
         id: "timestamp-editor",
-        title: "File Timestamp Editor",
-        description: "Change created/modified/accessed timestamps.",
+        title: "Timestamp Manifest Builder",
+        description: "Create a timestamp manifest for selected files.",
         category: "V3 - Advanced Tools",
         icon: <Clock className="text-white/70" />,
     },
     {
         id: "dns-lookup",
-        title: "DNS Lookup & WHOIS",
-        description: "Query DNS records and WHOIS for any domain.",
+        title: "DNS A Record Lookup",
+        description: "Query DNS A records through DNS-over-HTTPS.",
         category: "V3 - Advanced Tools",
         icon: <Globe className="text-white/70" />,
     },
@@ -216,21 +205,21 @@ export const devTools: DevTool[] = [
     {
         id: "diff-patcher",
         title: "Diff Patcher",
-        description: "Apply a .patch or .diff file to a text document.",
+        description: "Apply simple text diff additions and removals to pasted content.",
         category: "V3 - Advanced Tools",
         icon: <Puzzle className="text-white/70" />,
     },
     {
         id: "stegano-detector",
         title: "Steganography Detector",
-        description: "Detect or embed hidden data inside image files.",
+        description: "Run a quick low-bit density heuristic against a file.",
         category: "V3 - Advanced Tools",
         icon: <Ghost className="text-white/70" />,
     },
     {
         id: "ai-organiser",
-        title: "AI File Organiser",
-        description: "Analyse a folder and suggest a folder structure.",
+        title: "File Organiser",
+        description: "Suggest a folder structure from selected file types and names.",
         category: "V3 - Advanced Tools",
         icon: <FolderTree className="text-white/70" />,
     }
