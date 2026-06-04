@@ -2,7 +2,7 @@
 
 DawnDesk uses semantic versioning while it is in early development.
 
-Current version: `0.2.0`
+Current version: `0.9.3`
 
 ## Version Sources
 
@@ -135,6 +135,23 @@ Then manually update:
 - `README.md`
 - `docs/VERSIONING.md`
 
+## Auto-Update Releases
+
+DawnDesk uses the Tauri updater plugin for desktop auto-updates. The app checks this release asset:
+
+```text
+https://github.com/AdeelTahir-SE/DawnDesk/releases/latest/download/latest.json
+```
+
+Before shipping auto-updates:
+
+1. Keep the Tauri updater private key outside git.
+2. Confirm the generated public key in `src-tauri/tauri.conf.json` matches that private key.
+3. Build release bundles with `TAURI_SIGNING_PRIVATE_KEY` and, if used, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` set in the release environment.
+4. Upload the generated installer, signature, and `latest.json` updater manifest to the GitHub release.
+
+The update button appears in the top navigation only when the updater reports a newer signed version.
+
 ## Do Not Do This
 
 - Do not leave Tauri and package versions different.
@@ -148,7 +165,8 @@ Then manually update:
 | Version | Status | Notes |
 | --- | --- | --- |
 | `0.1.0` | Early development | Initial DawnDesk app baseline. |
-| `0.2.0` | Current | Structured multi-sub-app baseline with documentation, testing, asset cleanup, auth flow updates, and versioning rules. |
+| `0.2.0` | Superseded | Structured multi-sub-app baseline with documentation, testing, asset cleanup, auth flow updates, and versioning rules. |
+| `0.9.3` | Current | Desktop updater wiring, signed updater configuration, and release documentation. |
 
 ## Planned Version Milestones
 

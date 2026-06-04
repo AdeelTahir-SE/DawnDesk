@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 
-export default function Home(){
-    return(
-          <div className="flex min-h-screen flex-col items-center justify-center overflow-hidden">
+export default function Home() {
+  return (
+    <div className="flex flex-col items-center justify-center">
       <video
         className="fixed top-0 left-0 w-full h-full object-cover blur-sm"
         src="/sunflower_field_with_lake.mp4"
@@ -10,37 +10,37 @@ export default function Home(){
         loop
         muted
       />
-      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-center px-6 py-10 text-center">
+      <div className="relative w-full t-0 p-0 m-0 max-h-screen z-10 flex flex-col items-center justify-center">
         <img
           src="/realistic_logo.png"
           alt="DawnDesk Logo"
           width={100}
           height={100}
-          className="mb-2 w-[min(36vw,260px)] min-w-[150px]"
+          className="w-[40vw]"
         />
-        <div className="flex max-w-3xl flex-col items-center justify-center">
-          <h1 className="mb-4 text-5xl font-bold text-white sm:text-6xl md:text-7xl xl:text-8xl">DawnDesk</h1>
+        <div className="px-[20px] flex flex-col items-center justify-center relative sm:bottom-10 xl:bottom-20">
+          <h1 className="text-3xl sm:text-5xl md:text-7xl xl:text-8xl font-bold text-white mb-4">DawnDesk</h1>
           <p className="text-xs font-semibold tracking-[0.2em] uppercase text-yellow-400 ">
             Brighten Your Workflow
           </p>
 
-          <p className="mb-3 mt-2 text-3xl font-black leading-tight text-white md:text-4xl">
+          <p className="text-xl md:text-4xl font-black text-white mb-2 leading-tight">
             Welcome to <span className="text-yellow-400">DawnDesk</span>
           </p>
 
-          <p className="mb-8 max-w-xl text-base leading-relaxed text-white/75 md:text-lg">
-            Tasks, notes, calendar, files, messages — everything you've been
+          <p className="text-white/60 text-base leading-relaxed mb-8 max-w-md">
+            Tasks, notes, calendar, files, messages - everything you've been
             hunting across a dozen apps, finally in one place.
           </p>
 
           <Link
-            to="/auth"
+            to="/dashboard"
             className="bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-neutral-900 font-bold py-2.5 px-6 rounded-lg transition-colors duration-150"
           >
-            Get Started
+            Explore DawnDesk
           </Link>
         </div>
       </div>
     </div>
-    )
+  );
 }

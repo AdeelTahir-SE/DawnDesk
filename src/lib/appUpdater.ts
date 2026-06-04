@@ -1,3 +1,6 @@
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
+
 type TauriUpdate = {
   version?: string;
   date?: string;
@@ -15,17 +18,7 @@ export type AppUpdateInfo = {
 
 export async function checkForAppUpdate(): Promise<AppUpdateInfo | null> {
   try {
-    const updaterModule = "@tauri-apps/plugin-updater";
-    const updater = await import(/* @vite-ignore */ updaterModule) as {
-      check?: () => Promise<TauriUpdate | null>;
-    };
-
-    if (typeof updater.check !== "function") {
-      pendingUpdate = null;
-      return null;
-    }
-
-    const update = await updater.check();
+    const update = await check();
     pendingUpdate = update;
 
     if (!update) return null;
@@ -52,11 +45,7 @@ export async function installAvailableAppUpdate(onEvent?: (event: unknown) => vo
   await pendingUpdate.downloadAndInstall(onEvent);
 
   try {
-    const processModule = "@tauri-apps/plugin-process";
-    const processPlugin = await import(/* @vite-ignore */ processModule) as {
-      relaunch?: () => Promise<void>;
-    };
-    await processPlugin.relaunch?.();
+    await relaunch();
   } catch {
     // Windows installers may close the app automatically after install.
   }

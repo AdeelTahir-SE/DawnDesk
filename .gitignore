@@ -28,6 +28,8 @@ vite.config.d.ts
 *.sln
 *.sw?
 .env
+*.tauri-key
+*.tauri.key
 
 # Website content
 dawndesk-website-content/

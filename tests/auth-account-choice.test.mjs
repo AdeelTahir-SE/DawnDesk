@@ -13,10 +13,11 @@ async function readText(relativePath) {
 test("Google OAuth asks users to choose an account", async () => {
   const authChoice = await readText("src/Pages/AuthChoice.tsx");
   const requiredAuth = await readText("src/components/RequireGoogleAuth.tsx");
+  const desktopAuth = await readText("src/lib/desktopAuth.ts");
 
-  for (const source of [authChoice, requiredAuth]) {
-    assert.match(source, /queryParams:\s*{\s*prompt:\s*"select_account"/s);
-  }
+  assert.match(authChoice, /signInWithGoogleDesktop/);
+  assert.match(requiredAuth, /signInWithGoogleDesktop/);
+  assert.match(desktopAuth, /queryParams:\s*{\s*prompt:\s*"select_account"/s);
 });
 
 test("settings exposes a switch account flow", async () => {
@@ -26,4 +27,3 @@ test("settings exposes a switch account flow", async () => {
   assert.match(settings, /navigate\("\/auth\?switch=account"\)/);
   assert.match(settings, /Switch Account/);
 });
-
