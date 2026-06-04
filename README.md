@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
+  <a href="./LICENSE"><img alt="License: Source-available non-commercial" src="https://img.shields.io/badge/license-Source--available_non--commercial-green.svg" /></a>
   <img alt="Version" src="https://img.shields.io/badge/version-0.9.4-blue.svg" />
   <img alt="Desktop" src="https://img.shields.io/badge/desktop-Tauri_2-orange.svg" />
   <img alt="Frontend" src="https://img.shields.io/badge/frontend-React_19-61DAFB.svg" />
@@ -23,7 +23,7 @@
   |
   <a href="./CONTRIBUTING.md">Contributing</a>
   |
-  <a href="./LICENSE">MIT license</a>
+  <a href="./LICENSE">License</a>
   |
   <a href="./SECURITY.md">Security</a>
 </p>

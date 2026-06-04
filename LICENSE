@@ -1,16 +1,33 @@
-MIT License
+DawnDesk Source-Available Non-Commercial License
 
 Copyright (c) 2026 DawnDesk contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge, publish, and distribute copies of the Software for
+personal, educational, research, evaluation, and other non-commercial purposes,
+subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. The above copyright notice and this license notice shall be included in all
+   copies or substantial portions of the Software.
+
+2. Commercial use is reserved exclusively to the copyright holder or author.
+   No person or organization other than the copyright holder or author may use,
+   sell, sublicense, host, offer, distribute, incorporate, or otherwise exploit
+   the Software, modified versions of the Software, or substantial portions of
+   the Software for commercial purposes without prior written permission from
+   the copyright holder or author.
+
+3. "Commercial purposes" include, but are not limited to, selling the Software,
+   selling access to the Software, using the Software in a paid product or
+   service, using the Software to provide paid consulting or managed services,
+   bundling the Software with a commercial offering, or using the Software in
+   a way intended to generate revenue or commercial advantage.
+
+4. The Software may not be relicensed under the MIT License, any other
+   permissive open source license, or any license that grants commercial use
+   rights unless the copyright holder or author provides explicit written
+   permission.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

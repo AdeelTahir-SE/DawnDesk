@@ -24,7 +24,7 @@ test("README badges match package metadata", async () => {
   const readme = await readText("README.md");
 
   assert.match(readme, new RegExp(`version-${pkg.version.replaceAll(".", "\\.")}`));
-  assert.match(readme, /license-MIT/);
+  assert.match(readme, /license-Source--available_non--commercial/);
   assert.match(readme, /desktop-Tauri_2/);
   assert.match(readme, /frontend-React_19/);
 });
