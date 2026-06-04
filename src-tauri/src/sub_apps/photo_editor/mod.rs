@@ -51,7 +51,10 @@ fn sanitize_file_name(file_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static EXPORT_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn unique_export_dir(test_name: &str) -> PathBuf {
         let stamp = SystemTime::now()
@@ -73,6 +76,7 @@ mod tests {
 
     #[test]
     fn photo_export_file_writes_bytes_to_configured_export_dir() {
+        let _guard = EXPORT_ENV_LOCK.lock().expect("export env lock should not be poisoned");
         let export_dir = unique_export_dir("photo-export");
         env::set_var("DAWNDESK_EXPORT_DIR", &export_dir);
 
@@ -91,6 +95,7 @@ mod tests {
 
     #[test]
     fn photo_export_file_uses_default_name_for_blank_filename() {
+        let _guard = EXPORT_ENV_LOCK.lock().expect("export env lock should not be poisoned");
         let export_dir = unique_export_dir("blank-photo-export");
         env::set_var("DAWNDESK_EXPORT_DIR", &export_dir);
 
