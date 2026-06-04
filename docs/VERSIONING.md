@@ -2,7 +2,7 @@
 
 DawnDesk uses semantic versioning while it is in early development.
 
-Current version: `0.9.3`
+Current version: `0.9.4`
 
 ## Version Sources
 
@@ -166,7 +166,8 @@ The update button appears in the top navigation only when the updater reports a 
 | --- | --- | --- |
 | `0.1.0` | Early development | Initial DawnDesk app baseline. |
 | `0.2.0` | Superseded | Structured multi-sub-app baseline with documentation, testing, asset cleanup, auth flow updates, and versioning rules. |
-| `0.9.3` | Current | Desktop updater wiring, signed updater configuration, and release documentation. |
+| `0.9.3` | Superseded | Desktop updater wiring, signed updater configuration, and release documentation. |
+| `0.9.4` | Current | Release version for signed auto-update distribution. |
 
 ## Planned Version Milestones
 

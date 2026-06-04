@@ -10,6 +10,7 @@ This folder is the source of truth for DawnDesk documentation. Keep it small and
 - [Development](DEVELOPMENT.md): Setup, commands, builds, checks, and troubleshooting.
 - [Testing](TESTING.md): Test layers, naming rules, required coverage, and templates for new tests.
 - [Versioning](VERSIONING.md): Version bump rules, source files, and release checklist.
+- [Release Notes](RELEASE_NOTES.md): Required format for GitHub release titles and release notes.
 - [Assets](ASSETS.md): Active image and media assets, where they live, and how to clean them up safely.
 - [Documentation Guide](DOCUMENTATION_GUIDE.md): How to keep docs maintained without creating messy duplicate files.
 - [Feature and Sub-App Format](FEATURE_AND_SUB_APP_FORMAT.md): Required format for adding new sub-apps and features.

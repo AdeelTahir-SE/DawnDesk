@@ -855,6 +855,94 @@ fn apply_hardware_acceleration_from_settings() {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_deep_link_from_args_returns_first_dawndesk_auth_callback() {
+        let args = vec![
+            "dawndesk.exe".to_string(),
+            "--flag".to_string(),
+            "https://example.com/ignored".to_string(),
+            "dawndesk://auth/callback?code=abc123".to_string(),
+            "dawndesk://auth/callback?code=second".to_string(),
+        ];
+
+        assert_eq!(
+            auth_deep_link_from_args(args),
+            Some("dawndesk://auth/callback?code=abc123".to_string())
+        );
+    }
+
+    #[test]
+    fn auth_deep_link_from_args_ignores_non_auth_urls() {
+        let args = vec![
+            "dawndesk.exe".to_string(),
+            "dawndesk://settings".to_string(),
+            "https://example.com".to_string(),
+        ];
+
+        assert_eq!(auth_deep_link_from_args(args), None);
+    }
+
+    #[test]
+    fn markdown_pdf_builder_outputs_pdf_with_expected_markers() {
+        let pdf = build_markdown_pdf(
+            "# Release Notes\n\n## Highlights\n\n- Added updater\n- Fixed exports\n\nPlain text paragraph.",
+        );
+        let text = String::from_utf8_lossy(&pdf);
+
+        assert!(text.starts_with("%PDF-1.4"));
+        assert!(text.contains("/Type /Catalog"));
+        assert!(text.contains("/Type /Pages"));
+        assert!(text.contains("xref"));
+        assert!(text.ends_with("%%EOF"));
+    }
+
+    #[test]
+    fn markdown_inline_stripper_removes_common_formatting_marks() {
+        assert_eq!(
+            strip_markdown_inline("**bold** __strong__ *em* _i_ `code`"),
+            "bold strong em i code"
+        );
+    }
+
+    #[test]
+    fn wrap_pdf_text_breaks_long_paragraphs_and_keeps_empty_input_visible() {
+        let wrapped = wrap_pdf_text(
+            "DawnDesk keeps release notes, updater metadata, and native commands tidy.",
+            11.0,
+            80.0,
+        );
+
+        assert!(wrapped.len() > 1);
+        assert_eq!(wrap_pdf_text("", 11.0, 80.0), vec![String::new()]);
+    }
+
+    #[test]
+    fn ai_provider_normalization_and_defaults_are_stable() {
+        let settings = AiProviderSettings::default();
+
+        assert_eq!(normalize_ai_provider(None), "openai");
+        assert_eq!(normalize_ai_provider(Some(&"gemini".to_string())), "gemini");
+        assert_eq!(normalize_ai_provider(Some(&"unknown".to_string())), "openai");
+        assert_eq!(ai_default_model("openai", &settings), "gpt-4.1-mini");
+        assert_eq!(ai_default_model("gemini", &settings), "gemini-2.5-flash");
+        assert_eq!(ai_default_model("anthropic", &settings), "claude-3-5-haiku-latest");
+    }
+
+    #[test]
+    fn require_ai_key_rejects_missing_or_blank_keys() {
+        assert!(require_ai_key("openai", &None).is_err());
+        assert!(require_ai_key("openai", &Some("   ".to_string())).is_err());
+        assert_eq!(
+            require_ai_key("openai", &Some(" sk-test ".to_string())).expect("key should trim"),
+            "sk-test"
+        );
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     apply_hardware_acceleration_from_settings();

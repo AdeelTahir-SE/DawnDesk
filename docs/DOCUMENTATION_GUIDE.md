@@ -11,8 +11,9 @@ When you add or change a feature, update the existing docs in this order:
 3. `docs/DEVELOPMENT.md` for setup, build, scripts, environment, testing, or troubleshooting changes.
 4. `docs/TESTING.md` for test strategy, required coverage, mocks, fixtures, or command changes.
 5. `docs/VERSIONING.md` for release version rules, current version, or version bump process changes.
-6. `docs/ASSETS.md` for new, renamed, or removed images, video, icons, and other static assets.
-7. `docs/FEATURE_AND_SUB_APP_FORMAT.md` for the required feature or sub-app checklist.
+6. `docs/RELEASE_NOTES.md` for GitHub release title and release notes format changes.
+7. `docs/ASSETS.md` for new, renamed, or removed images, video, icons, and other static assets.
+8. `docs/FEATURE_AND_SUB_APP_FORMAT.md` for the required feature or sub-app checklist.
 
 ## When to Create a New Doc
 

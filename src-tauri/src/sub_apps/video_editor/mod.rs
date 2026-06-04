@@ -789,6 +789,19 @@ pub async fn ve_load_project(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_project_path(name: &str) -> String {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir()
+            .join(format!("dawndesk-{name}-{stamp}.json"))
+            .to_string_lossy()
+            .to_string()
+    }
 
     #[tokio::test]
     async fn test_ve_generate_waveform() {
@@ -799,5 +812,160 @@ mod tests {
         assert!(waveform_result.is_ok());
         let peaks = waveform_result.unwrap();
         assert_eq!(peaks.len(), 100);
+        assert!(peaks.iter().all(|peak| (0.2..=1.0).contains(peak)));
+        assert!(peaks.windows(2).any(|pair| (pair[0] - pair[1]).abs() > f32::EPSILON));
+    }
+
+    #[tokio::test]
+    async fn save_and_load_project_round_trips_exact_json() {
+        let path = temp_project_path("video-project");
+        let project_data = r#"{"name":"Cut 01","tracks":[{"type":"video","clips":[]}]}"#.to_string();
+
+        ve_save_project(path.clone(), project_data.clone())
+            .await
+            .expect("project save should succeed");
+        let loaded = ve_load_project(path.clone())
+            .await
+            .expect("project load should succeed");
+
+        assert_eq!(loaded, project_data);
+        let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn load_project_reports_missing_file_errors() {
+        let missing_path = temp_project_path("missing-video-project");
+        let result = ve_load_project(missing_path).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn import_media_command_points_to_frontend_dialog() {
+        let result = ve_import_media().await;
+
+        assert_eq!(result.unwrap_err(), "Use frontend dialog plugin instead");
+    }
+
+    #[test]
+    fn image_path_detection_is_case_insensitive_and_limited_to_supported_formats() {
+        assert!(is_image_path("cover.PNG"));
+        assert!(is_image_path("photo.JpEg"));
+        assert!(is_image_path("frame.webp"));
+        assert!(is_image_path("scan.BMP"));
+        assert!(is_image_path("animation.gif"));
+        assert!(!is_image_path("movie.mp4"));
+        assert!(!is_image_path("archive.png.zip"));
+    }
+
+    #[test]
+    fn codec_candidates_prefer_accelerated_codecs_before_software_fallbacks() {
+        assert_eq!(codec_candidates("h264").last(), Some(&"libx264"));
+        assert_eq!(codec_candidates("h265").last(), Some(&"libx265"));
+        assert_eq!(codec_candidates("av1"), vec!["libaom-av1", "libx264"]);
+        assert_eq!(codec_candidates("unknown"), vec!["libx264"]);
+    }
+
+    #[test]
+    fn effect_filter_chain_clamps_values_and_skips_disabled_effects() {
+        let effects = vec![
+            json!({
+                "type": "gaussian-blur",
+                "enabled": true,
+                "params": [{ "key": "radius", "value": 250.0 }]
+            }),
+            json!({
+                "type": "brightness-contrast",
+                "params": [
+                    { "key": "brightness", "value": -150.0 },
+                    { "key": "contrast", "value": 250.0 }
+                ]
+            }),
+            json!({
+                "type": "mirror",
+                "enabled": false,
+                "params": [{ "key": "axis", "value": "both" }]
+            }),
+            json!({
+                "type": "pixelate",
+                "params": [{ "key": "size", "value": 1.0 }]
+            }),
+        ];
+
+        let chain = effect_filter_chain(&effects);
+
+        assert!(chain.contains("gblur=sigma=100.000"));
+        assert!(chain.contains("eq=brightness=-1.0000:contrast=2.0000"));
+        assert!(chain.contains("scale=iw/2:ih/2:flags=neighbor"));
+        assert!(!chain.contains("hflip"));
+        assert!(!chain.contains("vflip"));
+    }
+
+    #[test]
+    fn collect_render_clips_filters_invalid_tracks_and_applies_defaults() {
+        let project = json!({
+            "tracks": [
+                {
+                    "type": "video",
+                    "visible": false,
+                    "clips": [
+                        { "path": "hidden.mp4", "mediaType": "video", "duration": 5.0 }
+                    ]
+                },
+                {
+                    "type": "audio",
+                    "muted": false,
+                    "volume": 0.5,
+                    "clips": [
+                        {
+                            "path": "voice.wav",
+                            "mediaType": "audio",
+                            "startTime": -5.0,
+                            "duration": 3.0,
+                            "inPoint": -2.0,
+                            "volume": 1.5
+                        },
+                        {
+                            "path": "bad.mov",
+                            "mediaType": "video",
+                            "duration": 0.0
+                        }
+                    ]
+                },
+                {
+                    "type": "video",
+                    "clips": [
+                        {
+                            "path": "image.png",
+                            "mediaType": "image",
+                            "startTime": 8.0,
+                            "duration": 4.0,
+                            "opacity": 3.0,
+                            "scale": 8.0,
+                            "positionX": 0.25,
+                            "positionY": -0.5
+                        },
+                        {
+                            "path": "",
+                            "mediaType": "image",
+                            "duration": 1.0
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let clips = collect_render_clips(&project);
+
+        assert_eq!(clips.len(), 2);
+        assert_eq!(clips[0].path, "voice.wav");
+        assert_eq!(clips[0].start_time, 0.0);
+        assert_eq!(clips[0].in_point, 0.0);
+        assert_eq!(clips[0].volume, 0.75);
+        assert_eq!(clips[1].path, "image.png");
+        assert_eq!(clips[1].opacity, 1.0);
+        assert_eq!(clips[1].scale, 4.0);
+        assert_eq!(clips[1].position_x, 0.25);
+        assert_eq!(clips[1].position_y, -0.5);
     }
 }

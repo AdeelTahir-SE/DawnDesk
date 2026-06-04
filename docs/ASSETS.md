@@ -21,6 +21,19 @@ Bundled assets are imported by source files and included by Vite.
 | `src/assets/bg-ocean.png` | Photo editor onboarding, video editor onboarding | Shared onboarding background option. |
 | `src/assets/bg-forest.png` | Photo editor onboarding, video editor onboarding | Shared onboarding background option. |
 
+## Active Desktop Icon Assets
+
+Tauri uses these assets for desktop builds and installers.
+
+| Asset | Used by | Notes |
+| --- | --- | --- |
+| `src-tauri/icons/icon-8192.png` | Source master for icon regeneration | High-resolution DawnDesk desktop icon master. |
+| `src-tauri/icons/icon.png` | Tauri icon source | 1024px PNG generated from the 8192px master. |
+| `src-tauri/icons/icon.ico` | Windows desktop icon | Multi-size ICO generated from the 8192px master. |
+| `src-tauri/icons/icon.icns` | macOS desktop icon | ICNS generated from the 8192px master. |
+| `src-tauri/icons/32x32.png`, `src-tauri/icons/128x128.png`, `src-tauri/icons/128x128@2x.png` | Tauri bundle config | PNG sizes referenced by `src-tauri/tauri.conf.json`. |
+| `src-tauri/icons/Square*.png`, `src-tauri/icons/StoreLogo.png` | Windows tile and store assets | Generated from the 8192px master. |
+
 ## Cleanup Completed
 
 Unused legacy public assets were removed:
