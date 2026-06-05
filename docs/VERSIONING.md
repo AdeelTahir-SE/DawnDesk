@@ -152,6 +152,28 @@ Before shipping auto-updates:
 
 The update button appears in the top navigation only when the updater reports a newer signed version.
 
+## Release Script
+
+Use `scripts/release.ps1` to run the local release flow end to end:
+
+```powershell
+.\scripts\release.ps1 `
+  -Version 0.9.4 `
+  -Tag v0.9.4 `
+  -ReleaseTitle "DawnDesk v0.9.4 - Desktop Auto-Update Setup" `
+  -NotesFile docs/releases/v0.9.4.md `
+  -Draft
+```
+
+Before running it:
+
+1. Create release notes using `docs/RELEASE_NOTES.md`.
+2. Put local updater signing values in `.env`, or export them in the shell.
+3. Log in with GitHub CLI using `gh auth login`.
+4. Commit the release changes.
+
+The script loads `.env`, verifies version sources, runs frontend and Rust tests, builds signed Tauri bundles, confirms `latest.json` exists, creates the git tag, pushes the branch and tag, and publishes the GitHub release with generated bundle assets.
+
 ## Do Not Do This
 
 - Do not leave Tauri and package versions different.
