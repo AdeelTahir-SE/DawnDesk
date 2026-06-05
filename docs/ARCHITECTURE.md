@@ -21,7 +21,6 @@ Workspace routes:
 
 - `/dashboard`
 - `/photo-editor`
-- `/photo-editor/help`
 - `/video-editor`
 - `/settings`
 - `/prompts`

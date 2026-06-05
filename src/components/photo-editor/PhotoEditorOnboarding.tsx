@@ -227,7 +227,7 @@ export default function PhotoEditorOnboarding({ children }: { children: React.Re
       title: <><span className="text-white">Learn.</span><br/><span className="text-[#facc15]">Create. Grow.</span></>,
       desc: <p>Use the built-in help page when you<br/>need a quick guide to tools, menus,<br/>shortcuts, and export options.</p>,
       features: [
-        { icon: <PlaySquare className="w-5 h-5 text-[#facc15]" />, title: "Help Page", desc: "Open the Photo Editor guide from the Help menu" },
+        { icon: <PlaySquare className="w-5 h-5 text-[#facc15]" />, title: "Documentation", desc: "Open the Photo Editor guide from the Help menu" },
         { icon: <Lightbulb className="w-5 h-5 text-[#facc15]" />, title: "Shortcuts", desc: "Review common keyboard actions" },
         { icon: <ImageIcon className="w-5 h-5 text-[#facc15]" />, title: "Export Guide", desc: "Understand format, quality, scale, and presets" }
       ],

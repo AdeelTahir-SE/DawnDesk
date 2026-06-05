@@ -30,7 +30,7 @@ Prompt Manager is available at `/prompts`. It supports storing, organizing, sear
 
 ## Photo Editor
 
-Photo Editor is available at `/photo-editor`, with help at `/photo-editor/help`. It includes canvas editing, layers, histogram, adjustments, toolbar/menu/options UI, color picking, swatches, film strip, import/export helpers, filters, drawing tools, and project-file support.
+Photo Editor is available at `/photo-editor`, with help opened externally at `https://dawndesk.app/documentation/photo-editor`. It includes canvas editing, layers, histogram, adjustments, toolbar/menu/options UI, color picking, swatches, film strip, import/export helpers, filters, drawing tools, and project-file support.
 
 The native layer currently exposes photo export support.
 

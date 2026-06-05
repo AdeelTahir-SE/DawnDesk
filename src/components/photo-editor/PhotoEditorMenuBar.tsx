@@ -149,8 +149,6 @@ export default function PhotoEditorMenuBar({
       label: 'Help',
       items: [
         { label: 'How to Use Photo Editor', description: 'Open the full user guide for every editor feature.', action: () => { onOpenHelp?.(); setOpenMenu(null); } },
-        { label: 'Keyboard Shortcuts', description: 'Shortcut reference is included in the How to Use guide.', action: () => { onOpenHelp?.(); setOpenMenu(null); } },
-        { label: 'About Photo Editor', description: 'Learn what this built-in DawnDesk editor is for.', action: () => { onOpenHelp?.(); setOpenMenu(null); } },
       ],
     },
   ];

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useAppLogger } from '../utils/LoggerContext';
 import { EditorProvider, useEditor } from '../engine/photo-editor/EditorContext';
 import { openImageFromDisk, calculateFitZoom, loadImageFile } from '../engine/photo-editor/importImage';
@@ -60,7 +61,6 @@ function PhotoEditorInner() {
   const logError = useCallback((action: string, message: string, options?: Parameters<typeof logErrorBase>[2]) => {
     logErrorBase(action, message, { source: 'photo-editor', ...options });
   }, [logErrorBase]);
-  const navigate = useNavigate();
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -545,7 +545,11 @@ function PhotoEditorInner() {
         onExport={handleExport}
         onExportDialog={() => setShowExportDialog(true)}
         onBatchExport={handleBatchExport}
-        onOpenHelp={() => navigate('/photo-editor/help')}
+        onOpenHelp={() => {
+          openUrl('https://dawndesk.app/documentation/photo-editor').catch((err) => {
+            logError('Photo Editor help failed', String(err), { source: 'photo-editor' });
+          });
+        }}
         onRotate={handleRotate}
         onFlip={handleFlip}
         onApplyFilter={applyFilter}
