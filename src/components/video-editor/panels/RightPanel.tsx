@@ -5,7 +5,7 @@ import ColorGradingPanel from './ColorGradingPanel';
 import TextPanel from './TextPanel';
 import AudioPanel from './AudioPanel';
 import MaskPanel from './MaskPanel';
-import type { RightPanelTab } from '../../../engine/video-editor/types';
+import type { EffectParam, RightPanelTab } from '../../../engine/video-editor/types';
 
 const tabs: { id: RightPanelTab; icon: React.ElementType }[] = [
   { id: 'properties', icon: SlidersHorizontal },
@@ -24,10 +24,12 @@ export default function RightPanel() {
       <div className="ve-panel">
         <div className="ve-panel-tabs">
           {tabs.map(tab => (
-            <button key={tab.id}
+            <button
+              key={tab.id}
               className={`ve-panel-tab ${state.activeRightPanel === tab.id ? 'active' : ''}`}
               onClick={() => dispatch({ type: 'SET_RIGHT_PANEL', payload: tab.id })}
-              title={tab.id.charAt(0).toUpperCase() + tab.id.slice(1)}>
+              title={tab.id.charAt(0).toUpperCase() + tab.id.slice(1)}
+            >
               <tab.icon size={14} />
             </button>
           ))}
@@ -62,6 +64,10 @@ function EffectsAppliedPanel() {
   const clip = state.project.tracks.flatMap(t => t.clips).find(c => c.id === clipId);
   if (!clip) return null;
 
+  const updateParam = (effectId: string, param: EffectParam, value: EffectParam['value']) => {
+    dispatch({ type: 'UPDATE_EFFECT_PARAM', payload: { clipId, effectId, paramKey: param.key, value } });
+  };
+
   return (
     <div>
       <div className="ve-panel-section-title" style={{ marginBottom: 8 }}>Applied Effects</div>
@@ -73,21 +79,87 @@ function EffectsAppliedPanel() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {clip.effects.map(effect => (
-            <div key={effect.id} style={{
-              padding: '8px 10px', borderRadius: 6, background: 'var(--ve-bg-surface)',
-              border: effect.id === state.selectedEffectId ? '1px solid var(--ve-accent)' : '1px solid var(--ve-border)',
-              boxShadow: effect.id === state.selectedEffectId ? '0 0 0 1px rgba(250,204,21,0.18)' : undefined,
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button className={`ve-toggle ${effect.enabled ? 'active' : ''}`}
-                  onClick={() => dispatch({ type: 'TOGGLE_EFFECT', payload: { clipId, effectId: effect.id } })} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>{effect.name}</span>
+            <div
+              key={effect.id}
+              className="ve-panel-section"
+              style={{
+                border: effect.id === state.selectedEffectId ? '1px solid var(--ve-accent)' : '1px solid var(--ve-border)',
+                boxShadow: effect.id === state.selectedEffectId ? '0 0 0 1px rgba(250,204,21,0.18)' : undefined,
+              }}
+              onClick={() => dispatch({ type: 'SELECT_EFFECT', payload: effect.id })}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <button
+                    className={`ve-toggle ${effect.enabled ? 'active' : ''}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      dispatch({ type: 'TOGGLE_EFFECT', payload: { clipId, effectId: effect.id } });
+                    }}
+                  />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>{effect.name}</span>
+                </div>
+                <button
+                  className="ve-tool-btn"
+                  style={{ width: 20, height: 20 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    dispatch({ type: 'REMOVE_EFFECT', payload: { clipId, effectId: effect.id } });
+                  }}
+                >
+                  <span style={{ fontSize: 13, color: '#ef4444' }}>x</span>
+                </button>
               </div>
-              <button className="ve-tool-btn" style={{ width: 20, height: 20 }}
-                onClick={() => dispatch({ type: 'REMOVE_EFFECT', payload: { clipId, effectId: effect.id } })}>
-                <span style={{ fontSize: 13, color: '#ef4444' }}>×</span>
-              </button>
+
+              {effect.params.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {effect.params.map(param => (
+                    <div key={param.key} onClick={(event) => event.stopPropagation()}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                        <span className="ve-slider-label">{param.label}</span>
+                        {param.type === 'number' && (
+                          <span className="ve-slider-value">{Number(param.value).toFixed((param.step ?? 1) < 1 ? 1 : 0)}</span>
+                        )}
+                      </div>
+                      {param.type === 'number' && (
+                        <input
+                          type="range"
+                          className="ve-slider"
+                          min={param.min ?? 0}
+                          max={param.max ?? 100}
+                          step={param.step ?? 1}
+                          value={Number(param.value)}
+                          onChange={(event) => updateParam(effect.id, param, Number(event.target.value))}
+                        />
+                      )}
+                      {param.type === 'select' && (
+                        <select
+                          className="ve-speed-select"
+                          style={{ width: '100%' }}
+                          value={String(param.value)}
+                          onChange={(event) => updateParam(effect.id, param, event.target.value)}
+                        >
+                          {(param.options ?? []).map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      )}
+                      {param.type === 'boolean' && (
+                        <button
+                          className={`ve-toggle ${param.value ? 'active' : ''}`}
+                          onClick={() => updateParam(effect.id, param, !param.value)}
+                        />
+                      )}
+                      {param.type === 'color' && (
+                        <input
+                          type="color"
+                          value={String(param.value)}
+                          onChange={(event) => updateParam(effect.id, param, event.target.value)}
+                          style={{ width: 28, height: 28, border: '1px solid var(--ve-border)', borderRadius: 4, padding: 0, background: 'none' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

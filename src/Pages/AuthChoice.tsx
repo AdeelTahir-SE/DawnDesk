@@ -116,15 +116,15 @@ export default function AuthChoice() {
               Choose how you want to start your workspace.
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-white/62 sm:text-lg">
-              Sign in to prepare cloud sync, or keep moving locally as a guest.
+              Sign in with Google to access workspaces like Project Manager, Finance Manager, and more coming soon.
             </p>
           </div>
 
           <div className="grid max-w-3xl gap-3 pb-4 sm:grid-cols-3">
             {[
-              { icon: <Cloud className="h-5 w-5" />, label: "Cloud ready", text: "Prepared for synced profiles." },
-              { icon: <ShieldCheck className="h-5 w-5" />, label: "Private by default", text: "Guest mode stays local." },
-              { icon: <Sparkles className="h-5 w-5" />, label: "Fast setup", text: "Enter DawnDesk in one step." },
+              { icon: <Cloud className="h-5 w-5" />, label: "Project Manager", text: "Plan and manage shared project workspaces." },
+              { icon: <ShieldCheck className="h-5 w-5" />, label: "Finance Manager", text: "Access protected finance workspaces." },
+              { icon: <Sparkles className="h-5 w-5" />, label: "More coming soon", text: "New cloud workspaces are on the way." },
             ].map((item) => (
               <div key={item.label} className="rounded-xl border border-white/10 bg-neutral-950/55 p-4 backdrop-blur">
                 <div className="mb-3 grid h-9 w-9 place-items-center rounded-lg border border-yellow-400/25 bg-yellow-400/10 text-yellow-300">
@@ -143,7 +143,7 @@ export default function AuthChoice() {
               <p className="dd-label">Continue</p>
               <h2 className="mt-2 font-heading text-2xl font-bold tracking-tight text-white">Welcome to DawnDesk</h2>
               <p className="mt-2 text-sm leading-relaxed text-white/55">
-                Your workspace can be connected to Google later, but choosing now keeps the path clear.
+                Sign in with Google to unlock protected DawnDesk workspaces, including Project Manager and Finance Manager.
               </p>
             </div>
 
@@ -193,8 +193,8 @@ export default function AuthChoice() {
             <div className="mt-6 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-yellow-300">What changes?</p>
               <p className="mt-2 text-sm leading-relaxed text-white/55">
-                Google sign-in is for identity and future sync. Guest mode keeps today&apos;s DawnDesk experience
-                lightweight and device-first.
+                Google sign-in gives access to cloud-protected workspaces. Guest mode keeps local tools available, while
+                more signed-in workspaces are coming soon.
               </p>
             </div>
           </div>

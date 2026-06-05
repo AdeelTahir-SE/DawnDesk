@@ -3,7 +3,7 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 import TransportControls from './TransportControls';
 import { Maximize } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import type { Effect } from '../../../engine/video-editor/types';
+import type { ClipTransition, ColorGradingState, Effect, Mask, TextOverlay } from '../../../engine/video-editor/types';
 
 const MAX_EFFECTS_PER_PREVIEW_CLIP = 32;
 const MAX_DROP_SHADOWS_PER_PREVIEW_CLIP = 4;
@@ -19,6 +19,26 @@ function paramString(effect: Effect, key: string, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function buildAudioPreviewGain(state: ReturnType<typeof useVideoEditor>['state']) {
+  let gain = 1;
+  const audio = state.audioEffects;
+  if (audio.eq.enabled) {
+    const averageGain = audio.eq.bands.reduce((sum, band) => sum + band.gain, 0) / Math.max(1, audio.eq.bands.length);
+    gain *= clampNumber(1 + averageGain / 36, 0.35, 1.8);
+  }
+  if (audio.compressor.enabled) {
+    gain *= clampNumber(1 + audio.compressor.makeupGain / 24, 0.5, 1.6);
+    gain *= clampNumber(1 - Math.max(0, -audio.compressor.threshold - 18) / 140, 0.65, 1);
+  }
+  if (audio.noise.enabled) {
+    gain *= clampNumber(1 - Math.abs(audio.noise.reduction) / 240, 0.65, 1);
+  }
+  if (audio.reverb.enabled) {
+    gain *= clampNumber(1 + audio.reverb.mix / 500, 1, 1.2);
+  }
+  return gain;
+}
+
 interface PreviewEffectPlan {
   filter: string;
   mirrorX: number;
@@ -32,8 +52,310 @@ interface PreviewEffectPlan {
   pixelateSize: number;
 }
 
+interface PreviewTransitionPlan {
+  alpha: number;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+  rotationDeg: number;
+  filter: string;
+  clipShape: 'none' | 'left' | 'right' | 'top' | 'bottom' | 'diagonal';
+  clipProgress: number;
+  overlayColor: string | null;
+  overlayAlpha: number;
+}
+
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function easeProgress(value: number, easing: ClipTransition['easing']): number {
+  const t = clampNumber(value, 0, 1);
+  if (easing === 'ease-in') return t * t;
+  if (easing === 'ease-out') return 1 - (1 - t) * (1 - t);
+  if (easing === 'ease-in-out') return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  return t;
+}
+
+function getTransitionProgress(transition: ClipTransition | null, time: number, startTime: number, duration: number) {
+  if (!transition || transition.duration <= 0) return null;
+  const transitionDuration = Math.min(Math.max(transition.duration, 0.05), duration);
+  if (transition.edge === 'start') {
+    if (time < startTime || time > startTime + transitionDuration) return null;
+    return easeProgress((time - startTime) / transitionDuration, transition.easing);
+  }
+
+  const transitionStart = startTime + duration - transitionDuration;
+  if (time < transitionStart || time > startTime + duration) return null;
+  return easeProgress(1 - (time - transitionStart) / transitionDuration, transition.easing);
+}
+
+function buildPreviewTransitionPlan(
+  transition: ClipTransition | null,
+  time: number,
+  startTime: number,
+  duration: number,
+  baseAlpha: number,
+): PreviewTransitionPlan {
+  const plan: PreviewTransitionPlan = {
+    alpha: baseAlpha,
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1,
+    rotationDeg: 0,
+    filter: '',
+    clipShape: 'none',
+    clipProgress: 1,
+    overlayColor: null,
+    overlayAlpha: 0,
+  };
+  const progress = getTransitionProgress(transition, time, startTime, duration);
+  if (!transition || progress == null) return plan;
+
+  const enter = transition.edge === 'start';
+  const visible = progress;
+  const hidden = 1 - progress;
+
+  switch (transition.type) {
+    case 'cross-dissolve':
+      plan.alpha = baseAlpha * visible;
+      break;
+    case 'dip-to-black':
+    case 'dip-to-white':
+      plan.alpha = baseAlpha * visible;
+      plan.overlayColor = transition.type === 'dip-to-white' ? '#ffffff' : '#000000';
+      plan.overlayAlpha = enter ? hidden : 1 - visible;
+      break;
+    case 'wipe-left':
+      plan.clipShape = 'right';
+      plan.clipProgress = visible;
+      break;
+    case 'wipe-right':
+      plan.clipShape = 'left';
+      plan.clipProgress = visible;
+      break;
+    case 'wipe-up':
+      plan.clipShape = 'bottom';
+      plan.clipProgress = visible;
+      break;
+    case 'wipe-down':
+      plan.clipShape = 'top';
+      plan.clipProgress = visible;
+      break;
+    case 'wipe-diagonal':
+      plan.clipShape = 'diagonal';
+      plan.clipProgress = visible;
+      break;
+    case 'zoom-in':
+      plan.alpha = baseAlpha * visible;
+      plan.scale = 0.72 + visible * 0.28;
+      break;
+    case 'zoom-out':
+      plan.alpha = baseAlpha * visible;
+      plan.scale = 1.28 - visible * 0.28;
+      break;
+    case 'spin':
+      plan.alpha = baseAlpha * visible;
+      plan.scale = 0.86 + visible * 0.14;
+      plan.rotationDeg = (enter ? -1 : 1) * hidden * 180;
+      break;
+    case 'slide-left':
+      plan.offsetX = -hidden;
+      break;
+    case 'slide-right':
+      plan.offsetX = hidden;
+      break;
+    case 'slide-up':
+      plan.offsetY = -hidden;
+      break;
+    case 'slide-down':
+      plan.offsetY = hidden;
+      break;
+    case 'push-left':
+      plan.offsetX = enter ? hidden : -hidden;
+      break;
+    case 'push-right':
+      plan.offsetX = enter ? -hidden : hidden;
+      break;
+    case 'glitch':
+      plan.alpha = baseAlpha * (0.75 + visible * 0.25);
+      plan.offsetX = Math.sin(time * 90) * hidden * 0.045;
+      plan.offsetY = Math.cos(time * 70) * hidden * 0.025;
+      plan.filter = `hue-rotate(${Math.round(hidden * 95)}deg) saturate(${100 + hidden * 90}%) contrast(${100 + hidden * 45}%)`;
+      break;
+    case 'light-leak':
+      plan.alpha = baseAlpha * visible;
+      plan.overlayColor = '#facc15';
+      plan.overlayAlpha = hidden * 0.45;
+      plan.filter = `brightness(${100 + hidden * 35}%) saturate(${100 + hidden * 25}%)`;
+      break;
+    case 'film-burn':
+      plan.alpha = baseAlpha * visible;
+      plan.overlayColor = '#f97316';
+      plan.overlayAlpha = hidden * 0.58;
+      plan.filter = `sepia(${hidden * 65}%) brightness(${100 + hidden * 45}%) contrast(${100 + hidden * 30}%)`;
+      break;
+    case 'morph-cut':
+      plan.alpha = baseAlpha * visible;
+      plan.scale = 0.96 + Math.sin(visible * Math.PI) * 0.04;
+      plan.filter = `blur(${hidden * 12}px)`;
+      break;
+  }
+
+  return plan;
+}
+
+function applyTransitionClip(ctx: CanvasRenderingContext2D, plan: PreviewTransitionPlan, drawW: number, drawH: number) {
+  const p = clampNumber(plan.clipProgress, 0, 1);
+  if (plan.clipShape === 'none') return;
+
+  ctx.beginPath();
+  if (plan.clipShape === 'left') {
+    ctx.rect(-drawW / 2, -drawH / 2, drawW * p, drawH);
+  } else if (plan.clipShape === 'right') {
+    ctx.rect(drawW / 2 - drawW * p, -drawH / 2, drawW * p, drawH);
+  } else if (plan.clipShape === 'top') {
+    ctx.rect(-drawW / 2, -drawH / 2, drawW, drawH * p);
+  } else if (plan.clipShape === 'bottom') {
+    ctx.rect(-drawW / 2, drawH / 2 - drawH * p, drawW, drawH * p);
+  } else if (plan.clipShape === 'diagonal') {
+    const reach = (drawW + drawH) * p;
+    ctx.moveTo(-drawW / 2, -drawH / 2);
+    ctx.lineTo(-drawW / 2 + reach, -drawH / 2);
+    ctx.lineTo(-drawW / 2, -drawH / 2 + reach);
+    ctx.closePath();
+  }
+  ctx.clip();
+}
+
+function drawMaskPath(ctx: CanvasRenderingContext2D, mask: Mask, width: number, height: number) {
+  const expansion = mask.expansion / 100;
+  const insetX = width * (0.18 - expansion * 0.12);
+  const insetY = height * (0.18 - expansion * 0.12);
+  const x = Math.min(width - 1, Math.max(0, insetX));
+  const y = Math.min(height - 1, Math.max(0, insetY));
+  const rectW = Math.max(1, width - x * 2);
+  const rectH = Math.max(1, height - y * 2);
+
+  ctx.beginPath();
+  if (mask.points.length >= 2) {
+    ctx.moveTo(mask.points[0].x * width, mask.points[0].y * height);
+    for (const point of mask.points.slice(1)) ctx.lineTo(point.x * width, point.y * height);
+    ctx.closePath();
+  } else if (mask.type === 'ellipse') {
+    ctx.ellipse(width / 2, height / 2, rectW / 2, rectH / 2, 0, 0, Math.PI * 2);
+  } else {
+    ctx.rect(x, y, rectW, rectH);
+  }
+}
+
+function applyMaskPreview(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, mask: Mask | null, width: number, height: number) {
+  if (!mask) {
+    ctx.drawImage(source, 0, 0);
+    return;
+  }
+
+  const masked = document.createElement('canvas');
+  masked.width = width;
+  masked.height = height;
+  const maskCtx = masked.getContext('2d');
+  if (!maskCtx) {
+    ctx.drawImage(source, 0, 0);
+    return;
+  }
+
+  maskCtx.drawImage(source, 0, 0);
+  maskCtx.save();
+  maskCtx.globalCompositeOperation = mask.inverted ? 'destination-out' : 'destination-in';
+  maskCtx.fillStyle = `rgba(255,255,255,${clampNumber(mask.opacity / 100, 0, 1)})`;
+  if (mask.feather > 0) maskCtx.filter = `blur(${mask.feather / 4}px)`;
+  drawMaskPath(maskCtx, mask, width, height);
+  maskCtx.fill();
+  maskCtx.restore();
+
+  ctx.drawImage(masked, 0, 0);
+
+  if (mask.chromaKey?.enabled) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.35, mask.chromaKey.tolerance / 250);
+    ctx.fillStyle = mask.chromaKey.keyColor;
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(250,204,21,0.65)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  drawMaskPath(ctx, mask, width, height);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function buildColorGradingFilter(cg: ColorGradingState) {
+  const liftMaster = cg.lift.master / 100;
+  const gammaMaster = cg.gamma.master / 100;
+  const gainMaster = cg.gain.master / 100;
+  const brightness = 100 + cg.exposure + cg.highlights * 0.12 + cg.whites * 0.1 + liftMaster * 16 + gainMaster * 12;
+  const contrast = 100 + cg.contrast + cg.blacks * -0.08 + gammaMaster * 12;
+  const saturation = 100 + cg.saturation + cg.vibrance * 0.7 + cg.hsl.saturationShift * 0.35;
+  const tint = cg.tint * 0.12 + (cg.gain.r - cg.gain.g) * 10;
+  const warmth = cg.temperature * 0.35;
+  return [
+    `brightness(${clampNumber(brightness, 0, 260)}%)`,
+    `contrast(${clampNumber(contrast, 0, 260)}%)`,
+    `saturate(${clampNumber(saturation, 0, 280)}%)`,
+    `hue-rotate(${cg.hue + cg.hsl.hueShift + tint}deg)`,
+    warmth > 0 ? `sepia(${clampNumber(warmth, 0, 70)}%)` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function applyColorOverlays(ctx: CanvasRenderingContext2D, cg: ColorGradingState, width: number, height: number) {
+  if (cg.shadows !== 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = cg.shadows > 0 ? 'screen' : 'multiply';
+    ctx.globalAlpha = Math.min(0.35, Math.abs(cg.shadows) / 220);
+    ctx.fillStyle = cg.shadows > 0 ? '#64748b' : '#020617';
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
+  if (cg.vignette.amount > 0) {
+    const radius = Math.max(width, height) * (0.35 + cg.vignette.midpoint / 220);
+    const gradient = ctx.createRadialGradient(width / 2, height / 2, radius * 0.15, width / 2, height / 2, radius);
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(1, `rgba(0,0,0,${Math.min(0.85, cg.vignette.amount / 100)})`);
+    ctx.save();
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+}
+
+function textAnimationTransform(text: TextOverlay, time: number) {
+  const duration = Math.max(0.05, text.animationDuration || 0.5);
+  const progress = easeProgress(Math.min(1, time / duration), 'ease-out');
+  const hidden = 1 - progress;
+  let alpha = text.opacity;
+  let offsetX = 0;
+  let offsetY = 0;
+  let scale = 1;
+  let rotation = 0;
+  let maxChars = text.text.length;
+
+  if (text.animation === 'fade') alpha *= progress;
+  if (text.animation === 'slide-up') offsetY = hidden * 36;
+  if (text.animation === 'slide-down') offsetY = -hidden * 36;
+  if (text.animation === 'slide-left') offsetX = hidden * 48;
+  if (text.animation === 'slide-right') offsetX = -hidden * 48;
+  if (text.animation === 'scale') scale = 0.82 + progress * 0.18;
+  if (text.animation === 'bounce') scale = 1 + Math.sin(progress * Math.PI) * 0.12;
+  if (text.animation === 'blur') alpha *= progress;
+  if (text.animation === 'typewriter') maxChars = Math.max(1, Math.ceil(text.text.length * progress));
+  if ((text.animation as string) === 'rotate') rotation = hidden * -12;
+
+  return { alpha, offsetX, offsetY, scale, rotation, text: text.text.slice(0, maxChars), blur: text.animation === 'blur' ? hidden * 10 : 0 };
 }
 
 function buildPreviewEffectPlan(effects: Effect[]): PreviewEffectPlan {
@@ -337,7 +659,8 @@ export default function PreviewCanvas() {
           const drawY = (clip.positionY ?? 0) * (h / 2);
           const rotation = ((clip.rotation ?? 0) * Math.PI) / 180;
           
-          const volume = Math.max(0, Math.min(1, clip.volume * track.volume * latestState.masterVolume));
+          const audioPreviewGain = buildAudioPreviewGain(latestState);
+          const volume = Math.max(0, Math.min(1, clip.volume * track.volume * latestState.masterVolume * audioPreviewGain));
 
           if (clip.mediaType === 'audio') {
             let aud = mediaCache.current[clip.id] as HTMLAudioElement;
@@ -360,36 +683,33 @@ export default function PreviewCanvas() {
             continue; // Nothing to draw for audio
           }
 
-          // Transition logic (basic cross-dissolve/fade)
-          let alpha = clip.opacity;
-          if (clip.transition) {
-             const t = clip.transition;
-             if (t.edge === 'start' && time < clip.startTime + t.duration) {
-                 const progress = (time - clip.startTime) / t.duration;
-                 alpha = clip.opacity * progress;
-             } else if (t.edge === 'end' && time > clip.startTime + clip.duration - t.duration) {
-                 const progress = (clip.startTime + clip.duration - time) / t.duration;
-                 alpha = clip.opacity * progress;
-             }
-          }
-
           const effectPlan = getEffectPlan(clip.id, clip.effects);
+          const transitionPlan = buildPreviewTransitionPlan(clip.transition, time, clip.startTime, clip.duration, clip.opacity);
 
           const drawWithTransform = (draw: () => void) => {
             offCtx.save();
-            offCtx.globalAlpha = alpha;
+            offCtx.globalAlpha = transitionPlan.alpha;
             if ((clip as any).blendMode && (clip as any).blendMode !== 'normal') {
                 offCtx.globalCompositeOperation = (clip as any).blendMode;
             }
-            if (effectPlan.filter) offCtx.filter = effectPlan.filter;
+            offCtx.filter = [effectPlan.filter, transitionPlan.filter].filter(Boolean).join(' ');
             
-            offCtx.translate(w / 2 + drawX, h / 2 + drawY);
-            offCtx.rotate(rotation);
-            offCtx.scale(effectPlan.mirrorX * effectPlan.lensScale, effectPlan.mirrorY * effectPlan.lensScale);
+            offCtx.translate(w / 2 + drawX + transitionPlan.offsetX * w, h / 2 + drawY + transitionPlan.offsetY * h);
+            offCtx.rotate(rotation + (transitionPlan.rotationDeg * Math.PI) / 180);
+            offCtx.scale(
+              effectPlan.mirrorX * effectPlan.lensScale * transitionPlan.scale,
+              effectPlan.mirrorY * effectPlan.lensScale * transitionPlan.scale,
+            );
+            applyTransitionClip(offCtx, transitionPlan, drawW, drawH);
             const previousSmoothing = offCtx.imageSmoothingEnabled;
             if (effectPlan.pixelateSize > 0) offCtx.imageSmoothingEnabled = false;
             draw();
             offCtx.imageSmoothingEnabled = previousSmoothing;
+            if (transitionPlan.overlayColor && transitionPlan.overlayAlpha > 0) {
+              offCtx.globalAlpha = Math.min(0.85, transitionPlan.overlayAlpha);
+              offCtx.fillStyle = transitionPlan.overlayColor;
+              offCtx.fillRect(-drawW / 2, -drawH / 2, drawW, drawH);
+            }
             if (effectPlan.needsVignette) {
               const gradient = offCtx.createRadialGradient(0, 0, Math.min(drawW, drawH) * 0.18, 0, 0, Math.max(drawW, drawH) * 0.62);
               gradient.addColorStop(0, 'rgba(0,0,0,0)');
@@ -461,8 +781,10 @@ export default function PreviewCanvas() {
       // Draw Text Overlay
       if (latestState.activeTextOverlay) {
           const text = latestState.activeTextOverlay;
+          const textAnim = textAnimationTransform(text, time);
           offCtx.save();
-          offCtx.globalAlpha = text.opacity;
+          offCtx.globalAlpha = textAnim.alpha;
+          if (textAnim.blur > 0) offCtx.filter = `blur(${textAnim.blur}px)`;
           
           offCtx.font = `${text.fontWeight} ${Math.max(1, text.fontSize * previewScale)}px ${text.fontFamily}`;
           offCtx.textAlign = text.alignment as CanvasTextAlign;
@@ -478,11 +800,12 @@ export default function PreviewCanvas() {
           const textX = text.x * w;
           const textY = text.y * h;
           
-          offCtx.translate(textX, textY);
-          offCtx.rotate(text.rotation * Math.PI / 180);
+          offCtx.translate(textX + textAnim.offsetX, textY + textAnim.offsetY);
+          offCtx.rotate((text.rotation + textAnim.rotation) * Math.PI / 180);
+          offCtx.scale(textAnim.scale, textAnim.scale);
           
           if (text.backgroundColor && text.backgroundOpacity > 0) {
-              const metrics = offCtx.measureText(text.text);
+              const metrics = offCtx.measureText(textAnim.text);
               const bgWidth = Math.max(text.width * previewScale, metrics.width + 40 * previewScale);
               const bgHeight = text.fontSize * previewScale * 1.5;
               offCtx.fillStyle = text.backgroundColor;
@@ -494,28 +817,22 @@ export default function PreviewCanvas() {
           if (text.outline.enabled) {
               offCtx.strokeStyle = text.outline.color;
               offCtx.lineWidth = text.outline.width;
-              offCtx.strokeText(text.text, 0, 0);
+              offCtx.strokeText(textAnim.text, 0, 0);
           }
           
           offCtx.fillStyle = text.color;
-          offCtx.fillText(text.text, 0, 0);
+          offCtx.fillText(textAnim.text, 0, 0);
           
           offCtx.restore();
       }
 
       // Apply Global Color Grading to final canvas
       const cg = latestState.colorGrading;
-      let cgFilter = `brightness(${100 + cg.exposure * 10}%) ` +
-                     `contrast(${100 + cg.contrast}%) ` +
-                     `saturate(${100 + cg.saturation}%) ` +
-                     `hue-rotate(${cg.hue}deg) `;
-                     
-      if (cg.temperature > 0) cgFilter += `sepia(${cg.temperature}%) `;
-      
       ctx.save();
-      ctx.filter = cgFilter.trim();
-      ctx.drawImage(offscreen, 0, 0);
+      ctx.filter = buildColorGradingFilter(cg);
+      applyMaskPreview(ctx, offscreen, latestState.activeMask, w, h);
       ctx.restore();
+      applyColorOverlays(ctx, cg, w, h);
 
       if (latestState.isPlaying) {
         frameRef.current = requestAnimationFrame(renderFrame);

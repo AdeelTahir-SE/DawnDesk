@@ -182,7 +182,7 @@ export default function DashboardView() {
                 Live cash position, accounts receivable aging, and pending vendor bills.
               </p>
             </div>
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-right">
+            <div className="rounded-xl border flex flex-col items-center justify-center border-neutral-800 bg-neutral-950 px-4 py-3 text-right">
               <p className="dd-subtext">Data Health</p>
               <p className="text-3xl font-black text-green-400">{metrics.healthScore}</p>
             </div>

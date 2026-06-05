@@ -307,8 +307,6 @@ export default function Settings() {
           {activeTab === "general" && (
             <div className="space-y-5">
               <SettingsGrid>
-                <SettingToggle icon={<Bell />} title="Notifications" text="Allow DawnDesk to surface important app alerts." checked={settings.notifications} onChange={(value) => void updateSetting("notifications", value)} />
-                <SettingToggle icon={<User />} title="Launch on Startup" text="Open DawnDesk automatically when you sign in." checked={settings.autoLaunch} onChange={(value) => void updateSetting("autoLaunch", value)} />
                 <SettingToggle icon={<Cpu />} title="Hardware Acceleration" text="Use GPU rendering for smoother panels and animations. Changes apply after restart." checked={settings.hardwareAcceleration} onChange={(value) => void updateSetting("hardwareAcceleration", value)} />
               </SettingsGrid>
               {nativeSettingsNote && (

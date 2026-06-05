@@ -110,6 +110,11 @@ export default function AudioPanel() {
       </div>
 
       <CollapsibleSection title="Equalizer" defaultOpen={false}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <button className={`ve-toggle ${state.audioEffects.eq.enabled ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { eq: { ...state.audioEffects.eq, enabled: !state.audioEffects.eq.enabled } } })} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Enable</span>
+        </div>
         {state.audioEffects.eq.bands.map(band => (
           <Slider key={band.frequency} label={band.frequency >= 1000 ? `${band.frequency / 1000} kHz` : `${band.frequency} Hz`} 
             value={band.gain} min={-12} max={12} step={0.5}
@@ -121,6 +126,11 @@ export default function AudioPanel() {
       </CollapsibleSection>
 
       <CollapsibleSection title="Compressor">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <button className={`ve-toggle ${state.audioEffects.compressor.enabled ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { compressor: { ...state.audioEffects.compressor, enabled: !state.audioEffects.compressor.enabled } } })} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Enable</span>
+        </div>
         <Slider label="Threshold" value={state.audioEffects.compressor.threshold} min={-60} max={0} 
           onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { compressor: { ...state.audioEffects.compressor, threshold: v } } })} suffix="dB" />
         <Slider label="Ratio" value={state.audioEffects.compressor.ratio} min={1} max={20} 
@@ -132,6 +142,11 @@ export default function AudioPanel() {
       </CollapsibleSection>
 
       <CollapsibleSection title="Reverb">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <button className={`ve-toggle ${state.audioEffects.reverb.enabled ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { reverb: { ...state.audioEffects.reverb, enabled: !state.audioEffects.reverb.enabled } } })} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Enable</span>
+        </div>
         <Slider label="Mix" value={state.audioEffects.reverb.mix} min={0} max={100} 
           onChange={(v) => dispatch({ type: 'SET_AUDIO_EFFECTS', payload: { reverb: { ...state.audioEffects.reverb, mix: v } } })} suffix="%" />
         <Slider label="Decay" value={state.audioEffects.reverb.decay} min={0.1} max={10} step={0.1} 

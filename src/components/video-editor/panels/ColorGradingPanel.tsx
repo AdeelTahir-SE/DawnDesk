@@ -160,7 +160,7 @@ export default function ColorGradingPanel() {
           {cg.lutPath ? cg.lutPath.split(/[/\\]/).pop() : 'Load LUT File...'}
         </button>
         <div style={{ marginTop: 8 }}>
-          <Slider label="Intensity" value={cg.lutIntensity} min={0} max={100} onChange={v => update('lutIntensity', v)} />
+          <Slider label="Intensity" value={Math.round(cg.lutIntensity * 100)} min={0} max={100} onChange={v => update('lutIntensity', v / 100)} />
         </div>
       </CollapsibleSection>
     </div>

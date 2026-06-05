@@ -1227,7 +1227,7 @@ export default function PromptManager() {
                 <div>
                   <p className="dd-label">Prompt Manager</p>
                   <h2 className="dd-page-title mt-2">Reusable Prompt Library</h2>
-                  <p className="dd-body-lg max-w-2xl mt-2">Keep your best AI instructions organized, searchable, and ready to copy.</p>
+                  <p className="dd-body-lg max-w-2xl mt-2">Keep your best Prompts organized, searchable, and ready to copy.</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 lg:self-auto">
                   <button

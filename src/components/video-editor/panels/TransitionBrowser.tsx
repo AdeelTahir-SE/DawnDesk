@@ -9,7 +9,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   ArrowLeftToLine: ArrowLeft, ArrowRightToLine: ArrowRight,
 };
 
-const CATEGORIES = ['All', 'Dissolve', 'Wipe', 'Slide', 'Zoom', '3D'];
+const CATEGORIES = ['All', 'Dissolve', 'Wipe', 'Zoom', 'Motion', 'Slide', 'Push', 'Stylized'];
 
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 

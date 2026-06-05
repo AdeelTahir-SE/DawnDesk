@@ -184,6 +184,9 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
         } else if (transitionPayload) {
           const transitionDef = TRANSITION_DEFINITIONS.find(def => def.type === transitionPayload.transitionType);
           if (!transitionDef) return;
+          const rect = clipRef.current?.getBoundingClientRect();
+          const dropX = rect ? e.clientX - rect.left : 0;
+          const edge = rect && dropX > rect.width / 2 ? 'end' : 'start';
           dispatch({
             type: 'ADD_TRANSITION',
             payload: {
@@ -193,7 +196,7 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
                 type: transitionDef.type,
                 duration: transitionPayload.duration,
                 easing: 'ease-in-out',
-                edge: 'start'
+                edge
               }
             }
           });

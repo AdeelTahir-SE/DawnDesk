@@ -633,6 +633,10 @@ export type VideoEditorAction =
   | { type: 'ADD_MEDIA_TO_NEW_TRACK'; payload: { media: MediaItem; startTime: number } }
   | { type: 'REMOVE_CLIPS'; payload: string[] }
   | { type: 'MOVE_CLIP'; payload: { clipId: string; trackId: string; startTime: number } }
+  | { type: 'RIPPLE_MOVE_CLIP'; payload: { clipId: string; trackId: string; startTime: number } }
+  | { type: 'ROLL_EDIT_CLIP'; payload: { clipId: string; edge: 'start' | 'end'; delta: number } }
+  | { type: 'SLIP_CLIP'; payload: { clipId: string; delta: number } }
+  | { type: 'SLIDE_CLIP'; payload: { clipId: string; trackId: string; startTime: number } }
   | { type: 'TRIM_CLIP_START'; payload: { clipId: string; newStartTime: number; newInPoint: number } }
   | { type: 'TRIM_CLIP_END'; payload: { clipId: string; newDuration: number; newOutPoint: number } }
   | { type: 'SPLIT_CLIP'; payload: { clipId: string; time: number } }

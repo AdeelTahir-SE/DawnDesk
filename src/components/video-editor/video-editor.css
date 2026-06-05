@@ -29,19 +29,19 @@
 }
 
 html.light {
-  --ve-bg: #f6f7f2;
+  --ve-bg: #f5f5ef;
   --ve-bg-panel: #ffffff;
-  --ve-bg-surface: #f0f1eb;
-  --ve-bg-elevated: #e8e9e1;
-  --ve-border: #d8d6cc;
-  --ve-border-light: #e3e0d6;
-  --ve-accent: #d09a00;
-  --ve-accent-dim: rgba(250, 204, 21, 0.24);
-  --ve-accent-hover: #b77900;
-  --ve-text: #171717;
-  --ve-text-secondary: rgba(23, 23, 23, 0.72);
-  --ve-text-muted: rgba(23, 23, 23, 0.52);
-  --ve-selection: rgba(250, 204, 21, 0.24);
+  --ve-bg-surface: #f2efe1;
+  --ve-bg-elevated: #e8e2c9;
+  --ve-border: #c9c5b8;
+  --ve-border-light: #d8d3c4;
+  --ve-accent: #8a6500;
+  --ve-accent-dim: rgba(247, 201, 72, 0.26);
+  --ve-accent-hover: #6f5100;
+  --ve-text: #111111;
+  --ve-text-secondary: rgba(17, 17, 17, 0.8);
+  --ve-text-muted: rgba(17, 17, 17, 0.62);
+  --ve-selection: rgba(247, 201, 72, 0.28);
 }
 
 /* ── Main Layout Grid ──────────────────────────────────────────────────── */

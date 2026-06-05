@@ -59,20 +59,25 @@ import ComplianceAuditView from "../components/finance-manager/views/ComplianceA
 import FinanceSectionComments from "../components/finance-manager/FinanceSectionComments";
 
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: <PieChart className="w-5 h-5" /> },
-  { id: "gl", label: "General Ledger", icon: <BookOpen className="w-5 h-5" /> },
-  { id: "ar", label: "Accounts Receivable", icon: <ArrowDownRight className="w-5 h-5" /> },
-  { id: "ap", label: "Accounts Payable", icon: <ArrowUpRight className="w-5 h-5" /> },
-  { id: "cash", label: "Cash & Treasury", icon: <Landmark className="w-5 h-5" /> },
-  { id: "budget", label: "Budgeting", icon: <PieChart className="w-5 h-5" /> },
-  { id: "reports", label: "Financial Reports", icon: <FileBarChart className="w-5 h-5" /> },
-  { id: "assets", label: "Fixed Assets", icon: <Building className="w-5 h-5" /> },
-  { id: "tax", label: "Tax Management", icon: <ReceiptText className="w-5 h-5" /> },
-  { id: "procurement", label: "Procurement", icon: <ShoppingCart className="w-5 h-5" /> },
-  { id: "inventory", label: "Inventory & COGS", icon: <Package className="w-5 h-5" /> },
-  { id: "compliance", label: "Compliance & Audit", icon: <ClipboardCheck className="w-5 h-5" /> },
-  { id: "members", label: "Members", icon: <Users className="w-5 h-5" /> },
-];
+  { id: "dashboard", label: "Dashboard", icon: PieChart, group: "Planning" },
+  { id: "gl", label: "General Ledger", icon: BookOpen, group: "Accounting" },
+  { id: "ar", label: "Accounts Receivable", icon: ArrowDownRight, group: "Accounting" },
+  { id: "ap", label: "Accounts Payable", icon: ArrowUpRight, group: "Accounting" },
+  { id: "cash", label: "Cash & Treasury", icon: Landmark, group: "Accounting" },
+  { id: "budget", label: "Budgeting", icon: PieChart, group: "Accounting" },
+  { id: "reports", label: "Financial Reports", icon: FileBarChart, group: "Project" },
+  { id: "assets", label: "Fixed Assets", icon: Building, group: "Operations" },
+  { id: "tax", label: "Tax Management", icon: ReceiptText, group: "Operations" },
+  { id: "procurement", label: "Procurement", icon: ShoppingCart, group: "Operations" },
+  { id: "inventory", label: "Inventory & COGS", icon: Package, group: "Operations" },
+  { id: "compliance", label: "Compliance & Audit", icon: ClipboardCheck, group: "Operations" },
+  { id: "members", label: "Members", icon: Users, group: "Project" },
+] as const;
+
+type FinanceView = (typeof NAV_ITEMS)[number]["id"];
+type FinanceNavGroup = (typeof NAV_ITEMS)[number]["group"];
+
+const FINANCE_NAV_GROUPS: FinanceNavGroup[] = ["Planning", "Accounting", "Operations", "Project"];
 
 type FinanceWorkspaceExportFile = {
   schema: "dawndesk.finance-workspace";
@@ -84,7 +89,7 @@ type FinanceWorkspaceExportFile = {
 
 export default function FinanceManager() {
   const { logSuccess, logError } = useAppLogger();
-  const [activeView, setActiveView] = useState("dashboard");
+  const [activeView, setActiveView] = useState<FinanceView>("dashboard");
   const [navSearch, setNavSearch] = useState("");
   const [financeWorkspace, setFinanceWorkspace] = useState<FinanceWorkspace | null>(null);
   const [financeWorkspaces, setFinanceWorkspaces] = useState<FinanceWorkspace[]>([]);
@@ -104,6 +109,7 @@ export default function FinanceManager() {
   const filteredNavItems = NAV_ITEMS.filter((item) =>
     item.label.toLowerCase().includes(navSearch.trim().toLowerCase())
   );
+  const ActiveIcon = activeItem.icon;
 
   const refreshFinanceWorkspace = async () => {
     if (!isSupabaseConfigured) {
@@ -374,62 +380,81 @@ export default function FinanceManager() {
         </>
       ) : (
       <div className="dd-page">
-        <aside className="dd-sidebar">
+        <aside className="dd-sidebar-narrow">
           <div className="dd-sidebar-header">
-            <div className="flex items-center gap-3">
-              <div className="dd-icon-box">
-                <Wallet className="h-5 w-5" />
-              </div>
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={() => { setFinanceWorkspace(null); setFinanceMembers([]); setNavSearch(""); }}
+                className="flex items-center gap-2 text-xs font-bold text-white/60 transition-colors hover:text-white self-start"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Hub
+              </button>
+
               <div>
-                <h1 className="dd-sidebar-title">Finance OS</h1>
-                <p className="dd-subtext">Enterprise ERP Workspace</p>
+                <h1 className="dd-sidebar-title line-clamp-1">{financeWorkspace.name}</h1>
+                <p className="dd-subtext mt-1 line-clamp-2">Finance Workspace</p>
               </div>
             </div>
-            <button
-              onClick={() => { setFinanceWorkspace(null); setFinanceMembers([]); }}
-              className="mt-5 flex items-center gap-2 text-xs font-bold text-white/60 transition-colors hover:text-white"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Finance projects
-            </button>
-            <button
-              onClick={() => financeWorkspace && handleExportFinanceWorkspace(financeWorkspace)}
-              disabled={!financeWorkspace || exportingWorkspaceId === financeWorkspace.id}
-              className="mt-3 flex items-center gap-2 text-xs font-bold text-white/60 transition-colors hover:text-white disabled:opacity-50"
-            >
-              {exportingWorkspaceId === financeWorkspace.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Export Project
-            </button>
-            <div className="dd-search mt-5">
-              <Search className="h-4 w-4" />
+          </div>
+
+          <div className="px-3 pt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
               <input
                 value={navSearch}
                 onChange={(event) => setNavSearch(event.target.value)}
                 placeholder="Search modules..."
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/40"
+                className="w-full rounded-lg border border-neutral-800 bg-neutral-950 py-2 pl-9 pr-3 text-xs text-white outline-none transition-colors placeholder:text-white/35 focus:border-yellow-400/60"
               />
             </div>
           </div>
 
-          <nav className="custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            {filteredNavItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveView(item.id)}
-                className={`dd-nav-item-sm ${
-                  activeView === item.id ? "dd-nav-item-sm-active" : ""
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
+          <nav className="custom-scrollbar flex-1 overflow-y-auto p-3">
+            {FINANCE_NAV_GROUPS.map((group) => {
+              const groupItems = filteredNavItems.filter((item) => item.group === group);
+              if (groupItems.length === 0) return null;
+
+              return (
+                <div key={group} className="mb-6 last:mb-0">
+                  <p className="dd-label-muted mb-2 px-2">{group}</p>
+                  <div className="space-y-1">
+                    {groupItems.map((item) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setActiveView(item.id)}
+                          className={`dd-nav-item-sm ${
+                            activeView === item.id ? "dd-nav-item-sm-active" : ""
+                          }`}
+                        >
+                          <ItemIcon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
             {filteredNavItems.length === 0 && (
               <p className="px-3 py-4 text-xs font-semibold text-white/40">
                 No finance modules match that search.
               </p>
             )}
           </nav>
+
+          <div className="border-t border-neutral-800 p-3">
+            <button
+              onClick={() => financeWorkspace && handleExportFinanceWorkspace(financeWorkspace)}
+              disabled={!financeWorkspace || exportingWorkspaceId === financeWorkspace.id}
+              className="dd-nav-item-sm w-full disabled:cursor-wait disabled:opacity-50"
+            >
+              {exportingWorkspaceId === financeWorkspace.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              <span>Export Project</span>
+            </button>
+          </div>
 
           {financeSyncError && (
             <div className="border-t border-neutral-800 p-4">
@@ -444,7 +469,7 @@ export default function FinanceManager() {
           <header className="dd-topbar">
             <div className="flex items-center gap-3">
               <div className="dd-icon-box-sm">
-                {activeItem.icon}
+                <ActiveIcon className="h-4 w-4" />
               </div>
               <div>
                 <p className="dd-label-muted">Workspace</p>
