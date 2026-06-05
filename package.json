@@ -1,12 +1,12 @@
 {
   "name": "dawndesk",
   "private": true,
-  "version": "0.9.4",
+  "version": "0.9.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/run-node-tests.mjs",
     "test:ci": "npm run test && cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "npm run build && npm run test",
     "preview": "vite preview",

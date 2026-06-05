@@ -14,7 +14,7 @@ test("package scripts expose the standard verification commands", async () => {
   const pkg = JSON.parse(await readText("package.json"));
 
   assert.equal(pkg.scripts.build, "tsc && vite build");
-  assert.equal(pkg.scripts.test, "node --test tests/*.test.mjs");
+  assert.equal(pkg.scripts.test, "node scripts/run-node-tests.mjs");
   assert.equal(pkg.scripts.check, "npm run build && npm run test");
   assert.match(pkg.scripts["test:ci"], /cargo test --manifest-path src-tauri\/Cargo\.toml/);
 });

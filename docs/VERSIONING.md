@@ -2,7 +2,7 @@
 
 DawnDesk uses semantic versioning while it is in early development.
 
-Current version: `0.9.4`
+Current version: `0.9.5`
 
 ## Version Sources
 
@@ -158,10 +158,10 @@ Use `scripts/release.ps1` to run the local release flow end to end:
 
 ```powershell
 .\scripts\release.ps1 `
-  -Version 0.9.4 `
-  -Tag v0.9.4 `
-  -ReleaseTitle "DawnDesk v0.9.4 - Desktop Auto-Update Setup" `
-  -NotesFile docs/releases/v0.9.4.md `
+  -Version 0.9.5 `
+  -Tag v0.9.5 `
+  -ReleaseTitle "DawnDesk v0.9.5 - Desktop Auto-Update Setup" `
+  -NotesFile docs/releases/v0.9.5.md `
   -Draft
 ```
 
@@ -189,7 +189,8 @@ The script loads `.env`, verifies version sources, runs frontend and Rust tests,
 | `0.1.0` | Early development | Initial DawnDesk app baseline. |
 | `0.2.0` | Superseded | Structured multi-sub-app baseline with documentation, testing, asset cleanup, auth flow updates, and versioning rules. |
 | `0.9.3` | Superseded | Desktop updater wiring, signed updater configuration, and release documentation. |
-| `0.9.4` | Current | Release version for signed auto-update distribution. |
+| `0.9.4` | Superseded | Release version for signed auto-update distribution. |
+| `0.9.5` | Current | GitHub Actions release automation and cross-platform test runner fix. |
 
 ## Planned Version Milestones
 
