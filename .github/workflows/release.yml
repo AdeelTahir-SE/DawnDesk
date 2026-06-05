@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+env:
+  VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+  VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+
 jobs:
   test:
     name: Build and test
@@ -33,6 +37,13 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Verify release auth config
+        shell: pwsh
+        run: |
+          if (-not $env:VITE_SUPABASE_URL -or -not $env:VITE_SUPABASE_ANON_KEY) {
+            throw "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Add them as GitHub repository variables or secrets before publishing a release."
+          }
 
       - name: Build frontend
         run: npm run build
@@ -68,6 +79,13 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Verify release auth config
+        shell: pwsh
+        run: |
+          if (-not $env:VITE_SUPABASE_URL -or -not $env:VITE_SUPABASE_ANON_KEY) {
+            throw "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Add them as GitHub repository variables or secrets before publishing a release."
+          }
 
       - name: Build signed Tauri release
         uses: tauri-apps/tauri-action@action-v0.6.2
