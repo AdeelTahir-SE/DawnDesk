@@ -210,7 +210,8 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-8">
+    <div className="custom-scrollbar h-[calc(100vh-4rem)] overflow-y-auto bg-neutral-950 p-8">
+      <div className="mx-auto w-full max-w-7xl space-y-6">
       <section className="dd-hero">
         <p className="dd-label">DawnDesk</p>
         <h1 className="mt-2 dd-page-title">DawnDesk Dashboard</h1>
@@ -365,6 +366,7 @@ export default function Dashboard() {
           </article>
         </aside>
       </section>
+      </div>
     </div>
   );
 }

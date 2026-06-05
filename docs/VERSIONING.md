@@ -2,7 +2,7 @@
 
 DawnDesk uses semantic versioning while it is in early development.
 
-Current version: `1.0.0`
+Current version: `1.0.1`
 
 ## Version Sources
 
@@ -191,7 +191,8 @@ The script loads `.env`, verifies version sources, runs frontend and Rust tests,
 | `0.9.3` | Superseded | Desktop updater wiring, signed updater configuration, and release documentation. |
 | `0.9.4` | Superseded | Release version for signed auto-update distribution. |
 | `0.9.5` | Superseded | GitHub Actions release automation and cross-platform test runner fix. |
-| `1.0.0` | Current | Stable desktop release version. |
+| `1.0.0` | Superseded | Stable desktop release version. |
+| `1.0.1` | Current | Patch release with updater overlay and desktop icon refresh. |
 
 ## Planned Version Milestones
 
