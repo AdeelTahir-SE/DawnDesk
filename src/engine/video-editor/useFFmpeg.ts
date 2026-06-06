@@ -54,9 +54,10 @@ export function useFFmpeg() {
           try {
             const thumbnailTime = probe.duration > 1 ? Math.min(10, Math.max(0.5, probe.duration * 0.25)) : 0;
             thumbnail = await invoke<string>('ve_generate_thumbnail', { path, time: thumbnailTime });
-            const stripTimes = Array.from({ length: Math.min(6, Math.max(2, Math.ceil((probe.duration || 1) / 12))) }, (_, index, arr) => {
-              if (arr.length <= 1) return 0;
-              return Math.max(0, Math.min(probe.duration || 0, (index / (arr.length - 1)) * Math.max(0, probe.duration || 0)));
+            const stripCount = Math.min(6, Math.max(2, Math.ceil((probe.duration || 1) / 12)));
+            const stripTimes = Array.from({ length: stripCount }, (_unused, index) => {
+              if (stripCount <= 1) return 0;
+              return Math.max(0, Math.min(probe.duration || 0, (index / (stripCount - 1)) * Math.max(0, probe.duration || 0)));
             });
             const strip = await Promise.all(stripTimes.map(async (time) => {
               try {
