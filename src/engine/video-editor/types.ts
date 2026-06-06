@@ -57,13 +57,14 @@ export interface MediaFolder {
 
 /* ── Track Types ───────────────────────────────────────────────────────── */
 
-export type TrackType = 'video' | 'audio';
+export type TrackType = 'video' | 'audio' | 'effect';
 
 export interface Track {
   id: string;
   name: string;
   type: TrackType;
   clips: Clip[];
+  effects?: TimelineEffect[];
   muted: boolean;
   solo: boolean;
   locked: boolean;
@@ -119,7 +120,7 @@ export type EffectCategory =
 export interface EffectParam {
   key: string;
   label: string;
-  type: 'number' | 'color' | 'boolean' | 'select' | 'point';
+  type: 'number' | 'color' | 'boolean' | 'select' | 'point' | 'text';
   value: number | string | boolean | { x: number; y: number };
   min?: number;
   max?: number;
@@ -136,6 +137,16 @@ export interface Effect {
   params: EffectParam[];
   keyframes: Keyframe[];
   expanded: boolean;
+  startOffset?: number;
+  duration?: number;
+}
+
+export interface TimelineEffect extends Effect {
+  trackId: string;
+  startTime: number;
+  duration: number;
+  targetMode: 'all-visible' | 'track-below' | 'selected-clip';
+  targetClipId?: string | null;
 }
 
 export interface EffectDefinition {
@@ -193,7 +204,7 @@ export interface TransitionDefinition {
 
 /* ── Keyframe Types ────────────────────────────────────────────────────── */
 
-export type KeyframeInterpolation = 'linear' | 'bezier' | 'hold';
+export type KeyframeInterpolation = 'linear' | 'bezier' | 'hold' | 'ease-in' | 'ease-out' | 'ease-in-out';
 
 export interface Keyframe {
   id: string;
@@ -524,6 +535,7 @@ export interface VideoEditorState {
   selectedTrackId: string | null;
   selectedMediaIds: string[];
   selectedEffectId: string | null;
+  selectedTimelineEffectId: string | null;
 
   // View
   timelineZoom: number;           // pixels per second
@@ -654,8 +666,20 @@ export type VideoEditorAction =
   | { type: 'ADD_EFFECT'; payload: { clipId: string; effect: Effect } }
   | { type: 'REMOVE_EFFECT'; payload: { clipId: string; effectId: string } }
   | { type: 'UPDATE_EFFECT_PARAM'; payload: { clipId: string; effectId: string; paramKey: string; value: any } }
+  | { type: 'UPDATE_EFFECT_TIMING'; payload: { clipId: string; effectId: string; startOffset?: number; duration?: number } }
+  | { type: 'ADD_EFFECT_KEYFRAME'; payload: { clipId: string; effectId: string; keyframe: Keyframe } }
+  | { type: 'UPDATE_EFFECT_KEYFRAME'; payload: { clipId: string; effectId: string; keyframeId: string; updates: Partial<Keyframe> } }
+  | { type: 'REMOVE_EFFECT_KEYFRAME'; payload: { clipId: string; effectId: string; keyframeId: string } }
+  | { type: 'REORDER_EFFECT_KEYFRAMES'; payload: { clipId: string; effectId: string; keyframeIds: string[] } }
   | { type: 'TOGGLE_EFFECT'; payload: { clipId: string; effectId: string } }
   | { type: 'REORDER_EFFECTS'; payload: { clipId: string; effectIds: string[] } }
+  | { type: 'ADD_TIMELINE_EFFECT'; payload: { trackId: string; effect: TimelineEffect } }
+  | { type: 'REMOVE_TIMELINE_EFFECT'; payload: string }
+  | { type: 'MOVE_TIMELINE_EFFECT'; payload: { effectId: string; trackId: string; startTime: number } }
+  | { type: 'TRIM_TIMELINE_EFFECT_START'; payload: { effectId: string; newStartTime: number } }
+  | { type: 'TRIM_TIMELINE_EFFECT_END'; payload: { effectId: string; newDuration: number } }
+  | { type: 'UPDATE_TIMELINE_EFFECT_PARAM'; payload: { effectId: string; paramKey: string; value: any } }
+  | { type: 'TOGGLE_TIMELINE_EFFECT'; payload: string }
 
   // Transitions
   | { type: 'ADD_TRANSITION'; payload: { clipId: string; transition: ClipTransition } }
@@ -678,6 +702,7 @@ export type VideoEditorAction =
   | { type: 'SELECT_TRACK'; payload: string | null }
   | { type: 'SELECT_MEDIA'; payload: string[] }
   | { type: 'SELECT_EFFECT'; payload: string | null }
+  | { type: 'SELECT_TIMELINE_EFFECT'; payload: string | null }
 
   // View
   | { type: 'SET_TIMELINE_ZOOM'; payload: number }

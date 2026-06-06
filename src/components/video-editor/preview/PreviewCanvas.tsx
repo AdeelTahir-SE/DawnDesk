@@ -3,7 +3,7 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 import TransportControls from './TransportControls';
 import { Maximize } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import type { ClipTransition, ColorGradingState, Effect, Mask, TextOverlay } from '../../../engine/video-editor/types';
+import type { ClipTransition, ColorGradingState, Effect, Mask, TextOverlay, TimelineEffect } from '../../../engine/video-editor/types';
 
 const MAX_EFFECTS_PER_PREVIEW_CLIP = 32;
 const MAX_DROP_SHADOWS_PER_PREVIEW_CLIP = 4;
@@ -44,6 +44,8 @@ interface PreviewEffectPlan {
   mirrorX: number;
   mirrorY: number;
   lensScale: number;
+  zoomOffsetX: number;
+  zoomOffsetY: number;
   needsGrain: boolean;
   grainAmount: number;
   grainSize: number;
@@ -358,6 +360,123 @@ function textAnimationTransform(text: TextOverlay, time: number) {
   return { alpha, offsetX, offsetY, scale, rotation, text: text.text.slice(0, maxChars), blur: text.animation === 'blur' ? hidden * 10 : 0 };
 }
 
+function drawTextOverlayEffect(
+  ctx: CanvasRenderingContext2D,
+  effect: Effect,
+  width: number,
+  height: number,
+  previewScale: number,
+  localTime: number
+) {
+  const text = paramString(effect, 'text', 'Text overlay');
+  if (!text.trim()) return;
+  const fontSize = Math.max(1, paramNumber(effect, 'fontSize', 52) * previewScale);
+  const animatedPosition = evaluatePointKeyframes(effect, 'position', localTime);
+  const xParam = animatedPosition ? animatedPosition.x : paramNumber(effect, 'x', 50);
+  const yParam = animatedPosition ? animatedPosition.y : paramNumber(effect, 'y', 50);
+  const x = clampNumber(xParam, 0, 100) / 100 * width;
+  const y = clampNumber(yParam, 0, 100) / 100 * height;
+  const color = paramString(effect, 'color', '#ffffff');
+  const background = paramString(effect, 'background', '#000000');
+  const backgroundOpacity = clampNumber(paramNumber(effect, 'backgroundOpacity', 35), 0, 100) / 100;
+
+  ctx.save();
+  ctx.font = `800 ${fontSize}px Sora, Inter, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = Math.max(2, 8 * previewScale);
+  const metrics = ctx.measureText(text);
+  const padX = 18 * previewScale;
+  const padY = 9 * previewScale;
+  if (backgroundOpacity > 0) {
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = backgroundOpacity;
+    ctx.fillStyle = background;
+    ctx.fillRect(x - metrics.width / 2 - padX, y - fontSize / 2 - padY, metrics.width + padX * 2, fontSize + padY * 2);
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = Math.max(2, 8 * previewScale);
+  }
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function interpolationProgress(value: number, interpolation: Effect['keyframes'][number]['interpolation'], handleOut?: { x: number; y: number }) {
+  const t = clampNumber(value, 0, 1);
+  if (interpolation === 'hold') return 0;
+  if (interpolation === 'ease-in') return t * t;
+  if (interpolation === 'ease-out') return 1 - (1 - t) * (1 - t);
+  if (interpolation === 'ease-in-out') return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  if (interpolation === 'bezier') {
+    const y1 = handleOut?.y ?? 0.25;
+    const y2 = 1 - y1;
+    const inv = 1 - t;
+    return inv * inv * inv * 0 + 3 * inv * inv * t * y1 + 3 * inv * t * t * y2 + t * t * t;
+  }
+  return t;
+}
+
+function evaluatePointKeyframes(effect: Effect, property: string, time: number) {
+  const keyframes = effect.keyframes
+    .filter(keyframe => keyframe.property === property && typeof keyframe.value === 'object' && keyframe.value !== null && 'x' in keyframe.value && 'y' in keyframe.value)
+    .sort((a, b) => a.time - b.time);
+  if (keyframes.length === 0) return null;
+  if (time <= keyframes[0].time) return keyframes[0].value as { x: number; y: number };
+  const last = keyframes[keyframes.length - 1];
+  if (time >= last.time) return last.value as { x: number; y: number };
+
+  for (let index = 0; index < keyframes.length - 1; index++) {
+    const from = keyframes[index];
+    const to = keyframes[index + 1];
+    if (time < from.time || time > to.time) continue;
+    const fromValue = from.value as { x: number; y: number };
+    const toValue = to.value as { x: number; y: number };
+    const span = Math.max(0.001, to.time - from.time);
+    const progress = interpolationProgress((time - from.time) / span, from.interpolation, from.handleOut);
+    return {
+      x: fromValue.x + (toValue.x - fromValue.x) * progress,
+      y: fromValue.y + (toValue.y - fromValue.y) * progress,
+    };
+  }
+  return null;
+}
+
+function evaluateNumberKeyframes(effect: Effect, property: string, time: number, fallback: number) {
+  const keyframes = effect.keyframes
+    .filter(keyframe => keyframe.property === property && typeof keyframe.value === 'number')
+    .sort((a, b) => a.time - b.time);
+  if (keyframes.length === 0) return fallback;
+  if (time <= keyframes[0].time) return keyframes[0].value as number;
+  const last = keyframes[keyframes.length - 1];
+  if (time >= last.time) return last.value as number;
+
+  for (let index = 0; index < keyframes.length - 1; index++) {
+    const from = keyframes[index];
+    const to = keyframes[index + 1];
+    if (time < from.time || time > to.time) continue;
+    const span = Math.max(0.001, to.time - from.time);
+    const progress = interpolationProgress((time - from.time) / span, from.interpolation, from.handleOut);
+    return (from.value as number) + ((to.value as number) - (from.value as number)) * progress;
+  }
+  return fallback;
+}
+
+function effectWithAnimatedParams(effect: Effect, localTime: number): Effect {
+  if (effect.keyframes.length === 0) return effect;
+  return {
+    ...effect,
+    params: effect.params.map(param => {
+      if (param.type !== 'number') return param;
+      return {
+        ...param,
+        value: evaluateNumberKeyframes(effect, param.key, localTime, Number(param.value) || 0),
+      };
+    }),
+  };
+}
+
 function buildPreviewEffectPlan(effects: Effect[]): PreviewEffectPlan {
   let blur = 0;
   let brightness = 100;
@@ -370,6 +489,8 @@ function buildPreviewEffectPlan(effects: Effect[]): PreviewEffectPlan {
   let mirrorX = 1;
   let mirrorY = 1;
   let lensScale = 1;
+  let zoomOffsetX = 0;
+  let zoomOffsetY = 0;
   let needsGrain = false;
   let grainAmount = 0;
   let grainSize = 1;
@@ -414,6 +535,13 @@ function buildPreviewEffectPlan(effects: Effect[]): PreviewEffectPlan {
     } else if (fx.type === 'lens-distortion') {
       const distortion = paramNumber(fx, 'distortion', 0);
       lensScale *= 1 + Math.abs(distortion) / 350;
+    } else if (fx.type === 'zoom-effect') {
+      const scale = clampNumber(paramNumber(fx, 'scale', 125) / 100, 0.25, 4);
+      const centerX = clampNumber(paramNumber(fx, 'centerX', 50), 0, 100) / 100;
+      const centerY = clampNumber(paramNumber(fx, 'centerY', 50), 0, 100) / 100;
+      lensScale *= scale;
+      zoomOffsetX += (0.5 - centerX) * (scale - 1);
+      zoomOffsetY += (0.5 - centerY) * (scale - 1);
     } else if (fx.type === 'mirror') {
       const axis = paramString(fx, 'axis', 'horizontal');
       if (axis === 'horizontal' || axis === 'both') mirrorX *= -1;
@@ -466,6 +594,8 @@ function buildPreviewEffectPlan(effects: Effect[]): PreviewEffectPlan {
     mirrorX,
     mirrorY,
     lensScale: clampNumber(lensScale, 0.25, 4),
+    zoomOffsetX,
+    zoomOffsetY,
     needsGrain,
     grainAmount,
     grainSize,
@@ -544,7 +674,10 @@ export default function PreviewCanvas() {
     let isActive = true;
 
     // Cleanup unused media
-    const currentClipIds = new Set(state.project.tracks.flatMap(t => t.clips.map(c => c.id)));
+    const currentClipIds = new Set(state.project.tracks.flatMap(t => [
+      ...t.clips.map(c => c.id),
+      ...(t.effects ?? []).map(effect => effect.id),
+    ]));
     for (const key in mediaCache.current) {
       if (!currentClipIds.has(key)) {
         const el = mediaCache.current[key];
@@ -570,6 +703,19 @@ export default function PreviewCanvas() {
       const plan = buildPreviewEffectPlan(effects);
       effectPlanCache.current.set(clipId, { signature, plan });
       return plan;
+    };
+
+    const getActiveTimelineEffects = (clipId: string, time: number): TimelineEffect[] => {
+      const project = latestStateRef.current.project;
+      if (!project) return [];
+      return project.tracks.flatMap(track => {
+        if (track.type !== 'effect' || track.muted) return [];
+        return (track.effects ?? []).filter(effect => {
+          if (time < effect.startTime || time >= effect.startTime + effect.duration) return false;
+          if (effect.targetMode === 'selected-clip') return effect.targetClipId === clipId;
+          return effect.targetMode === 'all-visible' || effect.targetMode === 'track-below';
+        });
+      });
     };
 
     const getGrainCanvas = (width: number, height: number, amount: number, size: number, now: number) => {
@@ -683,7 +829,16 @@ export default function PreviewCanvas() {
             continue; // Nothing to draw for audio
           }
 
-          const effectPlan = getEffectPlan(clip.id, clip.effects);
+          const clipLocalTime = time - clip.startTime;
+          const activeClipEffects = clip.effects.filter(effect => {
+            if (effect.startOffset === undefined || effect.duration === undefined) return true;
+            return clipLocalTime >= effect.startOffset && clipLocalTime < effect.startOffset + effect.duration;
+          }).map(effect => effectWithAnimatedParams(effect, Math.max(0, clipLocalTime - (effect.startOffset ?? 0))));
+          const timelineEffects = getActiveTimelineEffects(clip.id, time);
+          const effectPlan = getEffectPlan(
+            timelineEffects.length > 0 ? `${clip.id}:${timelineEffects.map(effect => effect.id).join(',')}` : clip.id,
+            [...activeClipEffects, ...timelineEffects]
+          );
           const transitionPlan = buildPreviewTransitionPlan(clip.transition, time, clip.startTime, clip.duration, clip.opacity);
 
           const drawWithTransform = (draw: () => void) => {
@@ -694,7 +849,10 @@ export default function PreviewCanvas() {
             }
             offCtx.filter = [effectPlan.filter, transitionPlan.filter].filter(Boolean).join(' ');
             
-            offCtx.translate(w / 2 + drawX + transitionPlan.offsetX * w, h / 2 + drawY + transitionPlan.offsetY * h);
+            offCtx.translate(
+              w / 2 + drawX + transitionPlan.offsetX * w + effectPlan.zoomOffsetX * w,
+              h / 2 + drawY + transitionPlan.offsetY * h + effectPlan.zoomOffsetY * h
+            );
             offCtx.rotate(rotation + (transitionPlan.rotationDeg * Math.PI) / 180);
             offCtx.scale(
               effectPlan.mirrorX * effectPlan.lensScale * transitionPlan.scale,
@@ -734,6 +892,9 @@ export default function PreviewCanvas() {
             }
             if (img.complete && track.type === 'video') {
               drawWithTransform(() => offCtx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH));
+              activeClipEffects
+                .filter(effect => effect.enabled && effect.type === 'text-overlay')
+                .forEach(effect => drawTextOverlayEffect(offCtx, effect, w, h, previewScale, Math.max(0, clipLocalTime - (effect.startOffset ?? 0))));
             }
           } else if (clip.mediaType === 'video') {
             let vid = mediaCache.current[clip.id] as HTMLVideoElement;
@@ -763,6 +924,9 @@ export default function PreviewCanvas() {
 
             if (vid.readyState >= 2 && track.type === 'video') { // HAVE_CURRENT_DATA
               drawWithTransform(() => offCtx.drawImage(vid, -drawW / 2, -drawH / 2, drawW, drawH));
+              activeClipEffects
+                .filter(effect => effect.enabled && effect.type === 'text-overlay')
+                .forEach(effect => drawTextOverlayEffect(offCtx, effect, w, h, previewScale, Math.max(0, clipLocalTime - (effect.startOffset ?? 0))));
             }
           }
         }

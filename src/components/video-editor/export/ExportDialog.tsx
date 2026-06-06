@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { RESOLUTION_PRESETS, FRAME_RATE_PRESETS } from '../../../engine/video-editor/constants';
 import { X, Download } from 'lucide-react';
@@ -21,37 +22,45 @@ export default function ExportDialog() {
     return `${(bytes / 1e6).toFixed(0)} MB`;
   };
 
-  return (
-    <div className="dd-modal-overlay" onClick={() => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' })}>
-      <div className="dd-modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
+  const closeDialog = () => {
+    if (!state.isExporting) {
+      dispatch({ type: 'TOGGLE_EXPORT_DIALOG' });
+    }
+  };
+
+  return createPortal(
+    <div className="dd-modal-overlay ve-export-overlay" onClick={closeDialog}>
+      <div className="dd-modal ve-export-modal" onClick={e => e.stopPropagation()}>
         <div className="dd-modal-header">
-          <h3 style={{ fontFamily: 'Sora', fontSize: 16, fontWeight: 700 }}>Export Settings</h3>
-          <button className="dd-icon-btn" onClick={() => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' })}><X size={16} /></button>
+          <h3 className={state.isExporting ? 've-export-title ve-export-title-active' : 've-export-title'}>Export Settings</h3>
+          {!state.isExporting && (
+            <button className="dd-icon-btn" onClick={closeDialog}><X size={16} /></button>
+          )}
         </div>
 
         <div className="dd-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           {state.isExporting ? (
-            <div style={{ padding: 40, textAlign: 'center' }}>
-              <h3 style={{ marginBottom: 20 }}>Exporting... {state.exportProgress}%</h3>
-              <div style={{ width: '100%', height: 8, background: 'var(--ve-bg-surface)', borderRadius: 4, overflow: 'hidden', marginBottom: 20 }}>
-                <div style={{ width: `${state.exportProgress}%`, height: '100%', background: '#FACC15', transition: 'width 0.2s' }} />
+            <div className="ve-export-progress-state">
+              <h3>Exporting... {state.exportProgress}%</h3>
+              <div className="ve-export-progress-bar">
+                <div style={{ width: `${state.exportProgress}%` }} />
               </div>
-              {state.exportError && <div style={{ color: '#ef4444', marginBottom: 20 }}>Error: {state.exportError}</div>}
+              {state.exportError && <div className="ve-export-error">Error: {state.exportError}</div>}
               <button className="dd-btn-secondary" onClick={() => cancelExport()}>Cancel Export</button>
             </div>
           ) : (
             <>
               <div className="ve-export-grid">
             {/* Left: Video */}
-            <div>
+            <div className="ve-export-section">
               <div className="ve-panel-section-title" style={{ marginBottom: 10 }}>Video</div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Output Name</label>
                 <input className="dd-input" value={es.name} onChange={e => update({ name: e.target.value })} />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Codec</label>
                 <select className="dd-select" value={es.videoCodec}
                   onChange={e => update({ videoCodec: e.target.value })}>
@@ -61,7 +70,7 @@ export default function ExportDialog() {
                 </select>
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Resolution</label>
                 <select className="dd-select" value={`${es.width}x${es.height}`}
                   onChange={e => {
@@ -74,7 +83,7 @@ export default function ExportDialog() {
                 </select>
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Frame Rate</label>
                 <select className="dd-select" value={es.frameRate}
                   onChange={e => update({ frameRate: Number(e.target.value) })}>
@@ -84,13 +93,13 @@ export default function ExportDialog() {
                 </select>
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Video Bitrate (kbps)</label>
                 <input type="number" className="dd-input" value={es.videoBitrate}
                   onChange={e => update({ videoBitrate: Number(e.target.value) })} />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Quality</label>
                 <div className="ve-slider-row">
                   <input type="range" className="ve-slider" min={1} max={100} value={es.quality}
@@ -101,10 +110,10 @@ export default function ExportDialog() {
             </div>
 
             {/* Right: Audio + Options */}
-            <div>
+            <div className="ve-export-section">
               <div className="ve-panel-section-title" style={{ marginBottom: 10 }}>Audio</div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Audio Codec</label>
                 <select className="dd-select" value={es.audioCodec}
                   onChange={e => update({ audioCodec: e.target.value })}>
@@ -114,13 +123,13 @@ export default function ExportDialog() {
                 </select>
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Audio Bitrate (kbps)</label>
                 <input type="number" className="dd-input" value={es.audioBitrate}
                   onChange={e => update({ audioBitrate: Number(e.target.value) })} />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
+              <div className="ve-export-field">
                 <label className="dd-form-label">Sample Rate</label>
                 <select className="dd-select" value={es.audioSampleRate}
                   onChange={e => update({ audioSampleRate: Number(e.target.value) })}>
@@ -130,23 +139,21 @@ export default function ExportDialog() {
                 </select>
               </div>
 
-              <div className="ve-panel-section-title" style={{ marginBottom: 10, marginTop: 20 }}>Options</div>
+              <div className="ve-panel-section-title" style={{ marginBottom: 10, marginTop: 18 }}>Options</div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div className="ve-export-option-row">
                 <button className={`ve-toggle ${es.burnSubtitles ? 'active' : ''}`}
                   onClick={() => update({ burnSubtitles: !es.burnSubtitles })} />
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Burn Subtitles</span>
+                <span>Burn Subtitles</span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <div className="ve-export-option-row">
                 <button className={`ve-toggle ${es.includeChapters ? 'active' : ''}`}
                   onClick={() => update({ includeChapters: !es.includeChapters })} />
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Include Chapters</span>
+                <span>Include Chapters</span>
               </div>
 
-              <div style={{
-                padding: 12, borderRadius: 8, background: 'var(--ve-bg-surface)', border: '1px solid var(--ve-border)',
-              }}>
+              <div className="ve-export-size-card">
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>Estimated File Size</div>
                 <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'JetBrains Mono', color: '#FACC15' }}>{estimatedSize()}</div>
               </div>
@@ -160,13 +167,16 @@ export default function ExportDialog() {
           </>)}
         </div>
 
-        <div className="dd-modal-footer">
-          <button className="dd-btn-secondary" onClick={() => dispatch({ type: 'TOGGLE_EXPORT_DIALOG' })} disabled={state.isExporting}>Close</button>
-          <button className="dd-btn-primary" onClick={() => exportProject(es)} disabled={state.isExporting}>
-            <Download size={14} style={{ marginRight: 6 }} /> Export
-          </button>
-        </div>
+        {!state.isExporting && (
+          <div className="dd-modal-footer">
+            <button className="dd-btn-secondary" onClick={closeDialog}>Close</button>
+            <button className="dd-btn-primary" onClick={() => exportProject(es)}>
+              <Download size={14} style={{ marginRight: 6 }} /> Export
+            </button>
+          </div>
+        )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -3,7 +3,7 @@ import { Reorder } from 'motion/react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import TimelineControls from './TimelineControls';
 import TimelineRuler from './TimelineRuler';
-import TimelineTrack from './TimelineTrack';
+import TimelineTrack, { getTimelineTrackDisplayHeight } from './TimelineTrack';
 import Playhead from './Playhead';
 import { getDroppedMedia } from '../dragDrop';
 
@@ -111,7 +111,7 @@ export default function Timeline() {
                 Click + Video or + Audio to add a track, then drag media here
               </div>
             )}
-            <Playhead height={tracks.reduce((sum, t) => sum + t.height, 0)} />
+            <Playhead height={tracks.reduce((sum, t) => sum + getTimelineTrackDisplayHeight(t), 0)} />
           </div>
         </div>
       </div>

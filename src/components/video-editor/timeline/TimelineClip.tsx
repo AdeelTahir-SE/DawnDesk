@@ -1,7 +1,7 @@
 import { useRef, useCallback, useMemo, useState } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { CLIP_COLORS, EFFECT_DEFINITIONS, TRANSITION_DEFINITIONS } from '../../../engine/video-editor/constants';
-import type { Clip } from '../../../engine/video-editor/types';
+import type { Clip, Effect } from '../../../engine/video-editor/types';
 import { useAppLogger } from '../../../utils/LoggerContext';
 import { getDroppedEffect, getDroppedMedia, getDroppedTransition } from '../dragDrop';
 
@@ -22,6 +22,77 @@ function trackAcceptsClip(trackType: string | null, mediaType: Clip['mediaType']
 }
 
 const DRAG_TOOLS = new Set(['select', 'ripple', 'roll', 'slip', 'slide']);
+const EFFECT_LANE_HEIGHT = 18;
+const EFFECT_TYPE_COLORS: Record<string, string> = {
+  'zoom-effect': '#22d3ee',
+  'text-overlay': '#f97316',
+  'gaussian-blur': '#a78bfa',
+  'radial-blur': '#8b5cf6',
+  'directional-blur': '#6366f1',
+  sharpen: '#84cc16',
+  'unsharp-mask': '#65a30d',
+  'brightness-contrast': '#facc15',
+  grayscale: '#94a3b8',
+  sepia: '#d97706',
+  invert: '#f43f5e',
+  'hue-saturation': '#ec4899',
+  'chromatic-aberration': '#06b6d4',
+  'lens-distortion': '#14b8a6',
+  mirror: '#38bdf8',
+  vignette: '#64748b',
+  'film-grain': '#c084fc',
+  glow: '#f59e0b',
+  pixelate: '#10b981',
+  emboss: '#fb7185',
+  'edge-detect': '#e879f9',
+};
+const EFFECT_COLORS = [
+  '#38bdf8',
+  '#fb7185',
+  '#a3e635',
+  '#f59e0b',
+  '#818cf8',
+  '#2dd4bf',
+  '#f472b6',
+];
+const KEYFRAME_COLORS = [
+  '#facc15',
+  '#38bdf8',
+  '#fb7185',
+  '#a3e635',
+  '#f97316',
+  '#c084fc',
+  '#2dd4bf',
+  '#f472b6',
+];
+
+function effectColor(effect: Effect) {
+  if (EFFECT_TYPE_COLORS[effect.type]) return EFFECT_TYPE_COLORS[effect.type];
+  let hash = 0;
+  for (const char of effect.type) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return EFFECT_COLORS[hash % EFFECT_COLORS.length];
+}
+
+function keyframeColor(index: number) {
+  return KEYFRAME_COLORS[index % KEYFRAME_COLORS.length];
+}
+
+function layoutEffectLanes(clip: Clip) {
+  const lanes: number[] = [];
+  return clip.effects
+    .map(effect => {
+      const startOffset = Math.max(0, Math.min(effect.startOffset ?? 0, clip.duration - 0.1));
+      const duration = Math.max(0.1, Math.min(effect.duration ?? clip.duration, clip.duration - startOffset));
+      return { effect, startOffset, duration, endOffset: startOffset + duration };
+    })
+    .sort((a, b) => a.startOffset - b.startOffset || a.endOffset - b.endOffset)
+    .map(item => {
+      const lane = lanes.findIndex(endOffset => item.startOffset >= endOffset);
+      const laneIndex = lane >= 0 ? lane : lanes.length;
+      lanes[laneIndex] = item.endOffset;
+      return { ...item, lane: laneIndex, color: effectColor(item.effect) };
+    });
+}
 
 export default function TimelineClip({ clip, trackId, zoom }: Props) {
   const { state, dispatch } = useVideoEditor();
@@ -152,6 +223,8 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
     });
   }, [clip.mediaType, width, clip.startTime, state.showWaveforms]);
 
+  const effectLanes = useMemo(() => layoutEffectLanes(clip), [clip]);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     try {
@@ -162,6 +235,7 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
       if (effectPayload || transitionPayload) {
         e.stopPropagation();
         if (effectPayload) {
+          if (clip.mediaType === 'audio') return;
           const effectDef = EFFECT_DEFINITIONS.find((def: any) => def.type === effectPayload.effectType);
           if (!effectDef) return;
           dispatch({
@@ -177,6 +251,8 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
                 params: JSON.parse(JSON.stringify(effectDef.defaultParams)),
                 keyframes: [],
                 expanded: true,
+                startOffset: Math.max(0, Math.min(clip.duration - 0.1, (e.clientX - (clipRef.current?.getBoundingClientRect().left ?? e.clientX)) / zoom)),
+                duration: Math.min(3, Math.max(0.1, clip.duration - Math.max(0, (e.clientX - (clipRef.current?.getBoundingClientRect().left ?? e.clientX)) / zoom))),
               }
             }
           });
@@ -217,6 +293,7 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
   return (
     <div ref={clipRef}
       className={`ve-clip ${isSelected ? 'selected' : ''} ${dragPreview ? 'dragging' : ''} ${dragPreview && !dragPreview.valid ? 'invalid-drop' : ''}`}
+      data-clip-id={clip.id}
       style={{
         left, width,
         opacity: clip.mediaType === 'video' ? clip.opacity : 1,
@@ -240,8 +317,139 @@ export default function TimelineClip({ clip, trackId, zoom }: Props) {
       )}
       {clip.speed !== 1 && <span className="ve-clip-speed">{clip.speed.toFixed(1)}×</span>}
       {clip.transition && <div className={`ve-clip-transition ${clip.transition.edge}`} />}
+      <div className="ve-clip-effect-layer" style={{ height: effectLanes.length ? Math.max(EFFECT_LANE_HEIGHT, (Math.max(...effectLanes.map(item => item.lane)) + 1) * EFFECT_LANE_HEIGHT) : 0 }}>
+        {effectLanes.map(item => (
+          <ClipEffectBar
+            key={item.effect.id}
+            clip={clip}
+            effect={item.effect}
+            zoom={zoom}
+            lane={item.lane}
+            color={item.color}
+            startOffset={item.startOffset}
+            duration={item.duration}
+          />
+        ))}
+      </div>
       <div className="ve-clip-handle left" onMouseDown={handleTrimStart} />
       <div className="ve-clip-handle right" onMouseDown={handleTrimEnd} />
+    </div>
+  );
+}
+
+function ClipEffectBar({
+  clip,
+  effect,
+  zoom,
+  lane,
+  color,
+  startOffset,
+  duration,
+}: {
+  clip: Clip;
+  effect: Effect;
+  zoom: number;
+  lane: number;
+  color: string;
+  startOffset: number;
+  duration: number;
+}) {
+  const { state, dispatch } = useVideoEditor();
+  const left = startOffset * zoom;
+  const width = Math.max(duration * zoom, 10);
+  const selected = state.selectedEffectId === effect.id && state.selectedClipIds.includes(clip.id);
+
+  const handleClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    dispatch({ type: 'SELECT_CLIPS', payload: [clip.id] });
+    dispatch({ type: 'SELECT_EFFECT', payload: effect.id });
+    dispatch({ type: 'SET_RIGHT_PANEL', payload: 'effects' });
+  };
+
+  const handleMove = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    dispatch({ type: 'SELECT_CLIPS', payload: [clip.id] });
+    dispatch({ type: 'SELECT_EFFECT', payload: effect.id });
+    dispatch({ type: 'SET_RIGHT_PANEL', payload: 'effects' });
+    const startX = event.clientX;
+    const originalStart = startOffset;
+    const onMove = (moveEvent: MouseEvent) => {
+      const dt = (moveEvent.clientX - startX) / zoom;
+      dispatch({
+        type: 'UPDATE_EFFECT_TIMING',
+        payload: { clipId: clip.id, effectId: effect.id, startOffset: originalStart + dt },
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const handleTrimStart = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const startX = event.clientX;
+    const originalStart = startOffset;
+    const originalDuration = duration;
+    const onMove = (moveEvent: MouseEvent) => {
+      const dt = (moveEvent.clientX - startX) / zoom;
+      if (originalDuration - dt < 0.1) return;
+      dispatch({
+        type: 'UPDATE_EFFECT_TIMING',
+        payload: { clipId: clip.id, effectId: effect.id, startOffset: originalStart + dt, duration: originalDuration - dt },
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const handleTrimEnd = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const startX = event.clientX;
+    const originalDuration = duration;
+    const onMove = (moveEvent: MouseEvent) => {
+      const dt = (moveEvent.clientX - startX) / zoom;
+      dispatch({
+        type: 'UPDATE_EFFECT_TIMING',
+        payload: { clipId: clip.id, effectId: effect.id, duration: originalDuration + dt },
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  return (
+    <div
+      className={`ve-clip-effect-bar ${selected ? 'selected' : ''} ${!effect.enabled ? 'disabled' : ''}`}
+      style={{ left, width, top: lane * EFFECT_LANE_HEIGHT, backgroundColor: color }}
+      onClick={handleClick}
+      onMouseDown={handleMove}
+      title={`${effect.name}: ${startOffset.toFixed(2)}s - ${(startOffset + duration).toFixed(2)}s`}
+    >
+      <span>{effect.name}</span>
+      {effect.keyframes.map((keyframe, index) => (
+        <i
+          key={keyframe.id}
+          className="ve-clip-effect-keyframe"
+          style={{
+            left: `${Math.max(0, Math.min(100, (keyframe.time / Math.max(0.1, duration)) * 100))}%`,
+            backgroundColor: keyframeColor(index),
+            boxShadow: `0 0 0 1px rgba(0,0,0,0.28), 0 0 5px ${keyframeColor(index)}66`,
+          }}
+        />
+      ))}
+      <div className="ve-clip-effect-handle left" onMouseDown={handleTrimStart} />
+      <div className="ve-clip-effect-handle right" onMouseDown={handleTrimEnd} />
     </div>
   );
 }

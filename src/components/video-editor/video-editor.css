@@ -19,6 +19,7 @@
   --ve-clip-video: #6366f1;
   --ve-clip-audio: #22c55e;
   --ve-clip-image: #f59e0b;
+  --ve-clip-effect: #d946ef;
   --ve-playhead: #FACC15;
   --ve-selection: rgba(250, 204, 21, 0.2);
   --ve-ruler-height: 28px;
@@ -188,6 +189,65 @@ html.light {
   border: none;
   background: none;
   position: relative;
+}
+
+.ve-tool-btn[data-tooltip]::after,
+.ve-transport-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  z-index: 2500;
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 9px;
+  border: 1px solid var(--ve-border);
+  border-radius: 6px;
+  background: rgba(20,20,20,0.98);
+  color: var(--ve-text);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.36);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transform: translate(-50%, -2px);
+  transition: opacity 90ms ease, transform 90ms ease;
+  white-space: normal;
+}
+
+.ve-tool-btn[data-tooltip]::before,
+.ve-transport-btn[data-tooltip]::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 3px);
+  z-index: 2501;
+  width: 8px;
+  height: 8px;
+  border-left: 1px solid var(--ve-border);
+  border-top: 1px solid var(--ve-border);
+  background: rgba(20,20,20,0.98);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) rotate(45deg);
+  transition: opacity 90ms ease;
+}
+
+.ve-tool-btn[data-tooltip]:hover::after,
+.ve-tool-btn[data-tooltip]:focus-visible::after,
+.ve-transport-btn[data-tooltip]:hover::after,
+.ve-transport-btn[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.ve-tool-btn[data-tooltip]:hover::before,
+.ve-tool-btn[data-tooltip]:focus-visible::before,
+.ve-transport-btn[data-tooltip]:hover::before,
+.ve-transport-btn[data-tooltip]:focus-visible::before {
+  opacity: 1;
 }
 
 .ve-tool-btn:hover {
@@ -384,6 +444,78 @@ html.light {
   color: var(--ve-text-secondary);
 }
 
+.ve-effect-editor {
+  position: relative;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--ve-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.025);
+  transition: border-color 120ms, background 120ms;
+}
+
+.ve-effect-editor:last-child {
+  margin-bottom: 0;
+}
+
+.ve-effect-editor:hover {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+}
+
+.ve-effect-editor-selected {
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.055);
+}
+
+.ve-effect-editor-title {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255,255,255,0.78);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-effect-remove-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255,255,255,0.34);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+.ve-effect-remove-btn:hover {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+}
+
+.ve-collapse-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ve-text-muted);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+.ve-collapse-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--ve-text-secondary);
+}
+
 /* ── Preview Canvas ────────────────────────────────────────────────────── */
 
 .ve-canvas-area {
@@ -462,6 +594,7 @@ html.light {
   cursor: pointer;
   border: none;
   background: none;
+  position: relative;
   transition: all 100ms;
 }
 
@@ -772,6 +905,12 @@ html.light {
   background: var(--ve-accent-dim);
 }
 
+.ve-clip.drop-target {
+  outline: 2px solid var(--ve-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(250,204,21,0.36), 0 10px 30px rgba(0,0,0,0.35);
+}
+
 .ve-track-clips.drag-target {
   background:
     linear-gradient(90deg, rgba(250,204,21,0.16), rgba(250,204,21,0.05)),
@@ -797,7 +936,7 @@ html.light {
   cursor: grab;
   transition: box-shadow 100ms, border-color 100ms, opacity 100ms;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   border: 1px solid rgba(255,255,255,0.08);
   will-change: transform;
 }
@@ -808,8 +947,8 @@ html.light {
 }
 
 .ve-clip.selected {
-  border-color: var(--ve-accent);
-  box-shadow: 0 0 0 1px var(--ve-accent), 0 2px 12px rgba(250,204,21,0.15);
+  border-color: rgba(255,255,255,0.38);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.14);
 }
 
 .ve-clip.dragging {
@@ -850,7 +989,8 @@ html.light {
 .ve-clip-label {
   position: relative;
   z-index: 2;
-  padding: 2px 8px;
+  max-width: calc(100% - 14px);
+  padding: 5px 8px 2px;
   font-size: 10px;
   font-weight: 600;
   color: rgba(255,255,255,0.9);
@@ -922,6 +1062,71 @@ html.light {
 
 .ve-clip-transition.start { left: 0; }
 .ve-clip-transition.end { right: 0; }
+
+.ve-clip-effect-layer {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 24px;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.ve-clip-effect-bar {
+  position: absolute;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+  color: rgba(255,255,255,0.92);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.ve-clip-effect-bar.selected {
+  border-color: rgba(255,255,255,0.62);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.26), 0 2px 7px rgba(0,0,0,0.35);
+}
+
+.ve-clip-effect-bar.disabled {
+  opacity: 0.46;
+}
+
+.ve-clip-effect-bar span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ve-clip-effect-keyframe {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--ve-accent);
+  transform: translateX(-2px);
+  pointer-events: none;
+}
+
+.ve-clip-effect-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+}
+
+.ve-clip-effect-handle.left { left: 0; }
+.ve-clip-effect-handle.right { right: 0; }
 
 /* ── Playhead ──────────────────────────────────────────────────────────── */
 
@@ -1060,6 +1265,195 @@ html.light {
   color: var(--ve-text-muted);
   min-width: 36px;
   text-align: right;
+}
+
+.ve-effect-keyframes {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ve-border);
+}
+
+.ve-effect-keyframes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ve-effect-keyframes-head > span {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: var(--ve-text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-align: center;
+}
+
+.ve-keyframe-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.ve-keyframe-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--ve-border);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.025);
+  color: var(--ve-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+
+.ve-keyframe-add-btn:hover {
+  border-color: rgba(250,204,21,0.45);
+  background: rgba(250,204,21,0.1);
+  color: var(--ve-text);
+}
+
+.ve-keyframe-add-btn svg {
+  color: var(--ve-accent);
+  flex: 0 0 auto;
+}
+
+.ve-keyframe-add-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-keyframe-empty {
+  padding: 6px 0 2px;
+  color: var(--ve-text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ve-keyframe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ve-keyframe-card {
+  position: relative;
+  padding: 9px;
+  border: 1px solid var(--ve-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.025);
+}
+
+.ve-keyframe-card.dragging {
+  opacity: 0.58;
+  border-color: rgba(255,255,255,0.22);
+}
+
+.ve-keyframe-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.ve-keyframe-card-head > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255,255,255,0.72);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-keyframe-color-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--ve-accent);
+}
+
+.ve-keyframe-drag-btn {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ve-text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.ve-keyframe-drag-btn:hover {
+  color: var(--ve-text-secondary);
+  background: rgba(255,255,255,0.06);
+}
+
+.ve-keyframe-drag-btn:active {
+  cursor: grabbing;
+}
+
+.ve-keyframe-card-head .ve-tool-btn {
+  color: var(--ve-text-muted);
+  flex: 0 0 auto;
+}
+
+.ve-keyframe-card-head .ve-tool-btn:hover {
+  color: #ef4444;
+}
+
+.ve-keyframe-control {
+  margin-bottom: 7px;
+}
+
+.ve-keyframe-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ve-keyframe-slider-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ve-keyframe-number {
+  width: 56px;
+}
+
+.ve-keyframe-select-row {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 7px;
+}
+
+.ve-keyframe-select-row .ve-speed-select {
+  width: 100%;
+  min-height: 24px;
 }
 
 /* ── Color Grading ─────────────────────────────────────────────────────── */
@@ -1435,12 +1829,159 @@ html.light {
   margin-top: 2px;
 }
 
+.ve-effect-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--ve-border);
+  border-radius: 8px;
+  background: rgba(20,20,20,0.96);
+  color: var(--ve-text);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.38);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ve-effect-drag-ghost span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-effect-drag-ghost-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 12px rgba(56,189,248,0.45);
+}
+
 /* ── Export Dialog ──────────────────────────────────────────────────────── */
 
 .ve-export-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.ve-export-modal {
+  max-width: min(860px, calc(100vw - 48px));
+}
+
+.ve-export-title {
+  margin: 0;
+  color: var(--ve-text);
+  font-family: 'Sora', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ve-export-title-active {
+  color: var(--ve-accent);
+}
+
+.ve-export-overlay {
+  z-index: 2147483647;
+}
+
+.ve-export-progress-state {
+  padding: 40px;
+  text-align: center;
+}
+
+.ve-export-progress-state h3 {
+  margin: 0 0 20px;
+  color: var(--ve-accent);
+  font-family: 'Sora', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.ve-export-progress-bar {
+  width: 100%;
+  height: 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+}
+
+.ve-export-progress-bar > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ve-accent);
+  box-shadow: 0 0 18px rgba(250,204,21,0.3);
+  transition: width 0.2s;
+}
+
+.ve-export-error {
+  margin-bottom: 20px;
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.ve-export-section {
+  min-width: 0;
+}
+
+.ve-export-field {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ve-export-field .dd-form-label {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.ve-export-field .dd-input,
+.ve-export-field .dd-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.ve-export-field .ve-slider-row {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.ve-export-option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: rgba(255,255,255,0.62);
+  font-size: 12px;
+}
+
+.ve-export-size-card {
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid var(--ve-border);
+  border-radius: 8px;
+  background: var(--ve-bg-surface);
+}
+
+@media (max-width: 760px) {
+  .ve-export-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ve-export-field {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
 }
 
 .ve-export-preset-grid {

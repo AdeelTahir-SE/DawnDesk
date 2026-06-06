@@ -121,13 +121,25 @@ export default function VideoEditorInner() {
       else if (ctrl && !shift && key === 'KeyA') { e.preventDefault(); dispatch({ type: 'SELECT_CLIPS', payload: state.project?.tracks.flatMap(t => t.clips.map(c => c.id)) || [] }); }
       else if (key === 'KeyV' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'select' });
       else if (key === 'KeyC' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'razor' });
-      else if (key === 'KeyB' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'ripple' });
-      else if (key === 'KeyN' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'roll' });
       else if (key === 'KeyH' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'hand' });
       else if (key === 'KeyT' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'text' });
       else if (key === 'KeyP' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'pen' });
       else if (key === 'Delete' || key === 'Backspace') {
-        if (state.selectedClipIds.length > 0) {
+        const selectedEffectClipId = state.selectedEffectId
+          ? state.project?.tracks
+              .flatMap(track => track.clips)
+              .find(clip => clip.effects.some(effect => effect.id === state.selectedEffectId))?.id
+          : null;
+        if (state.selectedTimelineEffectId) {
+          e.preventDefault();
+          dispatch({ type: 'REMOVE_TIMELINE_EFFECT', payload: state.selectedTimelineEffectId });
+        } else if (state.selectedEffectId && selectedEffectClipId) {
+          e.preventDefault();
+          dispatch({
+            type: 'REMOVE_EFFECT',
+            payload: { clipId: selectedEffectClipId, effectId: state.selectedEffectId },
+          });
+        } else if (state.selectedClipIds.length > 0) {
           e.preventDefault();
           dispatch({ type: 'REMOVE_CLIPS', payload: state.selectedClipIds });
         }
@@ -147,7 +159,7 @@ export default function VideoEditorInner() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, importMedia, loadProject, saveProject, saveProjectAs, state.project, state.selectedClipIds, state.timelineZoom, state.playheadTime]);
+  }, [dispatch, importMedia, loadProject, saveProject, saveProjectAs, state.project, state.selectedClipIds, state.selectedEffectId, state.selectedTimelineEffectId, state.timelineZoom, state.playheadTime]);
 
   return (
     <div className="ve-layout animate-fadeIn duration-500" style={layoutVars}>

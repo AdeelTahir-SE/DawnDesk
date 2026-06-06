@@ -2,17 +2,35 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 import { TOOL_DEFINITIONS } from '../../../engine/video-editor/constants';
 import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 import {
-  MousePointer2, Scissors, MoveHorizontal, Columns2, ArrowLeftRight,
+  MousePointer2, Scissors,
   Hand, ZoomIn, Type, Square, PenTool, Crop,
   Magnet, Undo2, Redo2, Save
 } from 'lucide-react';
 import type { Mask, TextOverlay, VideoToolType } from '../../../engine/video-editor/types';
 
 const TOOL_ICONS: Record<string, React.ElementType> = {
-  select: MousePointer2, razor: Scissors, ripple: MoveHorizontal,
-  roll: Columns2, slip: MoveHorizontal, slide: ArrowLeftRight,
+  select: MousePointer2, razor: Scissors,
   hand: Hand, zoom: ZoomIn, text: Type,
   shape: Square, pen: PenTool, crop: Crop,
+};
+
+const VISIBLE_TOOL_TYPES = new Set<VideoToolType>([
+  'select',
+  'razor',
+  'hand',
+  'zoom',
+  'text',
+  'shape',
+  'pen',
+  'crop',
+]);
+
+const TOOL_SHORTCUTS: Partial<Record<VideoToolType, string>> = {
+  select: 'V',
+  razor: 'C',
+  hand: 'H',
+  text: 'T',
+  pen: 'P',
 };
 
 export default function EditorToolbar() {
@@ -81,13 +99,17 @@ export default function EditorToolbar() {
   return (
     <div className="ve-toolbar-area">
       <div className="ve-toolbar-group">
-        {TOOL_DEFINITIONS.map((tool) => {
+        {TOOL_DEFINITIONS.filter(tool => VISIBLE_TOOL_TYPES.has(tool.type as VideoToolType)).map((tool) => {
           const Icon = TOOL_ICONS[tool.type] || MousePointer2;
+          const shortcut = TOOL_SHORTCUTS[tool.type as VideoToolType];
+          const label = `${tool.name}${shortcut ? ` (${shortcut})` : ''}: ${tool.description}`;
           return (
             <button key={tool.type}
               className={`ve-tool-btn ${state.activeTool === tool.type ? 'active' : ''}`}
               onClick={() => handleToolClick(tool.type as VideoToolType)}
-              title={`${tool.name} (${tool.shortcut})`}>
+              title={label}
+              aria-label={label}
+              data-tooltip={label}>
               <Icon size={16} />
             </button>
           );
@@ -99,7 +121,9 @@ export default function EditorToolbar() {
       <button
         className={`ve-tool-btn ${state.snapEnabled ? 'active' : ''}`}
         onClick={() => dispatch({ type: 'TOGGLE_SNAP' })}
-        title={`Snap ${state.snapEnabled ? 'On' : 'Off'} (S)`}>
+        title={`Snapping ${state.snapEnabled ? 'On' : 'Off'} (S)`}
+        aria-label={`Snapping ${state.snapEnabled ? 'On' : 'Off'} (S)`}
+        data-tooltip={`Snapping ${state.snapEnabled ? 'On' : 'Off'} (S): align clips and edits`}>
         <Magnet size={16} />
       </button>
 
@@ -109,6 +133,8 @@ export default function EditorToolbar() {
         <button className="ve-tool-btn"
           onClick={() => dispatch({ type: 'UNDO' })}
           title="Undo (Ctrl+Z)"
+          aria-label="Undo (Ctrl+Z)"
+          data-tooltip="Undo (Ctrl+Z)"
           disabled={state.historyIndex <= 0}
           style={{ opacity: state.historyIndex <= 0 ? 0.3 : 1 }}>
           <Undo2 size={16} />
@@ -116,6 +142,8 @@ export default function EditorToolbar() {
         <button className="ve-tool-btn"
           onClick={() => dispatch({ type: 'REDO' })}
           title="Redo (Ctrl+Shift+Z)"
+          aria-label="Redo (Ctrl+Shift+Z)"
+          data-tooltip="Redo (Ctrl+Shift+Z)"
           disabled={state.historyIndex >= state.history.length - 1}
           style={{ opacity: state.historyIndex >= state.history.length - 1 ? 0.3 : 1 }}>
           <Redo2 size={16} />
@@ -125,7 +153,7 @@ export default function EditorToolbar() {
       <div className="ve-toolbar-spacer" />
 
       <div className="ve-toolbar-group" style={{ gap: 8 }}>
-        <button className="ve-tool-btn" onClick={saveProject} title="Save Project (Ctrl+S)">
+        <button className="ve-tool-btn" onClick={saveProject} title="Save Project (Ctrl+S)" aria-label="Save Project (Ctrl+S)" data-tooltip="Save Project (Ctrl+S)">
           <Save size={16} color={state.isDirty ? '#FACC15' : 'currentColor'} />
         </button>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: 'JetBrains Mono' }}>

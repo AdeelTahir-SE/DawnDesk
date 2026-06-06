@@ -8,6 +8,8 @@ import type {
   VideoEditorAction,
   Track,
   Clip,
+  Keyframe,
+  TimelineEffect,
   MediaItem,
   HistorySnapshot,
 } from './types';
@@ -84,6 +86,10 @@ function calculateProjectDuration(tracks: Track[]): number {
       const end = clip.startTime + clip.duration;
       if (end > max) max = end;
     }
+    for (const effect of track.effects ?? []) {
+      const end = effect.startTime + effect.duration;
+      if (end > max) max = end;
+    }
   }
   return max;
 }
@@ -126,6 +132,25 @@ function snapTime(state: VideoEditorState, time: number, ignoreClipId?: string):
 
 function trackAcceptsMedia(track: Track, mediaType: MediaItem['type']): boolean {
   return track.type === mediaType || (track.type === 'video' && mediaType === 'image');
+}
+
+function findTimelineEffectInTracks(tracks: Track[], effectId: string): { track: Track; effect: TimelineEffect } | null {
+  for (const track of tracks) {
+    const effect = (track.effects ?? []).find(item => item.id === effectId);
+    if (effect) return { track, effect };
+  }
+  return null;
+}
+
+function updateTimelineEffectInTracks(
+  tracks: Track[],
+  effectId: string,
+  updater: (effect: TimelineEffect) => TimelineEffect
+): Track[] {
+  return tracks.map(track => ({
+    ...track,
+    effects: (track.effects ?? []).map(effect => effect.id === effectId ? updater(effect) : effect),
+  }));
 }
 
 function createClipFromMedia(media: MediaItem, trackId: string, startTime: number): Clip {
@@ -285,6 +310,7 @@ export const initialState: VideoEditorState = {
   selectedTrackId: null,
   selectedMediaIds: [],
   selectedEffectId: null,
+  selectedTimelineEffectId: null,
 
   // View
   timelineZoom: TIMELINE_DEFAULT_ZOOM,
@@ -453,12 +479,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       const stateAfterHistory = pushHistory(state, `Add ${action.payload.type} track`);
       const trackCount = stateAfterHistory.project!.tracks.filter(t => t.type === action.payload.type).length;
-      const label = action.payload.type === 'video' ? 'Video' : 'Audio';
+      const label = action.payload.type === 'video' ? 'Video' : action.payload.type === 'audio' ? 'Audio' : 'Effect';
       const newTrack: Track = {
         id: generateId(),
         name: `${label} ${trackCount + 1}`,
         type: action.payload.type,
         clips: [],
+        effects: [],
         muted: false, solo: false, locked: false, visible: true,
         volume: 1,
         height: action.payload.type === 'video' ? DEFAULT_VIDEO_TRACK_HEIGHT : DEFAULT_AUDIO_TRACK_HEIGHT,
@@ -592,6 +619,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         name: `${label} ${trackCount + 1}`,
         type: trackType,
         clips: [],
+        effects: [],
         muted: false,
         solo: false,
         locked: false,
@@ -850,6 +878,8 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     // ── Effects ──────────────────────────────────────────────────────────
     case 'ADD_EFFECT': {
       if (!state.project) return state;
+      const target = findClipInTracks(state.project.tracks, action.payload.clipId);
+      if (!target || target.clip.mediaType === 'audio') return state;
       const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: [...clip.effects, action.payload.effect],
@@ -870,7 +900,12 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         ...clip,
         effects: clip.effects.filter(e => e.id !== action.payload.effectId),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return {
+        ...state,
+        project: { ...state.project, tracks },
+        selectedEffectId: state.selectedEffectId === action.payload.effectId ? null : state.selectedEffectId,
+        isDirty: true,
+      };
     }
 
     case 'UPDATE_EFFECT_PARAM': {
@@ -883,6 +918,92 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
             ...e,
             params: e.params.map(p => p.key === action.payload.paramKey ? { ...p, value: action.payload.value } : p),
           };
+        }),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'UPDATE_EFFECT_TIMING': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+        ...clip,
+        effects: clip.effects.map(effect => {
+          if (effect.id !== action.payload.effectId) return effect;
+          const currentStart = effect.startOffset ?? 0;
+          const currentDuration = effect.duration ?? clip.duration;
+          const startOffset = clamp(action.payload.startOffset ?? currentStart, 0, Math.max(0, clip.duration - 0.1));
+          const maxDuration = Math.max(0.1, clip.duration - startOffset);
+          const duration = clamp(action.payload.duration ?? currentDuration, 0.1, maxDuration);
+          return { ...effect, startOffset, duration };
+        }),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'ADD_EFFECT_KEYFRAME': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+        ...clip,
+        effects: clip.effects.map(effect => (
+          effect.id === action.payload.effectId
+            ? {
+                ...effect,
+                keyframes: [
+                  ...effect.keyframes.filter(keyframe => (
+                    keyframe.property !== action.payload.keyframe.property
+                    || Math.abs(keyframe.time - action.payload.keyframe.time) > 0.001
+                  )),
+                  action.payload.keyframe,
+                ],
+              }
+            : effect
+        )),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'UPDATE_EFFECT_KEYFRAME': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+        ...clip,
+        effects: clip.effects.map(effect => (
+          effect.id === action.payload.effectId
+            ? {
+                ...effect,
+                keyframes: effect.keyframes
+                  .map(keyframe => keyframe.id === action.payload.keyframeId ? { ...keyframe, ...action.payload.updates } : keyframe),
+              }
+            : effect
+        )),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'REMOVE_EFFECT_KEYFRAME': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+        ...clip,
+        effects: clip.effects.map(effect => (
+          effect.id === action.payload.effectId
+            ? { ...effect, keyframes: effect.keyframes.filter(keyframe => keyframe.id !== action.payload.keyframeId) }
+            : effect
+        )),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'REORDER_EFFECT_KEYFRAMES': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+        ...clip,
+        effects: clip.effects.map(effect => {
+          if (effect.id !== action.payload.effectId) return effect;
+          const keyframesById = new Map(effect.keyframes.map(keyframe => [keyframe.id, keyframe]));
+          const reordered = action.payload.keyframeIds
+            .map(id => keyframesById.get(id))
+            .filter((keyframe): keyframe is Keyframe => Boolean(keyframe));
+          const missing = effect.keyframes.filter(keyframe => !action.payload.keyframeIds.includes(keyframe.id));
+          return { ...effect, keyframes: [...reordered, ...missing] };
         }),
       }));
       return { ...state, project: { ...state.project, tracks }, isDirty: true };
@@ -905,6 +1026,116 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         return { ...clip, effects: reordered };
       });
       return { ...state, project: { ...state.project, tracks } };
+    }
+
+    case 'ADD_TIMELINE_EFFECT': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Add timeline effect');
+      const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
+      if (!targetTrack || targetTrack.type !== 'effect' || targetTrack.locked) return s;
+      const effect = {
+        ...action.payload.effect,
+        trackId: action.payload.trackId,
+        startTime: Math.max(0, action.payload.effect.startTime),
+        duration: Math.max(0.1, action.payload.effect.duration),
+      };
+      const tracks = s.project!.tracks.map(track => (
+        track.id === action.payload.trackId
+          ? { ...track, effects: [...(track.effects ?? []), effect] }
+          : track
+      ));
+      return {
+        ...s,
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
+        selectedClipIds: [],
+        selectedEffectId: null,
+        selectedTimelineEffectId: effect.id,
+        selectedTrackId: action.payload.trackId,
+        activeRightPanel: 'effects',
+        isDirty: true,
+      };
+    }
+
+    case 'REMOVE_TIMELINE_EFFECT': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Remove timeline effect');
+      const tracks = s.project!.tracks.map(track => ({
+        ...track,
+        effects: (track.effects ?? []).filter(effect => effect.id !== action.payload),
+      }));
+      return {
+        ...s,
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
+        selectedTimelineEffectId: s.selectedTimelineEffectId === action.payload ? null : s.selectedTimelineEffectId,
+        isDirty: true,
+      };
+    }
+
+    case 'MOVE_TIMELINE_EFFECT': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Move timeline effect');
+      const found = findTimelineEffectInTracks(s.project!.tracks, action.payload.effectId);
+      const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
+      if (!found || found.track.locked || !targetTrack || targetTrack.type !== 'effect' || targetTrack.locked) return s;
+      const movedEffect = {
+        ...found.effect,
+        trackId: action.payload.trackId,
+        startTime: snapTime(s, action.payload.startTime, action.payload.effectId),
+      };
+      let tracks = s.project!.tracks.map(track => ({
+        ...track,
+        effects: (track.effects ?? []).filter(effect => effect.id !== action.payload.effectId),
+      }));
+      tracks = tracks.map(track => (
+        track.id === action.payload.trackId
+          ? { ...track, effects: [...(track.effects ?? []), movedEffect] }
+          : track
+      ));
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) }, isDirty: true };
+    }
+
+    case 'TRIM_TIMELINE_EFFECT_START': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Trim timeline effect start');
+      const found = findTimelineEffectInTracks(s.project!.tracks, action.payload.effectId);
+      if (!found || found.track.locked) return s;
+      const tracks = updateTimelineEffectInTracks(s.project!.tracks, action.payload.effectId, effect => {
+        const maxStart = effect.startTime + effect.duration - 0.1;
+        const newStartTime = clamp(action.payload.newStartTime, 0, maxStart);
+        const delta = newStartTime - effect.startTime;
+        return { ...effect, startTime: newStartTime, duration: Math.max(0.1, effect.duration - delta) };
+      });
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) }, isDirty: true };
+    }
+
+    case 'TRIM_TIMELINE_EFFECT_END': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Trim timeline effect end');
+      const found = findTimelineEffectInTracks(s.project!.tracks, action.payload.effectId);
+      if (!found || found.track.locked) return s;
+      const tracks = updateTimelineEffectInTracks(s.project!.tracks, action.payload.effectId, effect => ({
+        ...effect,
+        duration: Math.max(0.1, action.payload.newDuration),
+      }));
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) }, isDirty: true };
+    }
+
+    case 'UPDATE_TIMELINE_EFFECT_PARAM': {
+      if (!state.project) return state;
+      const tracks = updateTimelineEffectInTracks(state.project.tracks, action.payload.effectId, effect => ({
+        ...effect,
+        params: effect.params.map(param => param.key === action.payload.paramKey ? { ...param, value: action.payload.value } : param),
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
+    case 'TOGGLE_TIMELINE_EFFECT': {
+      if (!state.project) return state;
+      const tracks = updateTimelineEffectInTracks(state.project.tracks, action.payload, effect => ({
+        ...effect,
+        enabled: !effect.enabled,
+      }));
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
     }
 
     // ── Transitions ─────────────────────────────────────────────────────
@@ -1007,13 +1238,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     // ── Selection ────────────────────────────────────────────────────────
     case 'SELECT_CLIPS':
-      return { ...state, selectedClipIds: action.payload };
+      return { ...state, selectedClipIds: action.payload, selectedTimelineEffectId: null };
 
     case 'ADD_TO_SELECTION':
       return { ...state, selectedClipIds: [...new Set([...state.selectedClipIds, ...action.payload])] };
 
     case 'DESELECT_ALL':
-      return { ...state, selectedClipIds: [], selectedTrackId: null, selectedMediaIds: [], selectedEffectId: null };
+      return { ...state, selectedClipIds: [], selectedTrackId: null, selectedMediaIds: [], selectedEffectId: null, selectedTimelineEffectId: null };
 
     case 'SELECT_TRACK':
       return { ...state, selectedTrackId: action.payload };
@@ -1022,7 +1253,10 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       return { ...state, selectedMediaIds: action.payload };
 
     case 'SELECT_EFFECT':
-      return { ...state, selectedEffectId: action.payload };
+      return { ...state, selectedEffectId: action.payload, selectedTimelineEffectId: null };
+
+    case 'SELECT_TIMELINE_EFFECT':
+      return { ...state, selectedTimelineEffectId: action.payload, selectedEffectId: null, selectedClipIds: [] };
 
     // ── View ────────────────────────────────────────────────────────────
     case 'SET_TIMELINE_ZOOM':
@@ -1136,6 +1370,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       return { ...state, exportSettings: { ...state.exportSettings, ...action.payload } };
 
     case 'TOGGLE_EXPORT_DIALOG':
+      if (state.isExporting) return state;
       return { ...state, showExportDialog: !state.showExportDialog };
 
     case 'ADD_RENDER_JOB':

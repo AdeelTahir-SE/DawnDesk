@@ -257,6 +257,281 @@ fn effect_param_str<'a>(effect: &'a serde_json::Value, key: &str, fallback: &'a 
         .unwrap_or(fallback)
 }
 
+fn keyframe_progress(value: f64, interpolation: &str, handle_out_y: f64) -> f64 {
+    let t = value.clamp(0.0, 1.0);
+    match interpolation {
+        "hold" => 0.0,
+        "ease-in" => t * t,
+        "ease-out" => 1.0 - (1.0 - t) * (1.0 - t),
+        "ease-in-out" => {
+            if t < 0.5 {
+                2.0 * t * t
+            } else {
+                1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+            }
+        }
+        "bezier" => {
+            let y1 = handle_out_y;
+            let y2 = 1.0 - y1;
+            let inv = 1.0 - t;
+            3.0 * inv * inv * t * y1 + 3.0 * inv * t * t * y2 + t * t * t
+        }
+        _ => t,
+    }
+}
+
+fn evaluate_numeric_keyframes(effect: &serde_json::Value, property: &str, time: f64, fallback: f64) -> f64 {
+    let mut keyframes: Vec<&serde_json::Value> = effect
+        .get("keyframes")
+        .and_then(|k| k.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter(|keyframe| {
+                    keyframe.get("property").and_then(|p| p.as_str()) == Some(property)
+                        && keyframe.get("value").and_then(|v| v.as_f64()).is_some()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if keyframes.is_empty() {
+        return fallback;
+    }
+
+    keyframes.sort_by(|a, b| {
+        value_f64(a, "time", 0.0)
+            .partial_cmp(&value_f64(b, "time", 0.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let first = keyframes[0];
+    let first_time = value_f64(first, "time", 0.0);
+    if time <= first_time {
+        return value_f64(first, "value", fallback);
+    }
+
+    let last = keyframes[keyframes.len() - 1];
+    let last_time = value_f64(last, "time", 0.0);
+    if time >= last_time {
+        return value_f64(last, "value", fallback);
+    }
+
+    for pair in keyframes.windows(2) {
+        let from = pair[0];
+        let to = pair[1];
+        let from_time = value_f64(from, "time", 0.0);
+        let to_time = value_f64(to, "time", from_time + 0.001);
+        if time < from_time || time > to_time {
+            continue;
+        }
+        let span = (to_time - from_time).max(0.001);
+        let handle_out_y = from
+            .get("handleOut")
+            .and_then(|handle| handle.get("y"))
+            .and_then(|value| value.as_f64())
+            .unwrap_or(0.25);
+        let interpolation = from
+            .get("interpolation")
+            .and_then(|value| value.as_str())
+            .unwrap_or("linear");
+        let progress = keyframe_progress((time - from_time) / span, interpolation, handle_out_y);
+        let from_value = value_f64(from, "value", fallback);
+        let to_value = value_f64(to, "value", fallback);
+        return from_value + (to_value - from_value) * progress;
+    }
+
+    fallback
+}
+
+fn evaluate_point_keyframes(
+    effect: &serde_json::Value,
+    property: &str,
+    time: f64,
+    fallback_x: f64,
+    fallback_y: f64,
+) -> Option<(f64, f64)> {
+    let mut keyframes: Vec<&serde_json::Value> = effect
+        .get("keyframes")
+        .and_then(|k| k.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter(|keyframe| {
+                    keyframe.get("property").and_then(|p| p.as_str()) == Some(property)
+                        && keyframe
+                            .get("value")
+                            .and_then(|v| v.get("x"))
+                            .and_then(|v| v.as_f64())
+                            .is_some()
+                        && keyframe
+                            .get("value")
+                            .and_then(|v| v.get("y"))
+                            .and_then(|v| v.as_f64())
+                            .is_some()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if keyframes.is_empty() {
+        return None;
+    }
+
+    keyframes.sort_by(|a, b| {
+        value_f64(a, "time", 0.0)
+            .partial_cmp(&value_f64(b, "time", 0.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let point_value = |keyframe: &serde_json::Value| -> (f64, f64) {
+        let value = keyframe.get("value").unwrap_or(&serde_json::Value::Null);
+        (
+            value.get("x").and_then(|v| v.as_f64()).unwrap_or(fallback_x),
+            value.get("y").and_then(|v| v.as_f64()).unwrap_or(fallback_y),
+        )
+    };
+
+    let first = keyframes[0];
+    if time <= value_f64(first, "time", 0.0) {
+        return Some(point_value(first));
+    }
+
+    let last = keyframes[keyframes.len() - 1];
+    if time >= value_f64(last, "time", 0.0) {
+        return Some(point_value(last));
+    }
+
+    for pair in keyframes.windows(2) {
+        let from = pair[0];
+        let to = pair[1];
+        let from_time = value_f64(from, "time", 0.0);
+        let to_time = value_f64(to, "time", from_time + 0.001);
+        if time < from_time || time > to_time {
+            continue;
+        }
+        let span = (to_time - from_time).max(0.001);
+        let handle_out_y = from
+            .get("handleOut")
+            .and_then(|handle| handle.get("y"))
+            .and_then(|value| value.as_f64())
+            .unwrap_or(0.25);
+        let interpolation = from
+            .get("interpolation")
+            .and_then(|value| value.as_str())
+            .unwrap_or("linear");
+        let progress = keyframe_progress((time - from_time) / span, interpolation, handle_out_y);
+        let (from_x, from_y) = point_value(from);
+        let (to_x, to_y) = point_value(to);
+        return Some((
+            from_x + (to_x - from_x) * progress,
+            from_y + (to_y - from_y) * progress,
+        ));
+    }
+
+    None
+}
+
+fn effect_with_animated_params(effect: &serde_json::Value, local_time: f64) -> serde_json::Value {
+    let mut animated = effect.clone();
+    let Some(params) = animated.get_mut("params").and_then(|p| p.as_array_mut()) else {
+        return animated;
+    };
+
+    let position = if effect.get("type").and_then(|t| t.as_str()) == Some("text-overlay") {
+        evaluate_point_keyframes(
+            effect,
+            "position",
+            local_time,
+            effect_param_f64(effect, "x", 50.0),
+            effect_param_f64(effect, "y", 50.0),
+        )
+    } else {
+        None
+    };
+
+    for param in params {
+        let Some(param_key) = param.get("key").and_then(|k| k.as_str()).map(|key| key.to_string()) else {
+            continue;
+        };
+        if let Some((x, y)) = position {
+            if param_key == "x" {
+                param["value"] = serde_json::json!(x);
+                continue;
+            }
+            if param_key == "y" {
+                param["value"] = serde_json::json!(y);
+                continue;
+            }
+        }
+        let Some(current_value) = param.get("value").and_then(|v| v.as_f64()) else {
+            continue;
+        };
+        let animated_value = evaluate_numeric_keyframes(effect, &param_key, local_time, current_value);
+        param["value"] = serde_json::json!(animated_value);
+    }
+
+    animated
+}
+
+fn push_effect_keyframe_boundaries(
+    boundaries: &mut Vec<f64>,
+    effect: &serde_json::Value,
+    effect_start: f64,
+    effect_end: f64,
+    clip_start: f64,
+    clip_end: f64,
+) {
+    if effect_end <= effect_start {
+        return;
+    }
+
+    let Some(keyframes) = effect.get("keyframes").and_then(|k| k.as_array()) else {
+        return;
+    };
+
+    let has_animatable_keyframes = keyframes.iter().any(|keyframe| {
+        keyframe.get("value").and_then(|v| v.as_f64()).is_some()
+            || keyframe
+                .get("value")
+                .and_then(|v| v.get("x"))
+                .and_then(|v| v.as_f64())
+                .is_some()
+    });
+    if !has_animatable_keyframes {
+        return;
+    }
+
+    for keyframe in keyframes {
+        let time = value_f64(keyframe, "time", 0.0);
+        let absolute_time = (effect_start + time).clamp(effect_start, effect_end);
+        boundaries.push(absolute_time.clamp(clip_start, clip_end));
+    }
+
+    let mut sample_time = effect_start;
+    while sample_time < effect_end {
+        boundaries.push(sample_time.clamp(clip_start, clip_end));
+        sample_time += 0.1;
+    }
+    boundaries.push(effect_end.clamp(clip_start, clip_end));
+}
+
+fn escape_drawtext_text(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace(':', "\\:")
+        .replace('\'', "\\'")
+        .replace('%', "\\%")
+}
+
+fn ffmpeg_color(value: &str) -> String {
+    if let Some(hex) = value.strip_prefix('#') {
+        format!("0x{}", hex)
+    } else {
+        value.to_string()
+    }
+}
+
 fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
     let mut filters: Vec<String> = Vec::new();
 
@@ -349,6 +624,28 @@ fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
                     size.round()
                 ));
             }
+            "text-overlay" => {
+                let text = escape_drawtext_text(effect_param_str(effect, "text", "Text overlay"));
+                if !text.trim().is_empty() {
+                    let font_size = effect_param_f64(effect, "fontSize", 52.0).clamp(8.0, 180.0);
+                    let x = effect_param_f64(effect, "x", 50.0).clamp(0.0, 100.0) / 100.0;
+                    let y = effect_param_f64(effect, "y", 50.0).clamp(0.0, 100.0) / 100.0;
+                    let color = ffmpeg_color(effect_param_str(effect, "color", "#ffffff"));
+                    let background = ffmpeg_color(effect_param_str(effect, "background", "#000000"));
+                    let background_opacity =
+                        effect_param_f64(effect, "backgroundOpacity", 35.0).clamp(0.0, 100.0) / 100.0;
+                    filters.push(format!(
+                        "drawtext=text='{}':fontsize={:.0}:fontcolor={}:x=(w-text_w)*{:.4}:y=(h-text_h)*{:.4}:box=1:boxcolor={}@{:.3}:boxborderw=14",
+                        text,
+                        font_size,
+                        color,
+                        x,
+                        y,
+                        background,
+                        background_opacity
+                    ));
+                }
+            }
             _ => {}
         }
     }
@@ -368,8 +665,30 @@ fn is_image_path(path: &str) -> bool {
 
 fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
     let mut clips = Vec::new();
+    let mut timeline_effects: Vec<(f64, f64, serde_json::Value)> = Vec::new();
 
     if let Some(tracks) = project.get("tracks").and_then(|t| t.as_array()) {
+        for track in tracks {
+            let track_type = track.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            let muted = track
+                .get("muted")
+                .and_then(|m| m.as_bool())
+                .unwrap_or(false);
+            if track_type != "effect" || muted {
+                continue;
+            }
+
+            if let Some(effects) = track.get("effects").and_then(|e| e.as_array()) {
+                for effect in effects {
+                    let start = value_f64(effect, "startTime", 0.0).max(0.0);
+                    let duration = value_f64(effect, "duration", 0.0);
+                    if duration > 0.0 {
+                        timeline_effects.push((start, start + duration, effect.clone()));
+                    }
+                }
+            }
+        }
+
         for track in tracks {
             let track_type = track.get("type").and_then(|t| t.as_str()).unwrap_or("");
             let visible = track
@@ -382,6 +701,10 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                 .unwrap_or(false);
             let track_volume = value_f64(track, "volume", 1.0).clamp(0.0, 2.0);
             if muted || (track_type == "video" && !visible) {
+                continue;
+            }
+
+            if track_type == "effect" {
                 continue;
             }
 
@@ -400,24 +723,117 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                         continue;
                     }
 
-                    clips.push(RenderClip {
-                        path: path.to_string(),
-                        media_type: media_type.to_string(),
-                        track_type: track_type.to_string(),
-                        start_time: value_f64(clip, "startTime", 0.0).max(0.0),
-                        duration,
-                        in_point: value_f64(clip, "inPoint", 0.0).max(0.0),
-                        opacity: value_f64(clip, "opacity", 1.0).clamp(0.0, 1.0),
-                        volume: (value_f64(clip, "volume", 1.0) * track_volume).clamp(0.0, 4.0),
-                        position_x: value_f64(clip, "positionX", 0.0),
-                        position_y: value_f64(clip, "positionY", 0.0),
-                        scale: value_f64(clip, "scale", 1.0).clamp(0.1, 4.0),
-                        effects: clip
-                            .get("effects")
-                            .and_then(|e| e.as_array())
-                            .cloned()
-                            .unwrap_or_default(),
-                    });
+                    let clip_start = value_f64(clip, "startTime", 0.0).max(0.0);
+                    let clip_end = clip_start + duration;
+                    let mut boundaries = vec![clip_start, clip_end];
+                    for (effect_start, effect_end, _) in &timeline_effects {
+                        if *effect_start < clip_end && *effect_end > clip_start {
+                            boundaries.push(effect_start.clamp(clip_start, clip_end));
+                            boundaries.push(effect_end.clamp(clip_start, clip_end));
+                        }
+                    }
+                    boundaries.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    boundaries.dedup_by(|a, b| (*a - *b).abs() < 0.0001);
+
+                    let clip_effects = clip
+                        .get("effects")
+                        .and_then(|e| e.as_array())
+                        .cloned()
+                        .unwrap_or_default();
+                    for effect in &clip_effects {
+                        let Some(start_offset) = effect.get("startOffset").and_then(|v| v.as_f64()) else {
+                            continue;
+                        };
+                        let effect_duration = value_f64(effect, "duration", duration);
+                        let effect_start = clip_start + start_offset.clamp(0.0, duration);
+                        let effect_end = (effect_start + effect_duration).clamp(clip_start, clip_end);
+                        if effect_start < clip_end && effect_end > clip_start {
+                            boundaries.push(effect_start);
+                            boundaries.push(effect_end);
+                            push_effect_keyframe_boundaries(
+                                &mut boundaries,
+                                effect,
+                                effect_start,
+                                effect_end,
+                                clip_start,
+                                clip_end,
+                            );
+                        }
+                    }
+                    boundaries.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    boundaries.dedup_by(|a, b| (*a - *b).abs() < 0.0001);
+                    let base_in_point = value_f64(clip, "inPoint", 0.0).max(0.0);
+
+                    for window in boundaries.windows(2) {
+                        let segment_start = window[0];
+                        let segment_end = window[1];
+                        let segment_duration = segment_end - segment_start;
+                        if segment_duration <= 0.0 {
+                            continue;
+                        }
+
+                        let mut effects = Vec::new();
+                        for effect in &clip_effects {
+                            if let Some(start_offset) = effect.get("startOffset").and_then(|v| v.as_f64()) {
+                                let effect_start = clip_start + start_offset.clamp(0.0, duration);
+                                let effect_end =
+                                    (effect_start + value_f64(effect, "duration", duration))
+                                        .clamp(clip_start, clip_end);
+                                if segment_start >= effect_start && segment_start < effect_end {
+                                    effects.push(effect_with_animated_params(
+                                        effect,
+                                        (segment_start - clip_start - start_offset).max(0.0),
+                                    ));
+                                }
+                            } else {
+                                effects.push(effect_with_animated_params(effect, segment_start - clip_start));
+                            }
+                        }
+                        for (effect_start, effect_end, effect) in &timeline_effects {
+                            if segment_start >= *effect_start && segment_start < *effect_end {
+                                effects.push(effect.clone());
+                            }
+                        }
+
+                        let mut effective_scale = value_f64(clip, "scale", 1.0).clamp(0.1, 4.0);
+                        let mut effective_position_x = value_f64(clip, "positionX", 0.0);
+                        let mut effective_position_y = value_f64(clip, "positionY", 0.0);
+                        for effect in &effects {
+                            if !effect
+                                .get("enabled")
+                                .and_then(|e| e.as_bool())
+                                .unwrap_or(true)
+                            {
+                                continue;
+                            }
+                            if effect.get("type").and_then(|t| t.as_str()) == Some("zoom-effect") {
+                                let zoom_scale =
+                                    (effect_param_f64(effect, "scale", 125.0) / 100.0).clamp(0.25, 4.0);
+                                let center_x =
+                                    effect_param_f64(effect, "centerX", 50.0).clamp(0.0, 100.0) / 100.0;
+                                let center_y =
+                                    effect_param_f64(effect, "centerY", 50.0).clamp(0.0, 100.0) / 100.0;
+                                effective_scale *= zoom_scale;
+                                effective_position_x += 2.0 * (0.5 - center_x) * (zoom_scale - 1.0);
+                                effective_position_y += 2.0 * (0.5 - center_y) * (zoom_scale - 1.0);
+                            }
+                        }
+
+                        clips.push(RenderClip {
+                            path: path.to_string(),
+                            media_type: media_type.to_string(),
+                            track_type: track_type.to_string(),
+                            start_time: segment_start,
+                            duration: segment_duration,
+                            in_point: base_in_point + (segment_start - clip_start),
+                            opacity: value_f64(clip, "opacity", 1.0).clamp(0.0, 1.0),
+                            volume: (value_f64(clip, "volume", 1.0) * track_volume).clamp(0.0, 4.0),
+                            position_x: effective_position_x,
+                            position_y: effective_position_y,
+                            scale: effective_scale.clamp(0.1, 8.0),
+                            effects,
+                        });
+                    }
                 }
             }
         }
