@@ -38,6 +38,7 @@ export interface MediaItem {
   codec: string;
   fileSize: number;        // bytes
   thumbnail: string;       // base64 or path
+  timelineThumbnails?: TimelineThumbnail[];
   waveformData: number[];  // normalized peaks 0-1
   dateAdded: number;       // timestamp
   rating: MediaRating;
@@ -82,6 +83,8 @@ export interface Clip {
   mediaId: string;
   mediaName: string;
   mediaType: MediaType;
+  waveformData?: number[];
+  timelineThumbnails?: TimelineThumbnail[];
   startTime: number;      // position on timeline (seconds)
   duration: number;       // visible duration on timeline
   inPoint: number;        // source in point
@@ -94,13 +97,25 @@ export interface Clip {
   positionY: number;      // normalized -1 to 1, 0 = center
   scale: number;          // 0.1-4
   rotation: number;       // degrees
+  crop?: {
+    left: number;          // 0-0.9, source percentage
+    right: number;
+    top: number;
+    bottom: number;
+  };
   effects: Effect[];
   transition: ClipTransition | null;
   color: string;
   locked: boolean;
   label: string;
   blendMode?: BlendMode;
+  groupId?: string;
   path?: string;
+}
+
+export interface TimelineThumbnail {
+  time: number;
+  src: string;
 }
 
 /* ── Effect Types ──────────────────────────────────────────────────────── */
@@ -339,6 +354,19 @@ export interface TextPreset {
   config: Partial<TextOverlay>;
 }
 
+export interface SubtitleCue {
+  id: string;
+  startTime: number;
+  endTime: number;
+  text: string;
+  fontSize: number;
+  color: string;
+  backgroundColor: string;
+  backgroundOpacity: number;
+  x: number;
+  y: number;
+}
+
 /* ── Audio Types ───────────────────────────────────────────────────────── */
 
 export interface AudioEQ {
@@ -466,6 +494,7 @@ export interface Project {
   mediaPool: MediaItem[];
   mediaFolders: MediaFolder[];
   markers: Marker[];
+  subtitles?: SubtitleCue[];
   createdAt: number;
   modifiedAt: number;
   duration: number;
@@ -479,11 +508,14 @@ export interface HistoryEntry {
   label: string;
   timestamp: number;
   snapshot: HistorySnapshot;
+  group?: string;
 }
 
 export interface HistorySnapshot {
   tracks: Track[];
   markers: Marker[];
+  subtitles: SubtitleCue[];
+  mediaPool: MediaItem[];
   selectedClipIds: string[];
   playheadTime: number;
 }
@@ -589,6 +621,7 @@ export interface VideoEditorState {
   showProjectSettings: boolean;
   showNewProjectModal: boolean;
   _historyLabel?: string;
+  _historyGroup?: string;
 }
 
 export interface ContextMenuItem {
@@ -644,7 +677,14 @@ export type VideoEditorAction =
   | { type: 'ADD_CLIP'; payload: { trackId: string; clip: Clip } }
   | { type: 'ADD_MEDIA_TO_NEW_TRACK'; payload: { media: MediaItem; startTime: number } }
   | { type: 'REMOVE_CLIPS'; payload: string[] }
+  | { type: 'RIPPLE_DELETE_CLIPS'; payload: string[] }
+  | { type: 'DELETE_TIMELINE_GAPS'; payload?: { trackId?: string } }
+  | { type: 'INSERT_TIMELINE_GAP'; payload: { time: number; duration: number; trackId?: string } }
+  | { type: 'GROUP_SELECTED_CLIPS' }
+  | { type: 'UNGROUP_SELECTED_CLIPS' }
   | { type: 'MOVE_CLIP'; payload: { clipId: string; trackId: string; startTime: number } }
+  | { type: 'MOVE_SELECTED_CLIPS'; payload: { anchorClipId: string; delta: number } }
+  | { type: 'TRIM_SELECTED_CLIPS'; payload: { anchorClipId: string; edge: 'start' | 'end'; delta: number } }
   | { type: 'RIPPLE_MOVE_CLIP'; payload: { clipId: string; trackId: string; startTime: number } }
   | { type: 'ROLL_EDIT_CLIP'; payload: { clipId: string; edge: 'start' | 'end'; delta: number } }
   | { type: 'SLIP_CLIP'; payload: { clipId: string; delta: number } }
@@ -657,6 +697,7 @@ export type VideoEditorAction =
   | { type: 'SET_CLIP_VOLUME'; payload: { clipId: string; volume: number } }
   | { type: 'SET_CLIP_OPACITY'; payload: { clipId: string; opacity: number } }
   | { type: 'SET_CLIP_TRANSFORM'; payload: { clipId: string; positionX?: number; positionY?: number; scale?: number; rotation?: number } }
+  | { type: 'SET_CLIP_CROP'; payload: { clipId: string; crop: Partial<NonNullable<Clip['crop']>> } }
   | { type: 'SET_CLIP_LABEL'; payload: { clipId: string; label: string } }
   | { type: 'SET_CLIP_COLOR'; payload: { clipId: string; color: string } }
   | { type: 'SET_CLIP_BLEND_MODE'; payload: { clipId: string; blendMode: BlendMode } }
@@ -727,6 +768,9 @@ export type VideoEditorAction =
   // Text
   | { type: 'SET_TEXT_OVERLAY'; payload: TextOverlay | null }
   | { type: 'UPDATE_TEXT_OVERLAY'; payload: Partial<TextOverlay> }
+  | { type: 'ADD_SUBTITLE_CUE'; payload: SubtitleCue }
+  | { type: 'UPDATE_SUBTITLE_CUE'; payload: { cueId: string; updates: Partial<SubtitleCue> } }
+  | { type: 'REMOVE_SUBTITLE_CUE'; payload: string }
 
   // Audio
   | { type: 'SET_MASTER_VOLUME'; payload: number }

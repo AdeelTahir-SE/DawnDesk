@@ -18,6 +18,7 @@ export default function PropertiesPanel() {
 
   const clip = state.project.tracks.flatMap(t => t.clips).find(c => c.id === clipId);
   if (!clip) return null;
+  const crop = clip.crop ?? { left: 0, right: 0, top: 0, bottom: 0 };
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
@@ -90,6 +91,27 @@ export default function PropertiesPanel() {
               onChange={e => dispatch({ type: 'SET_CLIP_TRANSFORM', payload: { clipId, rotation: Number(e.target.value) } })} />
             <span className="ve-slider-value">{Math.round(clip.rotation ?? 0)} deg</span>
           </div>
+        </div>
+      )}
+
+      {/* Crop */}
+      {clip.mediaType !== 'audio' && (
+        <div className="ve-panel-section">
+          <div className="ve-panel-section-header">
+            <span className="ve-panel-section-title">Crop</span>
+            <button className="ve-tool-btn" style={{ width: 20, height: 20 }} title="Reset Crop"
+              onClick={() => dispatch({ type: 'SET_CLIP_CROP', payload: { clipId, crop: { left: 0, right: 0, top: 0, bottom: 0 } } })}>
+              <RotateCw size={10} />
+            </button>
+          </div>
+          {(['left', 'right', 'top', 'bottom'] as const).map(edge => (
+            <div className="ve-slider-row" key={edge}>
+              <span className="ve-slider-label" style={{ textTransform: 'capitalize' }}>{edge}</span>
+              <input type="range" className="ve-slider" min={0} max={0.9} step={0.01} value={crop[edge]}
+                onChange={e => dispatch({ type: 'SET_CLIP_CROP', payload: { clipId, crop: { [edge]: Number(e.target.value) } } })} />
+              <span className="ve-slider-value">{Math.round(crop[edge] * 100)}%</span>
+            </div>
+          ))}
         </div>
       )}
 

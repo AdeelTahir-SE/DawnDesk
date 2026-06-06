@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -118,9 +118,9 @@ function EffectsAppliedPanel() {
               </select>
             )}
             {param.type === 'text' && (
-              <input
-                className="ve-number-input"
-                style={{ width: '100%', textAlign: 'left' }}
+              <textarea
+                className="ve-number-input ve-effect-textarea"
+                rows={param.key === 'text' ? 3 : 1}
                 value={String(param.value)}
                 onChange={(event) => updateParam(param, event.target.value)}
               />
@@ -578,6 +578,7 @@ function SortableKeyframeCard({
               ))}
             </select>
           </div>
+          <KeyframeCurveGraph keyframe={keyframe} color={color} onUpdate={updates => onUpdate(keyframe.id, updates)} />
           {keyframe.interpolation === 'bezier' && (
             <>
               <KeyframeSlider
@@ -600,6 +601,66 @@ function SortableKeyframeCard({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function curvePath(interpolation: KeyframeInterpolation, handleOut?: { x: number; y: number }) {
+  if (interpolation === 'hold') return 'M 10 70 L 50 70 L 50 10 L 90 10';
+  if (interpolation === 'ease-in') return 'M 10 70 C 38 70 54 58 90 10';
+  if (interpolation === 'ease-out') return 'M 10 70 C 46 22 62 10 90 10';
+  if (interpolation === 'ease-in-out') return 'M 10 70 C 34 70 66 10 90 10';
+  if (interpolation === 'bezier') {
+    const x = 10 + Math.max(0, Math.min(1, handleOut?.x ?? 0.42)) * 80;
+    const y = 70 - Math.max(0, Math.min(1, handleOut?.y ?? 0)) * 60;
+    return `M 10 70 C ${x} ${y} ${90 - (x - 10)} ${80 - y} 90 10`;
+  }
+  return 'M 10 70 L 90 10';
+}
+
+function KeyframeCurveGraph({
+  keyframe,
+  color,
+  onUpdate,
+}: {
+  keyframe: Keyframe;
+  color: string;
+  onUpdate: (updates: Partial<Keyframe>) => void;
+}) {
+  const graphRef = useRef<SVGSVGElement | null>(null);
+  const handle = keyframe.handleOut ?? { x: 0.42, y: 0 };
+  const handleX = 10 + Math.max(0, Math.min(1, handle.x)) * 80;
+  const handleY = 70 - Math.max(0, Math.min(1, handle.y)) * 60;
+
+  const updateBezierHandle = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (keyframe.interpolation !== 'bezier' || !graphRef.current) return;
+    const rect = graphRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - rect.left - 10) / Math.max(1, rect.width - 20)));
+    const y = Math.max(0, Math.min(1, 1 - ((event.clientY - rect.top - 10) / Math.max(1, rect.height - 20))));
+    onUpdate({ handleOut: { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) } });
+  };
+
+  return (
+    <div className="ve-keyframe-curve-editor">
+      <svg
+        ref={graphRef}
+        viewBox="0 0 100 80"
+        onMouseDown={updateBezierHandle}
+        onMouseMove={event => {
+          if (event.buttons === 1) updateBezierHandle(event);
+        }}
+      >
+        <path className="ve-keyframe-curve-grid" d="M 10 10 H 90 M 10 30 H 90 M 10 50 H 90 M 10 70 H 90 M 10 10 V 70 M 30 10 V 70 M 50 10 V 70 M 70 10 V 70 M 90 10 V 70" />
+        <path className="ve-keyframe-curve-base" d="M 10 70 L 90 10" />
+        <path className="ve-keyframe-curve-line" d={curvePath(keyframe.interpolation, keyframe.handleOut)} style={{ stroke: color }} />
+        {keyframe.interpolation === 'bezier' && (
+          <>
+            <path className="ve-keyframe-curve-handle-line" d={`M 10 70 L ${handleX} ${handleY}`} />
+            <circle className="ve-keyframe-curve-handle" cx={handleX} cy={handleY} r="4" style={{ fill: color }} />
+          </>
+        )}
+      </svg>
+      <span>{keyframe.interpolation === 'bezier' ? 'Drag handle to shape curve' : keyframe.interpolation}</span>
     </div>
   );
 }

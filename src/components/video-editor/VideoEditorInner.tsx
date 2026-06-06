@@ -118,9 +118,17 @@ export default function VideoEditorInner() {
       else if (ctrl && !shift && key === 'KeyC') { e.preventDefault(); dispatch({ type: 'COPY' }); }
       else if (ctrl && !shift && key === 'KeyV') { e.preventDefault(); dispatch({ type: 'PASTE' }); }
       else if (ctrl && !shift && key === 'KeyX') { e.preventDefault(); dispatch({ type: 'COPY' }); dispatch({ type: 'REMOVE_CLIPS', payload: state.selectedClipIds }); }
+      else if (ctrl && !shift && key === 'KeyG') { e.preventDefault(); dispatch({ type: 'GROUP_SELECTED_CLIPS' }); }
+      else if (ctrl && shift && key === 'KeyG') { e.preventDefault(); dispatch({ type: 'UNGROUP_SELECTED_CLIPS' }); }
+      else if (ctrl && shift && key === 'KeyI') { e.preventDefault(); dispatch({ type: 'INSERT_TIMELINE_GAP', payload: { time: state.playheadTime, duration: 1 } }); }
+      else if (ctrl && shift && key === 'Backspace') { e.preventDefault(); dispatch({ type: 'DELETE_TIMELINE_GAPS', payload: state.selectedTrackId ? { trackId: state.selectedTrackId } : undefined }); }
       else if (ctrl && !shift && key === 'KeyA') { e.preventDefault(); dispatch({ type: 'SELECT_CLIPS', payload: state.project?.tracks.flatMap(t => t.clips.map(c => c.id)) || [] }); }
       else if (key === 'KeyV' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'select' });
       else if (key === 'KeyC' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'razor' });
+      else if (key === 'KeyB' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'ripple' });
+      else if (key === 'KeyN' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'roll' });
+      else if (key === 'KeyY' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'slip' });
+      else if (key === 'KeyU' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'slide' });
       else if (key === 'KeyH' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'hand' });
       else if (key === 'KeyT' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'text' });
       else if (key === 'KeyP' && !ctrl) dispatch({ type: 'SET_TOOL', payload: 'pen' });
@@ -141,7 +149,10 @@ export default function VideoEditorInner() {
           });
         } else if (state.selectedClipIds.length > 0) {
           e.preventDefault();
-          dispatch({ type: 'REMOVE_CLIPS', payload: state.selectedClipIds });
+          dispatch({ type: shift ? 'RIPPLE_DELETE_CLIPS' : 'REMOVE_CLIPS', payload: state.selectedClipIds });
+        } else if (state.selectedMediaIds.length > 0) {
+          e.preventDefault();
+          dispatch({ type: 'REMOVE_MEDIA', payload: state.selectedMediaIds });
         }
       }
       else if (ctrl && !shift && key === 'KeyZ') { e.preventDefault(); dispatch({ type: 'UNDO' }); }
@@ -159,7 +170,7 @@ export default function VideoEditorInner() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, importMedia, loadProject, saveProject, saveProjectAs, state.project, state.selectedClipIds, state.selectedEffectId, state.selectedTimelineEffectId, state.timelineZoom, state.playheadTime]);
+  }, [dispatch, importMedia, loadProject, saveProject, saveProjectAs, state.project, state.selectedClipIds, state.selectedEffectId, state.selectedMediaIds, state.selectedTimelineEffectId, state.timelineZoom, state.playheadTime, state.selectedTrackId]);
 
   return (
     <div className="ve-layout animate-fadeIn duration-500" style={layoutVars}>

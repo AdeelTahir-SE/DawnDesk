@@ -2,14 +2,15 @@ import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext'
 import { TOOL_DEFINITIONS } from '../../../engine/video-editor/constants';
 import { useFFmpeg } from '../../../engine/video-editor/useFFmpeg';
 import {
-  MousePointer2, Scissors,
+  MousePointer2, Scissors, MoveHorizontal, Columns2, ArrowLeftRight,
   Hand, ZoomIn, Type, Square, PenTool, Crop,
   Magnet, Undo2, Redo2, Save
 } from 'lucide-react';
 import type { Mask, TextOverlay, VideoToolType } from '../../../engine/video-editor/types';
 
 const TOOL_ICONS: Record<string, React.ElementType> = {
-  select: MousePointer2, razor: Scissors,
+  select: MousePointer2, razor: Scissors, ripple: MoveHorizontal,
+  roll: Columns2, slip: MoveHorizontal, slide: ArrowLeftRight,
   hand: Hand, zoom: ZoomIn, text: Type,
   shape: Square, pen: PenTool, crop: Crop,
 };
@@ -17,6 +18,10 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
 const VISIBLE_TOOL_TYPES = new Set<VideoToolType>([
   'select',
   'razor',
+  'ripple',
+  'roll',
+  'slip',
+  'slide',
   'hand',
   'zoom',
   'text',
@@ -28,6 +33,10 @@ const VISIBLE_TOOL_TYPES = new Set<VideoToolType>([
 const TOOL_SHORTCUTS: Partial<Record<VideoToolType, string>> = {
   select: 'V',
   razor: 'C',
+  ripple: 'B',
+  roll: 'N',
+  slip: 'Y',
+  slide: 'U',
   hand: 'H',
   text: 'T',
   pen: 'P',

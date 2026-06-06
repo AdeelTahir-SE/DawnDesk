@@ -38,6 +38,19 @@ function mediaOverlapsTrack(track: Track, startTime: number, duration: number) {
   );
 }
 
+function findAvailableStart(track: Track, desiredStart: number, duration: number) {
+  const sortedClips = [...track.clips].sort((a, b) => a.startTime - b.startTime);
+  let start = Math.max(0, desiredStart);
+  for (const clip of sortedClips) {
+    const clipEnd = clip.startTime + clip.duration;
+    if (start + duration <= clip.startTime) return start;
+    if (start < clipEnd && start + duration > clip.startTime) {
+      start = clipEnd;
+    }
+  }
+  return start;
+}
+
 export default function MediaBin() {
   const { state, dispatch } = useVideoEditor();
   const { importMedia } = useFFmpeg();
@@ -80,13 +93,14 @@ export default function MediaBin() {
       ? state.project.tracks.find(t => t.id === state.selectedTrackId && acceptsMedia(t.type) && !t.locked)
       : null;
     const targetTrack = selectedTrack || state.project.tracks.find(t =>
-      (item.type === 'audio' && t.type === 'audio') || (item.type !== 'audio' && t.type === 'video')
+      !t.locked && ((item.type === 'audio' && t.type === 'audio') || (item.type !== 'audio' && t.type === 'video'))
     );
     if (!targetTrack) {
       dispatch({ type: 'ADD_MEDIA_TO_NEW_TRACK', payload: { media: getDragMediaPayload(item), startTime: state.playheadTime } });
       return;
     }
-    const lastEnd = targetTrack.clips.reduce((max, c) => Math.max(max, c.startTime + c.duration), 0);
+    const duration = item.duration || item.outPoint || 5;
+    const startTime = findAvailableStart(targetTrack, state.playheadTime, duration);
     dispatch({
       type: 'ADD_CLIP',
       payload: {
@@ -94,10 +108,12 @@ export default function MediaBin() {
         clip: {
           id: `clip-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           trackId: targetTrack.id, mediaId: item.id, mediaName: item.name, mediaType: item.type,
-          startTime: lastEnd, duration: item.duration || 5, inPoint: item.inPoint, outPoint: item.outPoint,
+          startTime, duration, inPoint: item.inPoint || 0, outPoint: item.outPoint || duration,
           speed: 1, reversed: false, volume: 1, opacity: 1,
-          positionX: 0, positionY: 0, scale: 1, rotation: 0,
+          positionX: 0, positionY: 0, scale: 1, rotation: 0, crop: { left: 0, right: 0, top: 0, bottom: 0 },
           effects: [], transition: null, color: '', locked: false, label: '', path: item.path,
+          waveformData: item.waveformData ?? [],
+          timelineThumbnails: item.timelineThumbnails ?? [],
         },
       },
     });
@@ -118,7 +134,10 @@ export default function MediaBin() {
       const rect = trackEl.getBoundingClientRect();
       startTime = Math.max(0, (clientX - rect.left + trackEl.scrollLeft) / state.timelineZoom);
       const targetTrack = state.project.tracks.find(track => track.id === trackEl.dataset.trackId);
-      if (targetTrack && trackAcceptsMedia(targetTrack, item.type) && !targetTrack.locked && !mediaOverlapsTrack(targetTrack, startTime, duration)) {
+      if (targetTrack && trackAcceptsMedia(targetTrack, item.type) && !targetTrack.locked) {
+        const availableStart = mediaOverlapsTrack(targetTrack, startTime, duration)
+          ? findAvailableStart(targetTrack, startTime, duration)
+          : startTime;
         dispatch({
           type: 'ADD_CLIP',
           payload: {
@@ -129,7 +148,7 @@ export default function MediaBin() {
               mediaId: item.id,
               mediaName: item.name,
               mediaType: item.type,
-              startTime,
+              startTime: availableStart,
               duration,
               inPoint: item.inPoint || 0,
               outPoint: item.outPoint || duration,
@@ -141,12 +160,15 @@ export default function MediaBin() {
               positionY: 0,
               scale: 1,
               rotation: 0,
+              crop: { left: 0, right: 0, top: 0, bottom: 0 },
               effects: [],
               transition: null,
               color: '',
               locked: false,
               label: '',
               path: item.path,
+              waveformData: item.waveformData ?? [],
+              timelineThumbnails: item.timelineThumbnails ?? [],
             },
           },
         });
@@ -176,10 +198,15 @@ export default function MediaBin() {
       setDragGhost({ item: drag.item, x: me.clientX, y: me.clientY });
       const elements = document.elementsFromPoint(me.clientX, me.clientY);
       document.querySelectorAll('.ve-track-clips.drop-target').forEach(el => el.classList.remove('drop-target'));
+      document.querySelectorAll('.ve-track-clips.drag-invalid').forEach(el => el.classList.remove('drag-invalid'));
       const trackEl = elements
         .map(el => (el instanceof HTMLElement ? el.closest('.ve-track-clips') : null))
-        .find(Boolean);
-      if (trackEl) trackEl.classList.add('drop-target');
+        .find(Boolean) as HTMLElement | undefined;
+      if (trackEl) {
+        const targetTrack = state.project?.tracks.find(track => track.id === trackEl.dataset.trackId);
+        const valid = !!targetTrack && trackAcceptsMedia(targetTrack, drag.item.type) && !targetTrack.locked;
+        trackEl.classList.add(valid ? 'drop-target' : 'drag-invalid');
+      }
       me.preventDefault();
     };
 
@@ -187,6 +214,7 @@ export default function MediaBin() {
       const drag = dragRef.current;
       dragRef.current = null;
       document.querySelectorAll('.ve-track-clips.drop-target').forEach(el => el.classList.remove('drop-target'));
+      document.querySelectorAll('.ve-track-clips.drag-invalid').forEach(el => el.classList.remove('drag-invalid'));
       setDragGhost(null);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);

@@ -174,27 +174,72 @@ pub async fn ve_generate_thumbnail(
 }
 
 #[tauri::command]
-pub async fn ve_generate_waveform(path: String) -> Result<Vec<f32>, String> {
-    // A simplified waveform extraction: get audio data as raw PCM and sample it.
-    // For a real app, this might be too heavy or complex, so we'll simulate returning a simple array
-    // based on file size/hash just for the UI, or actually do a basic ffmpeg volume filter output parsing.
-    // For this implementation, we will use a very basic simulation to avoid blocking the main thread for long.
+pub async fn ve_generate_waveform(app: AppHandle, path: String) -> Result<Vec<f32>, String> {
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| e.to_string())?
+        .args([
+            "-v",
+            "error",
+            "-i",
+            &path,
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "8000",
+            "-t",
+            "1800",
+            "-f",
+            "s16le",
+            "pipe:1",
+        ])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
 
-    // In a full implementation, you'd do:
-    // ffmpeg -i input.mp4 -filter:a "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level" -f null -
+    if output.status.success() {
+        let peaks = waveform_peaks_from_pcm_s16le(&output.stdout, 240);
+        if !peaks.is_empty() {
+            return Ok(peaks);
+        }
+    }
 
-    // Simulated waveform data for now since actual parsing of audio peaks in Rust requires
-    // a bit more intensive processing (e.g., using rodio or parsing ffmpeg stdout frame by frame)
-    let len = 100;
+    Ok(fallback_waveform(&path, 240))
+}
+
+fn fallback_waveform(path: &str, len: usize) -> Vec<f32> {
     let mut peaks = Vec::with_capacity(len);
     let seed = path.len() as f32;
     for i in 0..len {
         let val = ((i as f32 * 0.1 + seed).sin() * 0.5 + 0.5) * 0.8 + 0.2;
         peaks.push(val);
     }
-
-    Ok(peaks)
+    peaks
 }
+
+fn waveform_peaks_from_pcm_s16le(bytes: &[u8], target_peaks: usize) -> Vec<f32> {
+    if bytes.len() < 2 || target_peaks == 0 {
+        return Vec::new();
+    }
+
+    let samples: Vec<f32> = bytes
+        .chunks_exact(2)
+        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]).unsigned_abs() as f32 / i16::MAX as f32)
+        .collect();
+
+    if samples.is_empty() {
+        return Vec::new();
+    }
+
+    let bucket_size = (samples.len() as f32 / target_peaks as f32).ceil().max(1.0) as usize;
+    samples
+        .chunks(bucket_size)
+        .map(|bucket| bucket.iter().copied().fold(0.0_f32, f32::max).clamp(0.0, 1.0))
+        .collect()
+}
+
 
 #[tauri::command]
 pub async fn ve_import_media() -> Result<Vec<String>, String> {
@@ -216,6 +261,10 @@ struct RenderClip {
     position_x: f64,
     position_y: f64,
     scale: f64,
+    crop_left: f64,
+    crop_right: f64,
+    crop_top: f64,
+    crop_bottom: f64,
     effects: Vec<serde_json::Value>,
 }
 
@@ -249,6 +298,23 @@ fn effect_param_str<'a>(effect: &'a serde_json::Value, key: &str, fallback: &'a 
                 let param_key = param.get("key").and_then(|k| k.as_str())?;
                 if param_key == key {
                     param.get("value").and_then(|v| v.as_str())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or(fallback)
+}
+
+fn effect_param_bool(effect: &serde_json::Value, key: &str, fallback: bool) -> bool {
+    effect
+        .get("params")
+        .and_then(|p| p.as_array())
+        .and_then(|params| {
+            params.iter().find_map(|param| {
+                let param_key = param.get("key").and_then(|k| k.as_str())?;
+                if param_key == key {
+                    param.get("value").and_then(|v| v.as_bool())
                 } else {
                     None
                 }
@@ -631,18 +697,47 @@ fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
                     let x = effect_param_f64(effect, "x", 50.0).clamp(0.0, 100.0) / 100.0;
                     let y = effect_param_f64(effect, "y", 50.0).clamp(0.0, 100.0) / 100.0;
                     let color = ffmpeg_color(effect_param_str(effect, "color", "#ffffff"));
+                    let font = escape_drawtext_text(effect_param_str(effect, "fontFamily", "Sora"));
+                    let align = effect_param_str(effect, "alignment", "center");
+                    let x_expr = match align {
+                        "left" => format!("w*{:.4}", x),
+                        "right" => format!("w*{:.4}-text_w", x),
+                        _ => format!("(w-text_w)*{:.4}", x),
+                    };
                     let background = ffmpeg_color(effect_param_str(effect, "background", "#000000"));
                     let background_opacity =
                         effect_param_f64(effect, "backgroundOpacity", 35.0).clamp(0.0, 100.0) / 100.0;
+                    let background_padding = effect_param_f64(effect, "backgroundPadding", 14.0).clamp(0.0, 60.0);
+                    let stroke_width = if effect_param_bool(effect, "strokeEnabled", false) {
+                        effect_param_f64(effect, "strokeWidth", 3.0).clamp(0.0, 18.0)
+                    } else {
+                        0.0
+                    };
+                    let stroke_color = ffmpeg_color(effect_param_str(effect, "strokeColor", "#000000"));
+                    let shadow = if effect_param_bool(effect, "shadowEnabled", true) {
+                        format!(
+                            ":shadowcolor={}:shadowx={:.0}:shadowy={:.0}",
+                            ffmpeg_color(effect_param_str(effect, "shadowColor", "#000000")),
+                            effect_param_f64(effect, "shadowX", 0.0).clamp(-30.0, 30.0),
+                            effect_param_f64(effect, "shadowY", 2.0).clamp(-30.0, 30.0)
+                        )
+                    } else {
+                        String::new()
+                    };
                     filters.push(format!(
-                        "drawtext=text='{}':fontsize={:.0}:fontcolor={}:x=(w-text_w)*{:.4}:y=(h-text_h)*{:.4}:box=1:boxcolor={}@{:.3}:boxborderw=14",
+                        "drawtext=text='{}':font='{}':fontsize={:.0}:fontcolor={}:x={}:y=(h-text_h)*{:.4}:box=1:boxcolor={}@{:.3}:boxborderw={:.0}:borderw={:.0}:bordercolor={}{}",
                         text,
+                        font,
                         font_size,
                         color,
-                        x,
+                        x_expr,
                         y,
                         background,
-                        background_opacity
+                        background_opacity,
+                        background_padding,
+                        stroke_width,
+                        stroke_color,
+                        shadow
                     ));
                 }
             }
@@ -663,18 +758,317 @@ fn is_image_path(path: &str) -> bool {
         || lower.ends_with(".gif")
 }
 
+fn escape_ffmetadata(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('\n', "\\n")
+        .replace('\r', "")
+        .replace('=', "\\=")
+}
+
+fn chapter_metadata(project: &serde_json::Value, duration: f64) -> Option<String> {
+    let mut markers: Vec<&serde_json::Value> = project
+        .get("markers")
+        .and_then(|m| m.as_array())
+        .map(|items| items.iter().collect())
+        .unwrap_or_default();
+    markers.sort_by(|a, b| {
+        value_f64(a, "time", 0.0)
+            .partial_cmp(&value_f64(b, "time", 0.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    if markers.is_empty() {
+        return None;
+    }
+
+    let mut text = String::from(";FFMETADATA1\n");
+    for (index, marker) in markers.iter().enumerate() {
+        let start = value_f64(marker, "time", 0.0).clamp(0.0, duration);
+        let marker_duration = value_f64(marker, "duration", 0.0).max(0.0);
+        let next_start = markers
+            .get(index + 1)
+            .map(|next| value_f64(next, "time", duration))
+            .unwrap_or(duration);
+        let end = if marker_duration > 0.0 {
+            (start + marker_duration).min(duration)
+        } else {
+            next_start.min(duration)
+        };
+        if end <= start {
+            continue;
+        }
+        let label = marker
+            .get("label")
+            .and_then(|label| label.as_str())
+            .filter(|label| !label.trim().is_empty())
+            .unwrap_or("Marker");
+        text.push_str("[CHAPTER]\nTIMEBASE=1/1000\n");
+        text.push_str(&format!("START={}\nEND={}\n", (start * 1000.0).round() as u64, (end * 1000.0).round() as u64));
+        text.push_str(&format!("title={}\n", escape_ffmetadata(label)));
+    }
+
+    Some(text)
+}
+
+fn escape_filter_path(path: &str) -> String {
+    path.replace('\\', "/").replace(':', "\\:")
+}
+
+fn audio_effect_filter_chain(settings: &serde_json::Value) -> String {
+    let mut filters: Vec<String> = Vec::new();
+    let master_volume = settings
+        .get("masterVolume")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(1.0)
+        .clamp(0.0, 4.0);
+    if (master_volume - 1.0).abs() > 0.001 {
+        filters.push(format!("volume={:.4}", master_volume));
+    }
+
+    let Some(audio_effects) = settings.get("audioEffects") else {
+        return filters.join(",");
+    };
+
+    if audio_effects
+        .get("eq")
+        .and_then(|eq| eq.get("enabled"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        if let Some(bands) = audio_effects
+            .get("eq")
+            .and_then(|eq| eq.get("bands"))
+            .and_then(|bands| bands.as_array())
+        {
+            for band in bands {
+                let gain = value_f64(band, "gain", 0.0).clamp(-24.0, 24.0);
+                if gain.abs() < 0.05 {
+                    continue;
+                }
+                let frequency = value_f64(band, "frequency", 1000.0).clamp(20.0, 20_000.0);
+                let q = value_f64(band, "q", 1.0).clamp(0.1, 18.0);
+                filters.push(format!(
+                    "equalizer=f={:.1}:width_type=q:width={:.3}:g={:.3}",
+                    frequency, q, gain
+                ));
+            }
+        }
+    }
+
+    if audio_effects
+        .get("compressor")
+        .and_then(|compressor| compressor.get("enabled"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        let compressor = audio_effects.get("compressor").unwrap_or(&serde_json::Value::Null);
+        let threshold = value_f64(compressor, "threshold", -18.0).clamp(-60.0, 0.0);
+        let ratio = value_f64(compressor, "ratio", 3.0).clamp(1.0, 20.0);
+        let attack = value_f64(compressor, "attack", 20.0).clamp(0.1, 200.0);
+        let release = value_f64(compressor, "release", 120.0).clamp(10.0, 1000.0);
+        let makeup = value_f64(compressor, "makeupGain", 0.0).clamp(0.0, 24.0);
+        filters.push(format!(
+            "acompressor=threshold={:.2}dB:ratio={:.3}:attack={:.3}:release={:.3}:makeup={:.3}",
+            threshold, ratio, attack, release, makeup
+        ));
+    }
+
+    if audio_effects
+        .get("noise")
+        .and_then(|noise| noise.get("enabled"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        let noise = audio_effects.get("noise").unwrap_or(&serde_json::Value::Null);
+        let reduction = value_f64(noise, "reduction", -18.0).clamp(-80.0, -1.0);
+        filters.push(format!("afftdn=nf={:.2}", reduction));
+    }
+
+    if audio_effects
+        .get("reverb")
+        .and_then(|reverb| reverb.get("enabled"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        let reverb = audio_effects.get("reverb").unwrap_or(&serde_json::Value::Null);
+        let mix = value_f64(reverb, "mix", 0.25).clamp(0.0, 1.0);
+        let decay = value_f64(reverb, "decay", 1.2).clamp(0.1, 8.0);
+        let pre_delay = value_f64(reverb, "preDelay", 40.0).clamp(0.0, 500.0);
+        if mix > 0.0 {
+            filters.push(format!(
+                "aecho={:.3}:{:.3}:{:.0}:{:.3}",
+                (1.0 - mix).clamp(0.0, 1.0),
+                mix,
+                pre_delay,
+                (decay / 8.0).clamp(0.0, 1.0)
+            ));
+        }
+    }
+
+    filters.join(",")
+}
+
+fn global_video_filter_chain(settings: &serde_json::Value, width: u64, height: u64) -> String {
+    let mut filters: Vec<String> = Vec::new();
+    let Some(color) = settings.get("colorGrading") else {
+        return filters.join(",");
+    };
+
+    let exposure = value_f64(color, "exposure", 0.0).clamp(-5.0, 5.0) / 5.0;
+    let contrast = 1.0 + value_f64(color, "contrast", 0.0).clamp(-100.0, 100.0) / 100.0;
+    let saturation = 1.0
+        + (value_f64(color, "saturation", 0.0).clamp(-100.0, 100.0)
+            + value_f64(color, "vibrance", 0.0).clamp(-100.0, 100.0) * 0.5)
+            / 100.0;
+    if exposure.abs() > 0.001 || (contrast - 1.0).abs() > 0.001 || (saturation - 1.0).abs() > 0.001 {
+        filters.push(format!(
+            "eq=brightness={:.4}:contrast={:.4}:saturation={:.4}",
+            exposure, contrast, saturation
+        ));
+    }
+
+    let hue = value_f64(color, "hue", 0.0).clamp(-180.0, 180.0);
+    if hue.abs() > 0.001 {
+        filters.push(format!("hue=h={:.3}", hue));
+    }
+
+    if let Some(lut_path) = color.get("lutPath").and_then(|value| value.as_str()) {
+        let intensity = value_f64(color, "lutIntensity", 1.0).clamp(0.0, 1.0);
+        if !lut_path.trim().is_empty() && intensity > 0.0 {
+            filters.push(format!("lut3d=file='{}':interp=tetrahedral", escape_filter_path(lut_path)));
+        }
+    }
+
+    let vignette = color
+        .get("vignette")
+        .and_then(|value| value.get("amount"))
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0)
+        .clamp(-100.0, 100.0);
+    if vignette.abs() > 0.001 {
+        filters.push(format!(
+            "vignette=angle=PI/5:mode={}:eval=frame",
+            if vignette >= 0.0 { "forward" } else { "backward" }
+        ));
+    }
+
+    let mask_chain = mask_filter_chain(settings, width, height);
+    if !mask_chain.is_empty() {
+        filters.push(mask_chain);
+    }
+
+    filters.join(",")
+}
+
+fn mask_filter_chain(settings: &serde_json::Value, width: u64, height: u64) -> String {
+    let Some(mask) = settings.get("activeMask") else {
+        return String::new();
+    };
+    let opacity = value_f64(mask, "opacity", 0.0).clamp(0.0, 1.0);
+    if opacity <= 0.0 {
+        return String::new();
+    }
+
+    let expansion = value_f64(mask, "expansion", 0.0).clamp(-100.0, 100.0) / 100.0;
+    let margin_x = ((width as f64) * (0.18 - expansion * 0.12)).clamp(0.0, width as f64 / 2.0);
+    let margin_y = ((height as f64) * (0.18 - expansion * 0.12)).clamp(0.0, height as f64 / 2.0);
+    let x = margin_x.round() as u64;
+    let y = margin_y.round() as u64;
+    let box_w = width.saturating_sub(x * 2).max(1);
+    let box_h = height.saturating_sub(y * 2).max(1);
+    let alpha = opacity * 0.72;
+    let inverted = mask
+        .get("inverted")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+
+    if inverted {
+        return format!("drawbox=x={}:y={}:w={}:h={}:color=black@{:.3}:t=fill", x, y, box_w, box_h, alpha);
+    }
+
+    let mut boxes = Vec::new();
+    if y > 0 {
+        boxes.push(format!("drawbox=x=0:y=0:w={}:h={}:color=black@{:.3}:t=fill", width, y, alpha));
+    }
+    let bottom_height = height.saturating_sub(y + box_h);
+    if bottom_height > 0 {
+        boxes.push(format!("drawbox=x=0:y={}:w={}:h={}:color=black@{:.3}:t=fill", y + box_h, width, bottom_height, alpha));
+    }
+    if x > 0 {
+        boxes.push(format!("drawbox=x=0:y={}:w={}:h={}:color=black@{:.3}:t=fill", y, x, box_h, alpha));
+    }
+    let right_width = width.saturating_sub(x + box_w);
+    if right_width > 0 {
+        boxes.push(format!("drawbox=x={}:y={}:w={}:h={}:color=black@{:.3}:t=fill", x + box_w, y, right_width, box_h, alpha));
+    }
+    boxes.join(",")
+}
+
+fn subtitle_filters(project: &serde_json::Value, duration: f64) -> Vec<String> {
+    project
+        .get("subtitles")
+        .and_then(|items| items.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|cue| {
+                    let text = cue.get("text").and_then(|value| value.as_str()).unwrap_or("").trim();
+                    if text.is_empty() {
+                        return None;
+                    }
+                    let start = value_f64(cue, "startTime", 0.0).clamp(0.0, duration);
+                    let end = value_f64(cue, "endTime", start + 2.0).clamp(start + 0.01, duration);
+                    if end <= start {
+                        return None;
+                    }
+                    let font_size = value_f64(cue, "fontSize", 42.0).clamp(8.0, 160.0);
+                    let x = value_f64(cue, "x", 0.5).clamp(0.0, 1.0);
+                    let y = value_f64(cue, "y", 0.86).clamp(0.0, 1.0);
+                    let color = ffmpeg_color(cue.get("color").and_then(|value| value.as_str()).unwrap_or("#ffffff"));
+                    let background = ffmpeg_color(cue.get("backgroundColor").and_then(|value| value.as_str()).unwrap_or("#000000"));
+                    let background_opacity = value_f64(cue, "backgroundOpacity", 0.55).clamp(0.0, 1.0);
+                    Some(format!(
+                        "drawtext=text='{}':fontsize={:.0}:fontcolor={}:x=(w-text_w)*{:.4}:y=(h-text_h)*{:.4}:box=1:boxcolor={}@{:.3}:boxborderw=18:enable='between(t,{:.6},{:.6})'",
+                        escape_drawtext_text(text),
+                        font_size,
+                        color,
+                        x,
+                        y,
+                        background,
+                        background_opacity,
+                        start,
+                        end
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
     let mut clips = Vec::new();
     let mut timeline_effects: Vec<(f64, f64, serde_json::Value)> = Vec::new();
 
     if let Some(tracks) = project.get("tracks").and_then(|t| t.as_array()) {
+        let has_solo = tracks.iter().any(|track| {
+            track
+                .get("solo")
+                .and_then(|s| s.as_bool())
+                .unwrap_or(false)
+        });
+
         for track in tracks {
             let track_type = track.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            let solo = track
+                .get("solo")
+                .and_then(|s| s.as_bool())
+                .unwrap_or(false);
             let muted = track
                 .get("muted")
                 .and_then(|m| m.as_bool())
                 .unwrap_or(false);
-            if track_type != "effect" || muted {
+            if track_type != "effect" || muted || (has_solo && !solo) {
                 continue;
             }
 
@@ -691,6 +1085,10 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
 
         for track in tracks {
             let track_type = track.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            let solo = track
+                .get("solo")
+                .and_then(|s| s.as_bool())
+                .unwrap_or(false);
             let visible = track
                 .get("visible")
                 .and_then(|v| v.as_bool())
@@ -700,7 +1098,7 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                 .and_then(|m| m.as_bool())
                 .unwrap_or(false);
             let track_volume = value_f64(track, "volume", 1.0).clamp(0.0, 2.0);
-            if muted || (track_type == "video" && !visible) {
+            if (has_solo && !solo) || (track_type == "audio" && muted) || (track_type == "video" && !visible) {
                 continue;
             }
 
@@ -791,13 +1189,21 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                         }
                         for (effect_start, effect_end, effect) in &timeline_effects {
                             if segment_start >= *effect_start && segment_start < *effect_end {
-                                effects.push(effect.clone());
+                                effects.push(effect_with_animated_params(
+                                    effect,
+                                    (segment_start - *effect_start).max(0.0),
+                                ));
                             }
                         }
 
                         let mut effective_scale = value_f64(clip, "scale", 1.0).clamp(0.1, 4.0);
                         let mut effective_position_x = value_f64(clip, "positionX", 0.0);
                         let mut effective_position_y = value_f64(clip, "positionY", 0.0);
+                        let crop = clip.get("crop");
+                        let crop_left = crop.and_then(|value| value.get("left")).and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 0.9);
+                        let crop_right = crop.and_then(|value| value.get("right")).and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 0.9);
+                        let crop_top = crop.and_then(|value| value.get("top")).and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 0.9);
+                        let crop_bottom = crop.and_then(|value| value.get("bottom")).and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 0.9);
                         for effect in &effects {
                             if !effect
                                 .get("enabled")
@@ -827,10 +1233,14 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                             duration: segment_duration,
                             in_point: base_in_point + (segment_start - clip_start),
                             opacity: value_f64(clip, "opacity", 1.0).clamp(0.0, 1.0),
-                            volume: (value_f64(clip, "volume", 1.0) * track_volume).clamp(0.0, 4.0),
+                            volume: if muted { 0.0 } else { (value_f64(clip, "volume", 1.0) * track_volume).clamp(0.0, 4.0) },
                             position_x: effective_position_x,
                             position_y: effective_position_y,
                             scale: effective_scale.clamp(0.1, 8.0),
+                            crop_left,
+                            crop_right,
+                            crop_top,
+                            crop_bottom,
                             effects,
                         });
                     }
@@ -924,6 +1334,10 @@ pub async fn ve_export_project(
         .get("audioSampleRate")
         .and_then(|v| v.as_u64())
         .unwrap_or(48000);
+    let include_chapters = settings
+        .get("includeChapters")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let mut duration = 5.0; // fallback duration
 
     if let Some(duration_val) = project.get("duration").and_then(|d| d.as_f64()) {
@@ -931,6 +1345,24 @@ pub async fn ve_export_project(
     }
 
     let render_clips = collect_render_clips(&project);
+    let chapter_metadata_path = if include_chapters {
+        chapter_metadata(&project, duration).and_then(|metadata| {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default();
+            let path = std::env::temp_dir().join(format!(
+                "dawndesk-chapters-{}-{}.ffmetadata",
+                std::process::id(),
+                stamp
+            ));
+            fs::write(&path, metadata).ok()?;
+            Some(path.to_string_lossy().to_string())
+        })
+    } else {
+        None
+    };
 
     let app_clone = app.clone();
 
@@ -961,6 +1393,13 @@ pub async fn ve_export_project(
                 clips_with_audio.push(false);
             }
         }
+        let chapter_input_index = if let Some(path) = &chapter_metadata_path {
+            args.push("-i".to_string());
+            args.push(path.clone());
+            Some(render_clips.len() + 1)
+        } else {
+            None
+        };
 
         let mut filter_parts = vec!["[0:v]format=rgba[base0]".to_string()];
         let mut previous_label = "base0".to_string();
@@ -985,12 +1424,27 @@ pub async fn ve_export_project(
             } else {
                 format!("{},", effect_chain)
             };
+            let crop_w = (1.0 - clip.crop_left - clip.crop_right).clamp(0.05, 1.0);
+            let crop_h = (1.0 - clip.crop_top - clip.crop_bottom).clamp(0.05, 1.0);
+            let crop_prefix = if clip.crop_left > 0.001
+                || clip.crop_right > 0.001
+                || clip.crop_top > 0.001
+                || clip.crop_bottom > 0.001
+            {
+                format!(
+                    "crop=iw*{:.6}:ih*{:.6}:iw*{:.6}:ih*{:.6},",
+                    crop_w, crop_h, clip.crop_left, clip.crop_top
+                )
+            } else {
+                String::new()
+            };
+            let source_prefix = format!("{}{}", crop_prefix, effect_prefix);
 
             let source_filter = if clip.media_type == "image" || is_image_path(&clip.path) {
                 format!(
                     "[{}:v]{}scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgba,colorchannelmixer=aa={:.6},setpts=PTS-STARTPTS+{:.6}/TB[{}]",
                     input_idx,
-                    effect_prefix,
+                    source_prefix,
                     scaled_width,
                     scaled_height,
                     scaled_width,
@@ -1006,7 +1460,7 @@ pub async fn ve_export_project(
                     clip.in_point,
                     clip.duration,
                     clip.start_time,
-                    effect_prefix,
+                    source_prefix,
                     scaled_width,
                     scaled_height,
                     scaled_width,
@@ -1053,19 +1507,54 @@ pub async fn ve_export_project(
             audio_labels.push(label);
         }
 
+        let audio_effects = audio_effect_filter_chain(&settings);
+        let audio_tail = if audio_effects.is_empty() {
+            String::new()
+        } else {
+            format!(",{}", audio_effects)
+        };
+
         if !audio_labels.is_empty() {
             if audio_labels.len() == 1 {
                 filter_parts.push(format!(
-                    "[{}]apad,atrim=0:{:.6},aresample={}[outa]",
-                    audio_labels[0], duration, sample_rate
+                    "[{}]apad,atrim=0:{:.6},aresample={}{}[outa]",
+                    audio_labels[0], duration, sample_rate, audio_tail
                 ));
             } else {
                 let inputs = audio_labels
                     .iter()
                     .map(|label| format!("[{}]", label))
                     .collect::<String>();
-                filter_parts.push(format!("{}amix=inputs={}:duration=longest:dropout_transition=0,apad,atrim=0:{:.6},aresample={}[outa]", inputs, audio_labels.len(), duration, sample_rate));
+                filter_parts.push(format!("{}amix=inputs={}:duration=longest:dropout_transition=0,apad,atrim=0:{:.6},aresample={}{}[outa]", inputs, audio_labels.len(), duration, sample_rate, audio_tail));
             }
+        }
+
+        let burn_subtitles = settings
+            .get("burnSubtitles")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if burn_subtitles {
+            let subtitles = subtitle_filters(&project, duration);
+            if !subtitles.is_empty() {
+                let output_label = "subtitles0".to_string();
+                filter_parts.push(format!(
+                    "[{}]{}[{}]",
+                    previous_label,
+                    subtitles.join(","),
+                    output_label
+                ));
+                previous_label = output_label;
+            }
+        }
+
+        let global_video_filters = global_video_filter_chain(&settings, width, height);
+        if !global_video_filters.is_empty() {
+            let output_label = "graded0".to_string();
+            filter_parts.push(format!(
+                "[{}]{}[{}]",
+                previous_label, global_video_filters, output_label
+            ));
+            previous_label = output_label;
         }
 
         filter_parts.push(format!(
@@ -1080,6 +1569,12 @@ pub async fn ve_export_project(
         if !audio_labels.is_empty() {
             args.push("-map".to_string());
             args.push("[outa]".to_string());
+        }
+        if let Some(index) = chapter_input_index {
+            args.push("-map_metadata".to_string());
+            args.push(index.to_string());
+            args.push("-map_chapters".to_string());
+            args.push(index.to_string());
         }
 
         if render_clips.is_empty() {
@@ -1221,15 +1716,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_ve_generate_waveform() {
-        // It's a simulated function but let's test if it returns exactly 100 length vector
-        let path = "dummy_path.mp4".to_string();
+        let mut pcm = Vec::new();
+        for sample in [0_i16, 16_384, -32_767, 8_192, -4_096, 1_024, 0, 2_048] {
+            pcm.extend_from_slice(&sample.to_le_bytes());
+        }
 
-        let waveform_result = ve_generate_waveform(path).await;
-        assert!(waveform_result.is_ok());
-        let peaks = waveform_result.unwrap();
-        assert_eq!(peaks.len(), 100);
-        assert!(peaks.iter().all(|peak| (0.2..=1.0).contains(peak)));
+        let peaks = waveform_peaks_from_pcm_s16le(&pcm, 4);
+        assert_eq!(peaks.len(), 4);
+        assert!(peaks.iter().all(|peak| (0.0..=1.0).contains(peak)));
         assert!(peaks.windows(2).any(|pair| (pair[0] - pair[1]).abs() > f32::EPSILON));
+
+        let fallback = fallback_waveform("dummy_path.mp4", 100);
+        assert_eq!(fallback.len(), 100);
+        assert!(fallback.iter().all(|peak| (0.2..=1.0).contains(peak)));
     }
 
     #[tokio::test]

@@ -9,6 +9,8 @@ export default function ExportDialog() {
   const { state, dispatch } = useVideoEditor();
   const es = state.exportSettings;
   const { exportProject, cancelExport } = useFFmpeg();
+  const chapterCount = state.project?.markers.length ?? 0;
+  const subtitleCount = state.project?.subtitles?.length ?? 0;
 
   const update = (patch: Record<string, unknown>) => {
     dispatch({ type: 'SET_EXPORT_SETTINGS', payload: patch });
@@ -143,14 +145,16 @@ export default function ExportDialog() {
 
               <div className="ve-export-option-row">
                 <button className={`ve-toggle ${es.burnSubtitles ? 'active' : ''}`}
-                  onClick={() => update({ burnSubtitles: !es.burnSubtitles })} />
-                <span>Burn Subtitles</span>
+                  disabled={subtitleCount === 0}
+                  title={subtitleCount === 0 ? 'Add subtitle cues in the Text panel first' : 'Burn subtitle cues into the exported video'}
+                  onClick={() => subtitleCount > 0 && update({ burnSubtitles: !es.burnSubtitles })} />
+                <span>Burn Subtitles <small>{subtitleCount} cue{subtitleCount === 1 ? '' : 's'}</small></span>
               </div>
 
               <div className="ve-export-option-row">
                 <button className={`ve-toggle ${es.includeChapters ? 'active' : ''}`}
                   onClick={() => update({ includeChapters: !es.includeChapters })} />
-                <span>Include Chapters</span>
+                <span>Include Chapters <small>{chapterCount} marker{chapterCount === 1 ? '' : 's'}</small></span>
               </div>
 
               <div className="ve-export-size-card">

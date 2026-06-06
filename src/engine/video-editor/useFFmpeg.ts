@@ -6,6 +6,17 @@ import { useVideoEditor } from './VideoEditorContext';
 import { useRef } from 'react';
 import { useAppLogger } from '../../utils/LoggerContext';
 
+function exportExtension(settings: ExportSettings) {
+  if (settings.videoCodec === 'prores') return 'mov';
+  if (settings.videoCodec === 'dnxhd') return 'mov';
+  if (settings.videoCodec === 'vp9' || settings.videoCodec === 'av1') return 'webm';
+  return 'mp4';
+}
+
+function withExportExtension(path: string, extension: string) {
+  return /\.[a-z0-9]{2,5}$/i.test(path) ? path : `${path}.${extension}`;
+}
+
 export function useFFmpeg() {
   const { state, dispatch } = useVideoEditor();
   const { logSuccess, logError, logInfo } = useAppLogger();
@@ -34,14 +45,37 @@ export function useFFmpeg() {
         const probe = await invoke<MediaProbeResult>('ve_probe_media', { path });
         
         let thumbnail = '';
+        let timelineThumbnails: MediaItem['timelineThumbnails'] = [];
+        let waveformData: number[] = [];
         if (isImageFile) {
           thumbnail = convertFileSrc(path);
+          timelineThumbnails = [{ time: 0, src: thumbnail }];
         } else if (probe.has_video) {
           try {
             const thumbnailTime = probe.duration > 1 ? Math.min(10, Math.max(0.5, probe.duration * 0.25)) : 0;
             thumbnail = await invoke<string>('ve_generate_thumbnail', { path, time: thumbnailTime });
+            const stripTimes = Array.from({ length: Math.min(6, Math.max(2, Math.ceil((probe.duration || 1) / 12))) }, (_, index, arr) => {
+              if (arr.length <= 1) return 0;
+              return Math.max(0, Math.min(probe.duration || 0, (index / (arr.length - 1)) * Math.max(0, probe.duration || 0)));
+            });
+            const strip = await Promise.all(stripTimes.map(async (time) => {
+              try {
+                return { time, src: await invoke<string>('ve_generate_thumbnail', { path, time }) };
+              } catch {
+                return { time, src: thumbnail };
+              }
+            }));
+            timelineThumbnails = strip.length ? strip : [{ time: thumbnailTime, src: thumbnail }];
           } catch (e) {
             console.error('Thumbnail generation failed', e);
+          }
+        }
+
+        if (probe.has_audio) {
+          try {
+            waveformData = await invoke<number[]>('ve_generate_waveform', { path });
+          } catch (e) {
+            console.error('Waveform generation failed', e);
           }
         }
 
@@ -61,7 +95,8 @@ export function useFFmpeg() {
           codec: probe.codec || '',
           fileSize: probe.file_size || 0,
           thumbnail,
-          waveformData: [],
+          timelineThumbnails,
+          waveformData,
           dateAdded: Date.now(),
           rating: 0,
           flag: 'none',
@@ -108,23 +143,37 @@ export function useFFmpeg() {
 
   const exportProject = async (settings: ExportSettings) => {
     try {
+      if (!state.project || state.project.duration <= 0) {
+        logError('Export unavailable', 'Add media to the timeline before exporting.');
+        return;
+      }
+      const extension = exportExtension(settings);
       let finalOutputPath = settings.outputPath;
       if (!finalOutputPath) {
         const path = await save({
-          defaultPath: settings.name || 'export',
+          defaultPath: `${settings.name || 'export'}.${extension}`,
           filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'webm'] }]
         });
         if (!path) return; // User cancelled
         finalOutputPath = path;
       }
+      finalOutputPath = withExportExtension(finalOutputPath, extension);
 
       const jobId = `render-${Date.now()}`;
+      const exportRuntimeSettings = {
+        ...settings,
+        outputPath: finalOutputPath,
+        masterVolume: state.masterVolume,
+        audioEffects: state.audioEffects,
+        colorGrading: state.colorGrading,
+        activeMask: state.activeMask,
+      };
       dispatch({
         type: 'ADD_RENDER_JOB',
         payload: {
           id: jobId,
           name: settings.name || 'Export',
-          settings: { ...settings, outputPath: finalOutputPath },
+          settings: exportRuntimeSettings as ExportSettings,
           status: 'rendering',
           progress: 0,
           startTime: Date.now(),
@@ -177,7 +226,7 @@ export function useFFmpeg() {
         unlistenError();
       };
 
-      await invoke('ve_export_project', { settings: { ...settings, outputPath: finalOutputPath }, project: state.project });
+      await invoke('ve_export_project', { settings: exportRuntimeSettings, project: state.project });
     } catch (e) {
       logError('Export failed', 'DawnDesk could not export this project.');
       dispatch({ type: 'EXPORT_ERROR', payload: String(e) });

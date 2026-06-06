@@ -37,13 +37,15 @@ function createSnapshot(state: VideoEditorState): HistorySnapshot {
   return {
     tracks: JSON.parse(JSON.stringify(state.project?.tracks ?? [])),
     markers: JSON.parse(JSON.stringify(state.project?.markers ?? [])),
+    subtitles: JSON.parse(JSON.stringify(state.project?.subtitles ?? [])),
+    mediaPool: JSON.parse(JSON.stringify(state.project?.mediaPool ?? [])),
     selectedClipIds: [...state.selectedClipIds],
     playheadTime: state.playheadTime,
   };
 }
 
-function pushHistory(state: VideoEditorState, label: string): VideoEditorState {
-  return { ...state, _historyLabel: label };
+function pushHistory(state: VideoEditorState, label: string, group?: string): VideoEditorState {
+  return { ...state, _historyLabel: label, _historyGroup: group };
 }
 
 function applySnapshot(state: VideoEditorState, snapshot: HistorySnapshot): VideoEditorState {
@@ -54,6 +56,8 @@ function applySnapshot(state: VideoEditorState, snapshot: HistorySnapshot): Vide
       ...state.project,
       tracks: JSON.parse(JSON.stringify(snapshot.tracks)),
       markers: JSON.parse(JSON.stringify(snapshot.markers)),
+      subtitles: JSON.parse(JSON.stringify(snapshot.subtitles ?? [])),
+      mediaPool: JSON.parse(JSON.stringify(snapshot.mediaPool ?? [])),
     },
     selectedClipIds: [...snapshot.selectedClipIds],
     playheadTime: snapshot.playheadTime,
@@ -103,6 +107,15 @@ function hasOverlap(track: Track, clip: Clip, startTime: number): boolean {
   return track.clips.some(other =>
     other.id !== clip.id &&
     startTime < other.startTime + other.duration &&
+    endTime > other.startTime
+  );
+}
+
+function hasOverlapExcluding(track: Track, clip: Clip, ignoredIds: Set<string>): boolean {
+  const endTime = clip.startTime + clip.duration;
+  return track.clips.some(other =>
+    !ignoredIds.has(other.id) &&
+    clip.startTime < other.startTime + other.duration &&
     endTime > other.startTime
   );
 }
@@ -174,12 +187,17 @@ function createClipFromMedia(media: MediaItem, trackId: string, startTime: numbe
     positionY: 0,
     scale: 1,
     rotation: 0,
+    crop: { left: 0, right: 0, top: 0, bottom: 0 },
     effects: [],
     transition: null,
     color: '',
     locked: false,
     label: '',
     path: media.path,
+    waveformData: media.waveformData ?? [],
+    timelineThumbnails: (media.timelineThumbnails ?? [])
+      .filter(thumbnail => thumbnail.time >= (media.inPoint || 0) && thumbnail.time <= (media.outPoint || duration))
+      .slice(0, 8),
   };
 }
 
@@ -392,6 +410,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         mediaPool: [],
         mediaFolders: [],
         markers: [],
+        subtitles: [],
         createdAt: Date.now(),
         modifiedAt: Date.now(),
         duration: 0,
@@ -497,16 +516,25 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       return {
         ...stateAfterHistory,
         project: { ...stateAfterHistory.project!, tracks },
+        selectedTrackId: newTrack.id,
       };
     }
 
     case 'REMOVE_TRACK': {
       if (!state.project) return state;
       const s = pushHistory(state, 'Remove track');
+      const removedTrack = s.project!.tracks.find(t => t.id === action.payload);
+      const removedClipIds = new Set(removedTrack?.clips.map(clip => clip.id) ?? []);
+      const removedClipEffectIds = new Set((removedTrack?.clips ?? []).flatMap(clip => clip.effects.map(effect => effect.id)));
+      const removedEffectIds = new Set((removedTrack?.effects ?? []).map(effect => effect.id));
+      const tracks = s.project!.tracks.filter(t => t.id !== action.payload);
       return {
         ...s,
-        project: { ...s.project!, tracks: s.project!.tracks.filter(t => t.id !== action.payload) },
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
         selectedTrackId: s.selectedTrackId === action.payload ? null : s.selectedTrackId,
+        selectedClipIds: s.selectedClipIds.filter(id => !removedClipIds.has(id)),
+        selectedEffectId: s.selectedEffectId && removedClipEffectIds.has(s.selectedEffectId) ? null : s.selectedEffectId,
+        selectedTimelineEffectId: s.selectedTimelineEffectId && removedEffectIds.has(s.selectedTimelineEffectId) ? null : s.selectedTimelineEffectId,
       };
     }
 
@@ -523,44 +551,48 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     case 'TOGGLE_TRACK_MUTE': {
       if (!state.project) return state;
+      const s = pushHistory(state, 'Toggle track mute');
       return {
-        ...state,
+        ...s,
         project: {
-          ...state.project,
-          tracks: state.project.tracks.map(t => t.id === action.payload ? { ...t, muted: !t.muted } : t),
+          ...s.project!,
+          tracks: s.project!.tracks.map(t => t.id === action.payload ? { ...t, muted: !t.muted } : t),
         },
       };
     }
 
     case 'TOGGLE_TRACK_SOLO': {
       if (!state.project) return state;
+      const s = pushHistory(state, 'Toggle track solo');
       return {
-        ...state,
+        ...s,
         project: {
-          ...state.project,
-          tracks: state.project.tracks.map(t => t.id === action.payload ? { ...t, solo: !t.solo } : t),
+          ...s.project!,
+          tracks: s.project!.tracks.map(t => t.id === action.payload ? { ...t, solo: !t.solo } : t),
         },
       };
     }
 
     case 'TOGGLE_TRACK_LOCK': {
       if (!state.project) return state;
+      const s = pushHistory(state, 'Toggle track lock');
       return {
-        ...state,
+        ...s,
         project: {
-          ...state.project,
-          tracks: state.project.tracks.map(t => t.id === action.payload ? { ...t, locked: !t.locked } : t),
+          ...s.project!,
+          tracks: s.project!.tracks.map(t => t.id === action.payload ? { ...t, locked: !t.locked } : t),
         },
       };
     }
 
     case 'TOGGLE_TRACK_VISIBILITY': {
       if (!state.project) return state;
+      const s = pushHistory(state, 'Toggle track visibility');
       return {
-        ...state,
+        ...s,
         project: {
-          ...state.project,
-          tracks: state.project.tracks.map(t => t.id === action.payload ? { ...t, visible: !t.visible } : t),
+          ...s.project!,
+          tracks: s.project!.tracks.map(t => t.id === action.payload ? { ...t, visible: !t.visible } : t),
         },
       };
     }
@@ -569,6 +601,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       return {
         ...state,
+        isDirty: true,
         project: {
           ...state.project,
           tracks: state.project.tracks.map(t => t.id === action.payload.trackId ? { ...t, volume: action.payload.volume } : t),
@@ -580,6 +613,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       return {
         ...state,
+        isDirty: true,
         project: {
           ...state.project,
           tracks: state.project.tracks.map(t => t.id === action.payload.trackId ? { ...t, height: action.payload.height } : t),
@@ -591,7 +625,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       if (!state.project) return state;
       const trackMap = new Map(state.project.tracks.map(t => [t.id, t]));
       const reordered = action.payload.map(id => trackMap.get(id)!).filter(Boolean);
-      return { ...state, project: { ...state.project, tracks: reordered } };
+      return { ...state, isDirty: true, project: { ...state.project, tracks: reordered } };
     }
 
     // ── Clips ───────────────────────────────────────────────────────────
@@ -605,7 +639,12 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         return { ...t, clips: [...t.clips, action.payload.clip] };
       });
       const duration = calculateProjectDuration(tracks);
-      return { ...s, project: { ...s.project!, tracks, duration } };
+      return {
+        ...s,
+        project: { ...s.project!, tracks, duration },
+        selectedClipIds: [action.payload.clip.id],
+        selectedTrackId: action.payload.trackId,
+      };
     }
 
     case 'ADD_MEDIA_TO_NEW_TRACK': {
@@ -655,6 +694,94 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       };
     }
 
+    case 'RIPPLE_DELETE_CLIPS': {
+      if (!state.project || action.payload.length === 0) return state;
+      const s = pushHistory(state, 'Ripple delete clips');
+      const idsToRemove = new Set(action.payload);
+      const tracks = s.project!.tracks.map(track => {
+        const removed = track.clips.filter(clip => idsToRemove.has(clip.id));
+        if (removed.length === 0 || track.locked) return track;
+        const remaining = track.clips
+          .filter(clip => !idsToRemove.has(clip.id))
+          .map(clip => {
+            const shift = removed
+              .filter(deleted => deleted.startTime < clip.startTime)
+              .reduce((sum, deleted) => sum + deleted.duration, 0);
+            return shift > 0 ? { ...clip, startTime: Math.max(0, clip.startTime - shift) } : clip;
+          });
+        return { ...track, clips: remaining };
+      });
+      return {
+        ...s,
+        project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) },
+        selectedClipIds: [],
+      };
+    }
+
+    case 'DELETE_TIMELINE_GAPS': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Close timeline gaps');
+      const tracks = s.project!.tracks.map(track => {
+        if (track.locked || (action.payload?.trackId && track.id !== action.payload.trackId)) return track;
+        let cursor = 0;
+        const clips = [...track.clips]
+          .sort((a, b) => a.startTime - b.startTime)
+          .map(clip => {
+            const next = { ...clip, startTime: cursor };
+            cursor += clip.duration;
+            return next;
+          });
+        return { ...track, clips };
+      });
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
+    }
+
+    case 'INSERT_TIMELINE_GAP': {
+      if (!state.project || action.payload.duration <= 0) return state;
+      const s = pushHistory(state, 'Insert timeline gap');
+      const tracks = s.project!.tracks.map(track => {
+        if (track.locked || (action.payload.trackId && track.id !== action.payload.trackId)) return track;
+        return {
+          ...track,
+          clips: track.clips.map(clip => (
+            clip.startTime >= action.payload.time
+              ? { ...clip, startTime: clip.startTime + action.payload.duration }
+              : clip
+          )),
+        };
+      });
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
+    }
+
+    case 'GROUP_SELECTED_CLIPS': {
+      if (!state.project || state.selectedClipIds.length < 2) return state;
+      const s = pushHistory(state, 'Group clips');
+      const groupId = generateId();
+      const selectedIds = new Set(s.selectedClipIds);
+      const tracks = s.project!.tracks.map(track => ({
+        ...track,
+        clips: track.clips.map(clip => selectedIds.has(clip.id) ? { ...clip, groupId } : clip),
+      }));
+      return { ...s, project: { ...s.project!, tracks } };
+    }
+
+    case 'UNGROUP_SELECTED_CLIPS': {
+      if (!state.project || state.selectedClipIds.length === 0) return state;
+      const s = pushHistory(state, 'Ungroup clips');
+      const selectedIds = new Set(s.selectedClipIds);
+      const groupIds = new Set(
+        s.project!.tracks.flatMap(track => track.clips)
+          .filter(clip => selectedIds.has(clip.id) && clip.groupId)
+          .map(clip => clip.groupId!)
+      );
+      if (groupIds.size === 0) return s;
+      const tracks = s.project!.tracks.map(track => ({
+        ...track,
+        clips: track.clips.map(clip => clip.groupId && groupIds.has(clip.groupId) ? { ...clip, groupId: undefined } : clip),
+      }));
+      return { ...s, project: { ...s.project!, tracks } };
+    }
+
     case 'MOVE_CLIP': {
       if (!state.project) return state;
       const s = pushHistory(state, 'Move clip');
@@ -675,6 +802,178 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       });
       const duration = calculateProjectDuration(tracks);
       return { ...s, project: { ...s.project!, tracks, duration } };
+    }
+
+    case 'MOVE_SELECTED_CLIPS': {
+      if (!state.project || state.selectedClipIds.length <= 1) return state;
+      const s = pushHistory(state, 'Move selected clips');
+      const selectedIds = new Set(s.selectedClipIds);
+      const selectedClips = s.project!.tracks
+        .flatMap(track => track.clips.map(clip => ({ track, clip })))
+        .filter(item => selectedIds.has(item.clip.id));
+      const anchor = selectedClips.find(item => item.clip.id === action.payload.anchorClipId);
+      if (!anchor || selectedClips.length <= 1) return s;
+
+      const snappedAnchorStart = snapTime(s, anchor.clip.startTime + action.payload.delta, action.payload.anchorClipId);
+      const delta = snappedAnchorStart - anchor.clip.startTime;
+      if (selectedClips.some(({ track, clip }) => track.locked || clip.locked || clip.startTime + delta < 0)) return s;
+
+      const candidateById = new Map<string, Clip>();
+      for (const { clip } of selectedClips) {
+        candidateById.set(clip.id, { ...clip, startTime: clip.startTime + delta });
+      }
+
+      for (const track of s.project!.tracks) {
+        const candidates = track.clips
+          .filter(clip => selectedIds.has(clip.id))
+          .map(clip => candidateById.get(clip.id))
+          .filter((clip): clip is Clip => Boolean(clip));
+        if (candidates.some(candidate => hasOverlapExcluding(track, candidate, selectedIds))) return s;
+      }
+
+      const tracks = s.project!.tracks.map(track => ({
+        ...track,
+        clips: track.clips.map(clip => candidateById.get(clip.id) ?? clip),
+      }));
+
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
+    }
+
+    case 'TRIM_SELECTED_CLIPS': {
+      if (!state.project || state.selectedClipIds.length <= 1) return state;
+      const s = pushHistory(state, 'Trim selected clips');
+      const selectedIds = new Set(s.selectedClipIds);
+      const candidateById = new Map<string, Clip>();
+
+      for (const track of s.project!.tracks) {
+        if (track.locked && track.clips.some(clip => selectedIds.has(clip.id))) return s;
+        for (const clip of track.clips) {
+          if (!selectedIds.has(clip.id)) continue;
+          if (clip.locked) return s;
+          if (action.payload.edge === 'start') {
+            const nextStart = Math.max(0, Math.min(clip.startTime + clip.duration - 0.1, clip.startTime + action.payload.delta));
+            const trimDelta = nextStart - clip.startTime;
+            candidateById.set(clip.id, {
+              ...clip,
+              startTime: nextStart,
+              duration: Math.max(0.1, clip.duration - trimDelta),
+              inPoint: Math.max(0, clip.inPoint + trimDelta * clip.speed),
+            });
+          } else {
+            const nextDuration = Math.max(0.1, clip.duration + action.payload.delta);
+            candidateById.set(clip.id, {
+              ...clip,
+              duration: nextDuration,
+              outPoint: Math.max(clip.inPoint + 0.1, clip.inPoint + nextDuration * clip.speed),
+            });
+          }
+        }
+      }
+
+      for (const track of s.project!.tracks) {
+        const candidates = track.clips
+          .filter(clip => selectedIds.has(clip.id))
+          .map(clip => candidateById.get(clip.id))
+          .filter((clip): clip is Clip => Boolean(clip));
+        if (candidates.some(candidate => hasOverlapExcluding(track, candidate, selectedIds))) return s;
+      }
+
+      const tracks = s.project!.tracks.map(track => ({
+        ...track,
+        clips: track.clips.map(clip => candidateById.get(clip.id) ?? clip),
+      }));
+
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
+    }
+
+    case 'RIPPLE_MOVE_CLIP': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Ripple move clip');
+      const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
+      if (!found) return s;
+      const targetTrack = s.project!.tracks.find(t => t.id === action.payload.trackId);
+      if (!targetTrack || found.clip.locked || found.track.locked || targetTrack.locked || !trackAcceptsMedia(targetTrack, found.clip.mediaType)) return s;
+      const snappedStart = snapTime(s, action.payload.startTime, action.payload.clipId);
+      const delta = snappedStart - found.clip.startTime;
+      const oldEnd = found.clip.startTime + found.clip.duration;
+      const movedClip = { ...found.clip, trackId: action.payload.trackId, startTime: snappedStart };
+      let tracks = s.project!.tracks.map(track => ({
+        ...track,
+        clips: track.clips
+          .filter(clip => clip.id !== action.payload.clipId)
+          .map(clip => (
+            track.id === found.track.id && clip.startTime >= oldEnd
+              ? { ...clip, startTime: Math.max(0, clip.startTime + delta) }
+              : clip
+          )),
+      }));
+      tracks = tracks.map(track => track.id === action.payload.trackId ? { ...track, clips: [...track.clips, movedClip] } : track);
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
+    }
+
+    case 'SLIDE_CLIP':
+      return baseReducer(state, { type: 'MOVE_CLIP', payload: action.payload });
+
+    case 'SLIP_CLIP': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Slip clip');
+      const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
+      if (!found || found.clip.locked || found.track.locked) return s;
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => {
+        const sourceSpan = Math.max(0.1, clip.outPoint - clip.inPoint);
+        const newInPoint = Math.max(0, clip.inPoint + action.payload.delta * clip.speed);
+        return { ...clip, inPoint: newInPoint, outPoint: newInPoint + sourceSpan };
+      });
+      return { ...s, project: { ...s.project!, tracks } };
+    }
+
+    case 'ROLL_EDIT_CLIP': {
+      if (!state.project) return state;
+      const s = pushHistory(state, 'Roll edit');
+      const found = findClipInTracks(s.project!.tracks, action.payload.clipId);
+      if (!found || found.clip.locked || found.track.locked) return s;
+      const sorted = [...found.track.clips].sort((a, b) => a.startTime - b.startTime);
+      const index = sorted.findIndex(clip => clip.id === action.payload.clipId);
+      const neighbor = action.payload.edge === 'start' ? sorted[index - 1] : sorted[index + 1];
+      if (!neighbor || neighbor.locked) return s;
+      const delta = action.payload.delta;
+      const tracks = s.project!.tracks.map(track => {
+        if (track.id !== found.track.id) return track;
+        return {
+          ...track,
+          clips: track.clips.map(clip => {
+            if (action.payload.edge === 'start') {
+              const appliedDelta = clamp(delta, -Math.max(0, neighbor.duration - 0.1), Math.max(0, found.clip.duration - 0.1));
+              if (clip.id === found.clip.id) {
+                return {
+                  ...clip,
+                  startTime: clip.startTime + appliedDelta,
+                  duration: clip.duration - appliedDelta,
+                  inPoint: Math.max(0, clip.inPoint + appliedDelta * clip.speed),
+                };
+              }
+              if (clip.id === neighbor.id) {
+                return { ...clip, duration: clip.duration + appliedDelta, outPoint: clip.outPoint + appliedDelta * clip.speed };
+              }
+            } else {
+              const appliedDelta = clamp(delta, -Math.max(0, found.clip.duration - 0.1), Math.max(0, neighbor.duration - 0.1));
+              if (clip.id === found.clip.id) {
+                return { ...clip, duration: clip.duration + appliedDelta, outPoint: clip.outPoint + appliedDelta * clip.speed };
+              }
+              if (clip.id === neighbor.id) {
+                return {
+                  ...clip,
+                  startTime: clip.startTime + appliedDelta,
+                  duration: clip.duration - appliedDelta,
+                  inPoint: Math.max(0, clip.inPoint + appliedDelta * clip.speed),
+                };
+              }
+            }
+            return clip;
+          }),
+        };
+      });
+      return { ...s, project: { ...s.project!, tracks, duration: calculateProjectDuration(tracks) } };
     }
 
     case 'TRIM_CLIP_START': {
@@ -784,6 +1083,31 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
       return { ...state, project: { ...state.project, tracks }, isDirty: true };
     }
 
+    case 'SET_CLIP_CROP': {
+      if (!state.project) return state;
+      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => {
+        const current = clip.crop ?? { left: 0, right: 0, top: 0, bottom: 0 };
+        const next = {
+          left: clamp(action.payload.crop.left ?? current.left, 0, 0.9),
+          right: clamp(action.payload.crop.right ?? current.right, 0, 0.9),
+          top: clamp(action.payload.crop.top ?? current.top, 0, 0.9),
+          bottom: clamp(action.payload.crop.bottom ?? current.bottom, 0, 0.9),
+        };
+        if (next.left + next.right > 0.95) {
+          const overflow = next.left + next.right - 0.95;
+          if (action.payload.crop.left != null) next.left -= overflow;
+          else next.right -= overflow;
+        }
+        if (next.top + next.bottom > 0.95) {
+          const overflow = next.top + next.bottom - 0.95;
+          if (action.payload.crop.top != null) next.top -= overflow;
+          else next.bottom -= overflow;
+        }
+        return { ...clip, crop: next };
+      });
+      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+    }
+
     case 'SET_CLIP_LABEL': {
       if (!state.project) return state;
       const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
@@ -878,15 +1202,16 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     // ── Effects ──────────────────────────────────────────────────────────
     case 'ADD_EFFECT': {
       if (!state.project) return state;
-      const target = findClipInTracks(state.project.tracks, action.payload.clipId);
-      if (!target || target.clip.mediaType === 'audio') return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Add effect');
+      const target = findClipInTracks(s.project!.tracks, action.payload.clipId);
+      if (!target || target.clip.mediaType === 'audio' || target.clip.locked || target.track.locked) return s;
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: [...clip.effects, action.payload.effect],
       }));
       return {
-        ...state,
-        project: { ...state.project, tracks },
+        ...s,
+        project: { ...s.project!, tracks },
         selectedClipIds: [action.payload.clipId],
         selectedEffectId: action.payload.effect.id,
         activeRightPanel: 'effects',
@@ -896,13 +1221,14 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     case 'REMOVE_EFFECT': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Remove effect');
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.filter(e => e.id !== action.payload.effectId),
       }));
       return {
-        ...state,
-        project: { ...state.project, tracks },
+        ...s,
+        project: { ...s.project!, tracks },
         selectedEffectId: state.selectedEffectId === action.payload.effectId ? null : state.selectedEffectId,
         isDirty: true,
       };
@@ -910,7 +1236,8 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     case 'UPDATE_EFFECT_PARAM': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Adjust effect parameter', `effect-param:${action.payload.clipId}:${action.payload.effectId}:${action.payload.paramKey}`);
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.map(e => {
           if (e.id !== action.payload.effectId) return e;
@@ -920,12 +1247,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
           };
         }),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return { ...s, project: { ...s.project!, tracks }, isDirty: true };
     }
 
     case 'UPDATE_EFFECT_TIMING': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Update effect timing');
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.map(effect => {
           if (effect.id !== action.payload.effectId) return effect;
@@ -937,12 +1265,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
           return { ...effect, startOffset, duration };
         }),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return { ...s, project: { ...s.project!, tracks }, isDirty: true };
     }
 
     case 'ADD_EFFECT_KEYFRAME': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Add keyframe');
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.map(effect => (
           effect.id === action.payload.effectId
@@ -959,12 +1288,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
             : effect
         )),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return { ...s, project: { ...s.project!, tracks }, isDirty: true };
     }
 
     case 'UPDATE_EFFECT_KEYFRAME': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Adjust keyframe', `keyframe:${action.payload.clipId}:${action.payload.effectId}:${action.payload.keyframeId}`);
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.map(effect => (
           effect.id === action.payload.effectId
@@ -976,12 +1306,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
             : effect
         )),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return { ...s, project: { ...s.project!, tracks }, isDirty: true };
     }
 
     case 'REMOVE_EFFECT_KEYFRAME': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Remove keyframe');
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.map(effect => (
           effect.id === action.payload.effectId
@@ -989,12 +1320,13 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
             : effect
         )),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return { ...s, project: { ...s.project!, tracks }, isDirty: true };
     }
 
     case 'REORDER_EFFECT_KEYFRAMES': {
       if (!state.project) return state;
-      const tracks = updateClipInTracks(state.project.tracks, action.payload.clipId, clip => ({
+      const s = pushHistory(state, 'Reorder keyframes');
+      const tracks = updateClipInTracks(s.project!.tracks, action.payload.clipId, clip => ({
         ...clip,
         effects: clip.effects.map(effect => {
           if (effect.id !== action.payload.effectId) return effect;
@@ -1006,7 +1338,7 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
           return { ...effect, keyframes: [...reordered, ...missing] };
         }),
       }));
-      return { ...state, project: { ...state.project, tracks }, isDirty: true };
+      return { ...s, project: { ...s.project!, tracks }, isDirty: true };
     }
 
     case 'TOGGLE_EFFECT': {
@@ -1167,31 +1499,50 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     }
 
     // ── Media ───────────────────────────────────────────────────────────
-    case 'ADD_MEDIA':
+    case 'ADD_MEDIA': {
       if (!state.project) return state;
+      if (state.project.mediaPool.some(media => media.path === action.payload.path)) return state;
+      const addMediaState = pushHistory(state, 'Import media');
       return {
-        ...state,
-        project: { ...state.project, mediaPool: [...state.project.mediaPool, action.payload] },
+        ...addMediaState,
+        project: { ...addMediaState.project!, mediaPool: [...addMediaState.project!.mediaPool, action.payload] },
+        selectedMediaIds: [action.payload.id],
+        isDirty: true,
       };
+    }
 
-    case 'ADD_MEDIA_BATCH':
+    case 'ADD_MEDIA_BATCH': {
       if (!state.project) return state;
+      const s = pushHistory(state, 'Import media');
+      const existingPaths = new Set(s.project!.mediaPool.map(media => media.path));
+      const newMedia = action.payload.filter(media => {
+        if (existingPaths.has(media.path)) return false;
+        existingPaths.add(media.path);
+        return true;
+      });
+      if (newMedia.length === 0) return state;
       return {
-        ...state,
-        project: { ...state.project, mediaPool: [...state.project.mediaPool, ...action.payload] },
+        ...s,
+        project: { ...s.project!, mediaPool: [...s.project!.mediaPool, ...newMedia] },
+        selectedMediaIds: newMedia.map(media => media.id),
+        isDirty: true,
       };
+    }
 
-    case 'REMOVE_MEDIA':
+    case 'REMOVE_MEDIA': {
       if (!state.project) return state;
+      const removeMediaState = pushHistory(state, 'Remove media');
       const removeSet = new Set(action.payload);
       return {
-        ...state,
+        ...removeMediaState,
         project: {
-          ...state.project,
-          mediaPool: state.project.mediaPool.filter(m => !removeSet.has(m.id)),
+          ...removeMediaState.project!,
+          mediaPool: removeMediaState.project!.mediaPool.filter(m => !removeSet.has(m.id)),
         },
-        selectedMediaIds: state.selectedMediaIds.filter(id => !removeSet.has(id)),
+        selectedMediaIds: removeMediaState.selectedMediaIds.filter(id => !removeSet.has(id)),
+        isDirty: true,
       };
+    }
 
     case 'UPDATE_MEDIA':
       if (!state.project) return state;
@@ -1330,6 +1681,46 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     case 'UPDATE_TEXT_OVERLAY':
       if (!state.activeTextOverlay) return state;
       return { ...state, activeTextOverlay: { ...state.activeTextOverlay, ...action.payload } };
+
+    case 'ADD_SUBTITLE_CUE': {
+      if (!state.project) return state;
+      const nextState = pushHistory(state, 'Add subtitle');
+      return {
+        ...nextState,
+        project: {
+          ...nextState.project!,
+          subtitles: [...(nextState.project!.subtitles ?? []), action.payload],
+        },
+        isDirty: true,
+      };
+    }
+
+    case 'UPDATE_SUBTITLE_CUE': {
+      if (!state.project) return state;
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          subtitles: (state.project.subtitles ?? []).map(cue =>
+            cue.id === action.payload.cueId ? { ...cue, ...action.payload.updates } : cue
+          ),
+        },
+        isDirty: true,
+      };
+    }
+
+    case 'REMOVE_SUBTITLE_CUE': {
+      if (!state.project) return state;
+      const nextState = pushHistory(state, 'Remove subtitle');
+      return {
+        ...nextState,
+        project: {
+          ...nextState.project!,
+          subtitles: (nextState.project!.subtitles ?? []).filter(cue => cue.id !== action.payload),
+        },
+        isDirty: true,
+      };
+    }
 
     // ── Audio ───────────────────────────────────────────────────────────
     case 'SET_MASTER_VOLUME':
@@ -1536,16 +1927,24 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
     nextState.historyIndex = 0;
   } else if (nextState._historyLabel) {
     const label = nextState._historyLabel;
+    const group = nextState._historyGroup;
     delete nextState._historyLabel;
+    delete nextState._historyGroup;
     
     const snapshot = createSnapshot(nextState);
     const newHistory = nextState.history.slice(0, nextState.historyIndex + 1);
-    newHistory.push({
-      id: generateId(),
-      label,
-      timestamp: Date.now(),
-      snapshot,
-    });
+    const previous = newHistory[newHistory.length - 1];
+    if (group && previous?.group === group) {
+      newHistory[newHistory.length - 1] = { ...previous, label, timestamp: Date.now(), snapshot, group };
+    } else {
+      newHistory.push({
+        id: generateId(),
+        label,
+        timestamp: Date.now(),
+        snapshot,
+        group,
+      });
+    }
     
     if (newHistory.length > MAX_HISTORY) newHistory.shift();
     

@@ -87,29 +87,44 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
         </div>
         <div className="ve-track-controls">
           <button className={`ve-track-control-btn ${track.muted ? 'muted' : ''}`}
-            onClick={() => dispatch({ type: 'TOGGLE_TRACK_MUTE', payload: track.id })}
+            onClick={(event) => { event.stopPropagation(); dispatch({ type: 'TOGGLE_TRACK_MUTE', payload: track.id }); }}
             title={track.muted ? 'Unmute' : 'Mute'}>
             {track.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
           </button>
           <button className={`ve-track-control-btn ${track.solo ? 'active' : ''}`}
-            onClick={() => dispatch({ type: 'TOGGLE_TRACK_SOLO', payload: track.id })}
+            onClick={(event) => { event.stopPropagation(); dispatch({ type: 'TOGGLE_TRACK_SOLO', payload: track.id }); }}
             title={track.solo ? 'Unsolo' : 'Solo'}>
             <Headphones size={12} />
           </button>
           <button className={`ve-track-control-btn ${track.locked ? 'active' : ''}`}
-            onClick={() => dispatch({ type: 'TOGGLE_TRACK_LOCK', payload: track.id })}
+            onClick={(event) => { event.stopPropagation(); dispatch({ type: 'TOGGLE_TRACK_LOCK', payload: track.id }); }}
             title={track.locked ? 'Unlock' : 'Lock'}>
             {track.locked ? <Lock size={12} /> : <Unlock size={12} />}
           </button>
           {track.type === 'video' && (
             <button className={`ve-track-control-btn ${!track.visible ? 'muted' : ''}`}
-              onClick={() => dispatch({ type: 'TOGGLE_TRACK_VISIBILITY', payload: track.id })}
+              onClick={(event) => { event.stopPropagation(); dispatch({ type: 'TOGGLE_TRACK_VISIBILITY', payload: track.id }); }}
               title={track.visible ? 'Hide' : 'Show'}>
               {track.visible ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
           )}
+          <div className="ve-track-height-presets" title="Track height">
+            {[56, 84, 126].map((height, presetIndex) => (
+              <button
+                key={height}
+                className={`ve-track-height-btn ${Math.abs(track.height - height) < 2 ? 'active' : ''}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  dispatch({ type: 'SET_TRACK_HEIGHT', payload: { trackId: track.id, height } });
+                }}
+                aria-label={`Track height ${presetIndex + 1}`}
+              >
+                {presetIndex + 1}
+              </button>
+            ))}
+          </div>
           <button className="ve-track-control-btn danger"
-            onClick={handleDeleteTrack}
+            onClick={(event) => { event.stopPropagation(); handleDeleteTrack(); }}
             title={track.clips.length > 0 ? 'Delete track and clips' : 'Delete track'}>
             <Trash2 size={12} />
           </button>
@@ -187,12 +202,15 @@ export default function TimelineTrack({ track, index: _index, headerOnly }: Prop
             positionY: 0,
             scale: 1,
             rotation: 0,
+            crop: { left: 0, right: 0, top: 0, bottom: 0 },
             effects: [],
             transition: null,
             color: '',
             locked: false,
             label: '',
             path: mediaItem.path,
+            waveformData: mediaItem.waveformData ?? [],
+            timelineThumbnails: mediaItem.timelineThumbnails ?? [],
           },
         },
       });

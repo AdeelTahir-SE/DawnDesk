@@ -15,6 +15,8 @@ const CATEGORIES: { id: EffectCategory | 'all'; label: string }[] = [
   { id: 'sharpen', label: 'Sharpen' },
   { id: 'distort', label: 'Distort' },
   { id: 'stylize', label: 'Stylize' },
+  { id: 'perspective', label: 'Perspective' },
+  { id: 'generate', label: 'Generate' },
 ];
 
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';

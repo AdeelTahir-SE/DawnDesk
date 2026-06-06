@@ -15,6 +15,13 @@ export default function Timeline() {
   const tracks = state.project?.tracks ?? [];
   const duration = Math.max(state.project?.duration ?? 0, 60);
   const totalWidth = duration * state.timelineZoom;
+  const snapGuideTimes = state.snapEnabled ? Array.from(new Set([
+    state.playheadTime,
+    ...(state.project?.markers.map(marker => marker.time) ?? []),
+    ...tracks.flatMap(track => track.clips)
+      .filter(clip => state.selectedClipIds.includes(clip.id))
+      .flatMap(clip => [clip.startTime, clip.startTime + clip.duration]),
+  ].map(time => Number(Math.max(0, time).toFixed(3))))) : [];
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -103,6 +110,13 @@ export default function Timeline() {
           onDrop={handleEmptyDrop}>
           <TimelineRuler width={totalWidth} duration={duration} onClick={handleRulerClick} />
           <div style={{ position: 'relative', width: totalWidth, minHeight: '100%' }}>
+            {snapGuideTimes.map(time => (
+              <div
+                key={time}
+                className="ve-snap-guide"
+                style={{ left: time * state.timelineZoom }}
+              />
+            ))}
             {tracks.map((track, i) => (
               <TimelineTrack key={track.id} track={track} index={i} />
             ))}

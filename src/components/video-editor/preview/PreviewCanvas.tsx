@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import TransportControls from './TransportControls';
 import { Maximize } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import type { ClipTransition, ColorGradingState, Effect, Mask, TextOverlay, TimelineEffect } from '../../../engine/video-editor/types';
+import type { ClipTransition, ColorGradingState, Effect, Mask, SubtitleCue, TextOverlay, TimelineEffect } from '../../../engine/video-editor/types';
 
 const MAX_EFFECTS_PER_PREVIEW_CLIP = 32;
 const MAX_DROP_SHADOWS_PER_PREVIEW_CLIP = 4;
@@ -17,6 +17,11 @@ function paramNumber(effect: Effect, key: string, fallback: number): number {
 function paramString(effect: Effect, key: string, fallback: string): string {
   const value = effect.params.find(param => param.key === key)?.value;
   return typeof value === 'string' ? value : fallback;
+}
+
+function paramBoolean(effect: Effect, key: string, fallback: boolean): boolean {
+  const value = effect.params.find(param => param.key === key)?.value;
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 function buildAudioPreviewGain(state: ReturnType<typeof useVideoEditor>['state']) {
@@ -377,29 +382,113 @@ function drawTextOverlayEffect(
   const x = clampNumber(xParam, 0, 100) / 100 * width;
   const y = clampNumber(yParam, 0, 100) / 100 * height;
   const color = paramString(effect, 'color', '#ffffff');
+  const fontFamily = paramString(effect, 'fontFamily', 'Sora');
+  const fontWeight = paramString(effect, 'fontWeight', '800');
+  const alignment = paramString(effect, 'alignment', 'center') as CanvasTextAlign;
   const background = paramString(effect, 'background', '#000000');
   const backgroundOpacity = clampNumber(paramNumber(effect, 'backgroundOpacity', 35), 0, 100) / 100;
+  const backgroundPadding = Math.max(0, paramNumber(effect, 'backgroundPadding', 14)) * previewScale;
+  const strokeEnabled = paramBoolean(effect, 'strokeEnabled', false);
+  const strokeColor = paramString(effect, 'strokeColor', '#000000');
+  const strokeWidth = Math.max(0, paramNumber(effect, 'strokeWidth', 3)) * previewScale;
+  const shadowEnabled = paramBoolean(effect, 'shadowEnabled', true);
+  const shadowColor = paramString(effect, 'shadowColor', '#000000');
+  const shadowBlur = Math.max(0, paramNumber(effect, 'shadowBlur', 8)) * previewScale;
+  const shadowX = paramNumber(effect, 'shadowX', 0) * previewScale;
+  const shadowY = paramNumber(effect, 'shadowY', 2) * previewScale;
 
   ctx.save();
-  ctx.font = `800 ${fontSize}px Sora, Inter, sans-serif`;
-  ctx.textAlign = 'center';
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}, Sora, Inter, sans-serif`;
+  ctx.textAlign = alignment;
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = Math.max(2, 8 * previewScale);
+  if (shadowEnabled) {
+    ctx.shadowColor = shadowColor;
+    ctx.shadowBlur = shadowBlur;
+    ctx.shadowOffsetX = shadowX;
+    ctx.shadowOffsetY = shadowY;
+  }
   const metrics = ctx.measureText(text);
-  const padX = 18 * previewScale;
-  const padY = 9 * previewScale;
+  const padX = backgroundPadding;
+  const padY = backgroundPadding * 0.62;
+  const textLeft = alignment === 'left' ? x : alignment === 'right' ? x - metrics.width : x - metrics.width / 2;
   if (backgroundOpacity > 0) {
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.globalAlpha = backgroundOpacity;
     ctx.fillStyle = background;
-    ctx.fillRect(x - metrics.width / 2 - padX, y - fontSize / 2 - padY, metrics.width + padX * 2, fontSize + padY * 2);
+    ctx.fillRect(textLeft - padX, y - fontSize / 2 - padY, metrics.width + padX * 2, fontSize + padY * 2);
     ctx.globalAlpha = 1;
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = Math.max(2, 8 * previewScale);
+    if (shadowEnabled) {
+      ctx.shadowColor = shadowColor;
+      ctx.shadowBlur = shadowBlur;
+      ctx.shadowOffsetX = shadowX;
+      ctx.shadowOffsetY = shadowY;
+    }
+  }
+  if (strokeEnabled && strokeWidth > 0) {
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = strokeColor;
+    ctx.strokeText(text, x, y);
   }
   ctx.fillStyle = color;
   ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawSubtitleCue(
+  ctx: CanvasRenderingContext2D,
+  cue: SubtitleCue,
+  width: number,
+  height: number,
+  previewScale: number
+) {
+  const text = cue.text.trim();
+  if (!text) return;
+
+  ctx.save();
+  const fontSize = Math.max(8, cue.fontSize * previewScale);
+  const lineHeight = fontSize * 1.28;
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  ctx.font = `700 ${fontSize}px Sora, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const maxWidth = Math.max(...lines.map(line => ctx.measureText(line).width), 1);
+  const padX = 18 * previewScale;
+  const padY = 10 * previewScale;
+  const boxWidth = maxWidth + padX * 2;
+  const boxHeight = lines.length * lineHeight + padY * 2;
+  const x = cue.x * width;
+  const y = cue.y * height;
+
+  if (cue.backgroundOpacity > 0) {
+    ctx.globalAlpha = cue.backgroundOpacity;
+    ctx.fillStyle = cue.backgroundColor;
+    ctx.fillRect(x - boxWidth / 2, y - boxHeight / 2, boxWidth, boxHeight);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = cue.color;
+  lines.forEach((line, index) => {
+    const lineY = y - ((lines.length - 1) * lineHeight) / 2 + index * lineHeight;
+    ctx.fillText(line, x, lineY);
+  });
+  ctx.restore();
+}
+
+function drawMediaPlaceholder(ctx: CanvasRenderingContext2D, label: string, width: number, height: number) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fillRect(-width / 2, -height / 2, width, height);
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-width / 2 + 1, -height / 2 + 1, width - 2, height - 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = `700 ${Math.max(11, Math.min(22, width / 24))}px Sora, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 0, 0);
   ctx.restore();
 }
 
@@ -625,6 +714,62 @@ export default function PreviewCanvas() {
   const w = Math.max(1, Math.round(projectW * previewScale));
   const h = Math.max(1, Math.round(projectH * previewScale));
   const aspect = projectW / projectH;
+  const selectedClip = state.project?.tracks
+    .flatMap(track => track.clips)
+    .find(clip => clip.id === state.selectedClipIds[0]);
+  const selectedCanvasEffect = selectedClip?.effects.find(effect =>
+    effect.id === state.selectedEffectId && (effect.type === 'text-overlay' || effect.type === 'zoom-effect')
+  );
+  const selectedCanvasEffectPoint = selectedCanvasEffect
+    ? {
+        x: paramNumber(selectedCanvasEffect, selectedCanvasEffect.type === 'zoom-effect' ? 'centerX' : 'x', 50),
+        y: paramNumber(selectedCanvasEffect, selectedCanvasEffect.type === 'zoom-effect' ? 'centerY' : 'y', 50),
+      }
+    : null;
+
+  const dragActiveTextOverlay = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const viewport = event.currentTarget.parentElement;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+
+    const move = (moveEvent: MouseEvent) => {
+      const x = clampNumber((moveEvent.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+      const y = clampNumber((moveEvent.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+      dispatch({ type: 'UPDATE_TEXT_OVERLAY', payload: { x, y } });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  const dragSelectedCanvasEffect = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!selectedClip || !selectedCanvasEffect) return;
+    const viewport = event.currentTarget.parentElement;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const xKey = selectedCanvasEffect.type === 'zoom-effect' ? 'centerX' : 'x';
+    const yKey = selectedCanvasEffect.type === 'zoom-effect' ? 'centerY' : 'y';
+
+    const move = (moveEvent: MouseEvent) => {
+      const x = clampNumber(((moveEvent.clientX - rect.left) / Math.max(1, rect.width)) * 100, 0, 100);
+      const y = clampNumber(((moveEvent.clientY - rect.top) / Math.max(1, rect.height)) * 100, 0, 100);
+      dispatch({ type: 'UPDATE_EFFECT_PARAM', payload: { clipId: selectedClip.id, effectId: selectedCanvasEffect.id, paramKey: xKey, value: x } });
+      dispatch({ type: 'UPDATE_EFFECT_PARAM', payload: { clipId: selectedClip.id, effectId: selectedCanvasEffect.id, paramKey: yKey, value: y } });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
 
   // Cache elements to avoid reloading them on every frame
   const mediaCache = useRef<Record<string, HTMLVideoElement | HTMLImageElement | HTMLAudioElement>>({});
@@ -778,21 +923,22 @@ export default function PreviewCanvas() {
 
       const time = getRenderTime(now);
       const tracks = project.tracks;
+      const hasSolo = tracks.some(track => track.solo);
       
       const activeClipIdsThisFrame = new Set<string>();
 
       // Render bottom to top
       for (const track of tracks) {
+        if (hasSolo && !track.solo) continue;
         if (track.type === 'video' && !track.visible) continue;
-        if (track.muted) continue;
+        if (track.type === 'audio' && track.muted) continue;
 
         for (const clip of track.clips) {
           if (time < clip.startTime || time >= clip.startTime + clip.duration) continue;
-          if (!clip.path) continue; // Needs path to render
           
           activeClipIdsThisFrame.add(clip.id);
 
-          const src = convertFileSrc(clip.path);
+          const src = clip.path ? convertFileSrc(clip.path) : '';
           const sourceDuration = Math.max(0.1, clip.outPoint - clip.inPoint);
           const localTime = (time - clip.startTime) * clip.speed;
           const clipTime = clip.reversed
@@ -804,20 +950,24 @@ export default function PreviewCanvas() {
           const drawX = (clip.positionX ?? 0) * (w / 2);
           const drawY = (clip.positionY ?? 0) * (h / 2);
           const rotation = ((clip.rotation ?? 0) * Math.PI) / 180;
+          const crop = clip.crop ?? { left: 0, right: 0, top: 0, bottom: 0 };
           
           const audioPreviewGain = buildAudioPreviewGain(latestState);
-          const volume = Math.max(0, Math.min(1, clip.volume * track.volume * latestState.masterVolume * audioPreviewGain));
+          const audible = !track.muted && (!hasSolo || track.solo);
+          const volume = audible ? Math.max(0, Math.min(1, clip.volume * track.volume * latestState.masterVolume * audioPreviewGain)) : 0;
 
           if (clip.mediaType === 'audio') {
+            if (!src) continue;
             let aud = mediaCache.current[clip.id] as HTMLAudioElement;
             if (!aud) {
               aud = new Audio(src);
               mediaCache.current[clip.id] = aud;
             }
+            aud.muted = !audible;
             aud.volume = volume;
             aud.playbackRate = Math.max(0.0625, Math.min(16, latestState.playbackSpeed * clip.speed));
             
-            const audioDriftLimit = latestState.isPlaying ? 0.65 : 0.03;
+            const audioDriftLimit = latestState.isPlaying ? 0.25 : 0.02;
             if (!aud.seeking && Math.abs(aud.currentTime - clipTime) > audioDriftLimit) {
               aud.currentTime = clipTime;
             }
@@ -884,6 +1034,10 @@ export default function PreviewCanvas() {
           };
 
           if (clip.mediaType === 'image') {
+            if (!src) {
+              drawWithTransform(() => drawMediaPlaceholder(offCtx, 'Missing image', drawW, drawH));
+              continue;
+            }
             let img = mediaCache.current[clip.id] as HTMLImageElement;
             if (!img) {
               img = new Image();
@@ -891,12 +1045,24 @@ export default function PreviewCanvas() {
               mediaCache.current[clip.id] = img;
             }
             if (img.complete && track.type === 'video') {
-              drawWithTransform(() => offCtx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH));
+              const sourceW = img.naturalWidth || img.width;
+              const sourceH = img.naturalHeight || img.height;
+              const sx = sourceW * crop.left;
+              const sy = sourceH * crop.top;
+              const sw = Math.max(1, sourceW * (1 - crop.left - crop.right));
+              const sh = Math.max(1, sourceH * (1 - crop.top - crop.bottom));
+              drawWithTransform(() => offCtx.drawImage(img, sx, sy, sw, sh, -drawW / 2, -drawH / 2, drawW, drawH));
               activeClipEffects
                 .filter(effect => effect.enabled && effect.type === 'text-overlay')
                 .forEach(effect => drawTextOverlayEffect(offCtx, effect, w, h, previewScale, Math.max(0, clipLocalTime - (effect.startOffset ?? 0))));
+            } else {
+              drawWithTransform(() => drawMediaPlaceholder(offCtx, 'Loading image', drawW, drawH));
             }
           } else if (clip.mediaType === 'video') {
+            if (!src) {
+              drawWithTransform(() => drawMediaPlaceholder(offCtx, 'Missing video', drawW, drawH));
+              continue;
+            }
             let vid = mediaCache.current[clip.id] as HTMLVideoElement;
             if (!vid) {
               vid = document.createElement('video');
@@ -907,11 +1073,11 @@ export default function PreviewCanvas() {
               mediaCache.current[clip.id] = vid;
             }
             
-            vid.muted = track.muted;
+            vid.muted = !audible;
             vid.volume = volume;
             vid.playbackRate = Math.max(0.0625, Math.min(16, latestState.playbackSpeed * clip.speed));
 
-            const videoDriftLimit = latestState.isPlaying ? 0.65 : 0.03;
+            const videoDriftLimit = latestState.isPlaying ? 0.25 : 0.02;
             if (!vid.seeking && Math.abs(vid.currentTime - clipTime) > videoDriftLimit) {
               vid.currentTime = clipTime;
             }
@@ -923,10 +1089,18 @@ export default function PreviewCanvas() {
             }
 
             if (vid.readyState >= 2 && track.type === 'video') { // HAVE_CURRENT_DATA
-              drawWithTransform(() => offCtx.drawImage(vid, -drawW / 2, -drawH / 2, drawW, drawH));
+              const sourceW = vid.videoWidth || w;
+              const sourceH = vid.videoHeight || h;
+              const sx = sourceW * crop.left;
+              const sy = sourceH * crop.top;
+              const sw = Math.max(1, sourceW * (1 - crop.left - crop.right));
+              const sh = Math.max(1, sourceH * (1 - crop.top - crop.bottom));
+              drawWithTransform(() => offCtx.drawImage(vid, sx, sy, sw, sh, -drawW / 2, -drawH / 2, drawW, drawH));
               activeClipEffects
                 .filter(effect => effect.enabled && effect.type === 'text-overlay')
                 .forEach(effect => drawTextOverlayEffect(offCtx, effect, w, h, previewScale, Math.max(0, clipLocalTime - (effect.startOffset ?? 0))));
+            } else {
+              drawWithTransform(() => drawMediaPlaceholder(offCtx, 'Loading video', drawW, drawH));
             }
           }
         }
@@ -990,6 +1164,9 @@ export default function PreviewCanvas() {
           offCtx.restore();
       }
 
+      const activeSubtitles = (project.subtitles ?? []).filter(cue => time >= cue.startTime && time < cue.endTime);
+      activeSubtitles.forEach(cue => drawSubtitleCue(offCtx, cue, w, h, previewScale));
+
       // Apply Global Color Grading to final canvas
       const cg = latestState.colorGrading;
       ctx.save();
@@ -1036,6 +1213,22 @@ export default function PreviewCanvas() {
               height={h} 
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
+            {state.activeTextOverlay && (
+              <div
+                className="ve-canvas-text-handle"
+                style={{ left: `${state.activeTextOverlay.x * 100}%`, top: `${state.activeTextOverlay.y * 100}%` }}
+                onMouseDown={dragActiveTextOverlay}
+                title="Drag text position"
+              />
+            )}
+            {selectedCanvasEffect && selectedCanvasEffectPoint && (
+              <div
+                className={`ve-canvas-text-handle ${selectedCanvasEffect.type === 'zoom-effect' ? 'zoom' : 'effect-text'}`}
+                style={{ left: `${selectedCanvasEffectPoint.x}%`, top: `${selectedCanvasEffectPoint.y}%` }}
+                onMouseDown={dragSelectedCanvasEffect}
+                title={selectedCanvasEffect.type === 'zoom-effect' ? 'Drag zoom center' : 'Drag text overlay position'}
+              />
+            )}
             {state.showSafeZones && (
               <>
                 <div className="ve-safe-zone title" />

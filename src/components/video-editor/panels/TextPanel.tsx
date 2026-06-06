@@ -1,15 +1,123 @@
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { TEXT_PRESETS } from '../../../engine/video-editor/constants';
-import { Type, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Type, AlignLeft, AlignCenter, AlignRight, Plus, Trash2 } from 'lucide-react';
 
 export default function TextPanel() {
   const { state, dispatch } = useVideoEditor();
   const text = state.activeTextOverlay;
+  const subtitles = state.project?.subtitles ?? [];
+
+  const addSubtitle = () => {
+    const startTime = Math.max(0, state.playheadTime);
+    const projectDuration = state.project?.duration ?? 0;
+    const endTime = projectDuration > startTime
+      ? Math.min(projectDuration, startTime + 2)
+      : startTime + 2;
+    dispatch({
+      type: 'ADD_SUBTITLE_CUE',
+      payload: {
+        id: `subtitle-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        startTime,
+        endTime,
+        text: 'New subtitle',
+        fontSize: 42,
+        color: '#ffffff',
+        backgroundColor: '#000000',
+        backgroundOpacity: 0.55,
+        x: 0.5,
+        y: 0.86,
+      },
+    });
+  };
+
+  const updateSubtitle = (cueId: string, updates: Record<string, unknown>) => {
+    dispatch({ type: 'UPDATE_SUBTITLE_CUE', payload: { cueId, updates: updates as any } });
+  };
+
+  const subtitleEditor = (
+    <div className="ve-panel-section">
+      <div className="ve-panel-row-title">
+        <span>Subtitles</span>
+        <button className="ve-icon-btn" onClick={addSubtitle} title="Add subtitle at playhead">
+          <Plus size={14} />
+        </button>
+      </div>
+      <div className="ve-subtitle-list">
+        {subtitles.length === 0 && (
+          <div className="ve-empty-desc" style={{ padding: '8px 0' }}>Add subtitle cues to enable subtitle burn-in during export.</div>
+        )}
+        {subtitles.map((cue, index) => (
+          <div key={cue.id} className="ve-subtitle-card">
+            <div className="ve-subtitle-card-head">
+              <span>Subtitle {index + 1}</span>
+              <button className="ve-icon-btn danger" onClick={() => dispatch({ type: 'REMOVE_SUBTITLE_CUE', payload: cue.id })} title="Remove subtitle">
+                <Trash2 size={13} />
+              </button>
+            </div>
+            <textarea
+              className="ve-subtitle-textarea"
+              rows={2}
+              value={cue.text}
+              onChange={event => updateSubtitle(cue.id, { text: event.target.value })}
+            />
+            <div className="ve-two-col">
+              <label>
+                <span>Start</span>
+                <input className="ve-number-input" type="number" min={0} step={0.1} value={cue.startTime}
+                  onChange={event => updateSubtitle(cue.id, { startTime: Math.max(0, Number(event.target.value)) })} />
+              </label>
+              <label>
+                <span>End</span>
+                <input className="ve-number-input" type="number" min={0} step={0.1} value={cue.endTime}
+                  onChange={event => updateSubtitle(cue.id, { endTime: Math.max(cue.startTime + 0.1, Number(event.target.value)) })} />
+              </label>
+            </div>
+            <div className="ve-two-col">
+              <label>
+                <span>Size</span>
+                <input className="ve-number-input" type="number" min={8} max={160} value={cue.fontSize}
+                  onChange={event => updateSubtitle(cue.id, { fontSize: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span>Opacity</span>
+                <input className="ve-number-input" type="number" min={0} max={1} step={0.05} value={cue.backgroundOpacity}
+                  onChange={event => updateSubtitle(cue.id, { backgroundOpacity: Number(event.target.value) })} />
+              </label>
+            </div>
+            <div className="ve-two-col">
+              <label>
+                <span>X</span>
+                <input type="range" min={0} max={1} step={0.01} value={cue.x}
+                  onChange={event => updateSubtitle(cue.id, { x: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span>Y</span>
+                <input type="range" min={0} max={1} step={0.01} value={cue.y}
+                  onChange={event => updateSubtitle(cue.id, { y: Number(event.target.value) })} />
+              </label>
+            </div>
+            <div className="ve-two-col">
+              <label>
+                <span>Text</span>
+                <input type="color" value={cue.color} onChange={event => updateSubtitle(cue.id, { color: event.target.value })} />
+              </label>
+              <label>
+                <span>Box</span>
+                <input type="color" value={cue.backgroundColor} onChange={event => updateSubtitle(cue.id, { backgroundColor: event.target.value })} />
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
 
   if (!text) {
     return (
       <div>
+        {subtitleEditor}
+
         <div className="ve-empty" style={{ marginBottom: 16 }}>
           <Type size={24} className="ve-empty-icon" />
           <div className="ve-empty-title">No text selected</div>
@@ -34,6 +142,8 @@ export default function TextPanel() {
 
   return (
     <div>
+      {subtitleEditor}
+
       <div className="ve-panel-section">
         <div className="ve-panel-section-title" style={{ marginBottom: 8 }}>Text Content</div>
         <textarea value={text.text || ''} onChange={e => update({ text: e.target.value })}
