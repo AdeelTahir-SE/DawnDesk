@@ -172,8 +172,9 @@ export default function Settings() {
 
     if (key === "autoLaunch" && typeof value === "boolean") {
       try {
-        await invoke("set_auto_launch", { enabled: value });
-        logSuccess("Settings", value ? "DawnDesk will launch on startup" : "DawnDesk startup launch disabled", { source: "settings" });
+        const autoLaunch = await invoke<boolean>("set_auto_launch", { enabled: value });
+        persistSettings({ ...nextSettings, autoLaunch });
+        logSuccess("Settings", "DawnDesk startup launch disabled", { source: "settings" });
       } catch (error) {
         setNativeSettingsNote(String(error));
         persistSettings({ ...nextSettings, autoLaunch: !value });

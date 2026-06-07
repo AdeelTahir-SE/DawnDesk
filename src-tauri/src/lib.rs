@@ -401,23 +401,22 @@ fn startup_script_path() -> Result<PathBuf, String> {
 
 #[tauri::command]
 fn get_auto_launch() -> Result<bool, String> {
-    Ok(startup_script_path()?.exists())
+    remove_startup_script()?;
+    Ok(false)
 }
 
 #[tauri::command]
-fn set_auto_launch(enabled: bool) -> Result<bool, String> {
+fn set_auto_launch(_enabled: bool) -> Result<bool, String> {
+    remove_startup_script()?;
+    Ok(false)
+}
+
+fn remove_startup_script() -> Result<(), String> {
     let path = startup_script_path()?;
-    if enabled {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        }
-        let exe = env::current_exe().map_err(|error| error.to_string())?;
-        let script = format!("@echo off\r\nstart \"\" \"{}\"\r\n", exe.display());
-        fs::write(&path, script).map_err(|error| error.to_string())?;
-    } else if path.exists() {
+    if path.exists() {
         fs::remove_file(&path).map_err(|error| error.to_string())?;
     }
-    Ok(enabled)
+    Ok(())
 }
 
 #[tauri::command]
