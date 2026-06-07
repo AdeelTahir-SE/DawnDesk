@@ -50,4 +50,4 @@ Developer Tools is available at `/dev-tools`. It includes practical utilities fo
 
 ## Settings
 
-Settings is available at `/settings`. Current native settings include auto-launch and hardware acceleration support.
+Settings is available at `/settings`. Current native settings include hardware acceleration support.

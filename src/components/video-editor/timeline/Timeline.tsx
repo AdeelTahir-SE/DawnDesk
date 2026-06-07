@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState, type CSSProperties } from 'react';
 import { Reorder } from 'motion/react';
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import TimelineControls from './TimelineControls';
@@ -7,10 +7,15 @@ import TimelineTrack, { getTimelineTrackDisplayHeight } from './TimelineTrack';
 import Playhead from './Playhead';
 import { getDroppedMedia } from '../dragDrop';
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export default function Timeline() {
   const { state, dispatch } = useVideoEditor();
   const scrollRef = useRef<HTMLDivElement>(null);
   const headersRef = useRef<HTMLDivElement>(null);
+  const [trackHeaderWidth, setTrackHeaderWidth] = useState(180);
 
   const tracks = state.project?.tracks ?? [];
   const duration = Math.max(state.project?.duration ?? 0, 60);
@@ -36,6 +41,31 @@ export default function Timeline() {
       headersRef.current.scrollTop = scrollRef.current.scrollTop;
     }
   }, []);
+
+  const handleHeaderResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const initialWidth = trackHeaderWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      setTrackHeaderWidth(clamp(initialWidth + moveEvent.clientX - startX, 112, 360));
+    };
+
+    const handleUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  }, [trackHeaderWidth]);
 
   const handleRulerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -85,7 +115,10 @@ export default function Timeline() {
   };
 
   return (
-    <div className="ve-timeline-area">
+    <div
+      className="ve-timeline-area"
+      style={{ '--ve-track-header-width': `${trackHeaderWidth}px` } as CSSProperties}
+    >
       <TimelineControls />
       <div className="ve-timeline-body">
         {/* Track Headers */}
@@ -103,6 +136,11 @@ export default function Timeline() {
             <button className="dd-btn-secondary" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => dispatch({ type: 'ADD_TRACK', payload: { type: 'audio' } })}>+ Audio</button>
           </div>
         </div>
+        <div
+          className="ve-timeline-header-resizer"
+          onMouseDown={handleHeaderResize}
+          title="Resize track controls"
+        />
 
         {/* Scrollable clips area */}
         <div className="ve-timeline-scroll" ref={scrollRef} onWheel={handleWheel} onScroll={handleScroll} onMouseDown={handleScrollMouseDown}

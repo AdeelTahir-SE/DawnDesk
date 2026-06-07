@@ -13,7 +13,7 @@ interface MenuItem {
 
 export default function MenuBar() {
   const { state, dispatch } = useVideoEditor();
-  const { importMedia, saveProject, saveProjectAs, loadProject } = useFFmpeg();
+  const { importMedia, saveProject, saveProjectAs, loadProject, exportEditPackage, importEditPackage } = useFFmpeg();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleMenuClick = (menu: string) => {
@@ -34,6 +34,8 @@ export default function MenuBar() {
       { label: 'Save As...', shortcut: 'Ctrl+Shift+S', action: saveProjectAs },
       { label: '', separator: true },
       { label: 'Import Media', shortcut: 'Ctrl+I', action: importMedia },
+      { label: 'Import Edit Package JSON', action: importEditPackage, disabled: !state.project },
+      { label: 'Export Edit Package JSON', action: exportEditPackage, disabled: !state.project },
       { label: '', separator: true },
       { label: 'Project Settings', action: () => dispatch({ type: 'TOGGLE_PROJECT_SETTINGS' }) },
       { label: '', separator: true },

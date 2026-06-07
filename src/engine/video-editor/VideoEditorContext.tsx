@@ -412,6 +412,7 @@ export const initialState: VideoEditorState = {
   clipboard: [],
   showProjectSettings: false,
   showNewProjectModal: false,
+  pendingEditPackage: null,
 };
 
 /* ── Reducer ───────────────────────────────────────────────────────────── */
@@ -442,6 +443,22 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
         isDirty: false,
         history: [],
         historyIndex: -1,
+      };
+
+    case 'APPLY_EDIT_PACKAGE':
+      return {
+        ...state,
+        project: action.payload.project,
+        colorGrading: action.payload.colorGrading ?? state.colorGrading,
+        activeTextOverlay: action.payload.activeTextOverlay ?? state.activeTextOverlay,
+        masterVolume: action.payload.masterVolume ?? state.masterVolume,
+        audioEffects: action.payload.audioEffects ?? state.audioEffects,
+        activeMask: action.payload.activeMask ?? state.activeMask,
+        selectedClipIds: [],
+        selectedEffectId: null,
+        selectedTimelineEffectId: null,
+        isDirty: true,
+        _historyLabel: 'Import edit package',
       };
 
     case 'CLOSE_PROJECT':
@@ -1897,6 +1914,9 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
     case 'TOGGLE_NEW_PROJECT_MODAL':
       return { ...state, showNewProjectModal: !state.showNewProjectModal };
 
+    case 'SET_PENDING_EDIT_PACKAGE':
+      return { ...state, pendingEditPackage: action.payload };
+
     case 'SET_CONTEXT_MENU':
       return { ...state, contextMenu: action.payload };
 
@@ -1923,8 +1943,8 @@ function videoEditorReducer(state: VideoEditorState, action: VideoEditorAction):
 
   let nextState = baseReducer(state, action);
 
-  if (action.type === 'NEW_PROJECT' || action.type === 'LOAD_PROJECT') {
-    const label = action.type === 'NEW_PROJECT' ? 'New Project' : 'Load Project';
+  if (action.type === 'NEW_PROJECT' || action.type === 'LOAD_PROJECT' || action.type === 'APPLY_EDIT_PACKAGE') {
+    const label = action.type === 'NEW_PROJECT' ? 'New Project' : action.type === 'LOAD_PROJECT' ? 'Load Project' : 'Import edit package';
     nextState.history = [{
       id: generateId(),
       label,

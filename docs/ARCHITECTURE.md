@@ -46,7 +46,6 @@ Workspace routes:
 
 The Rust layer currently provides:
 
-- App startup integration for Windows auto-launch.
 - Hardware acceleration settings persisted in `native-settings.json`.
 - Video editor commands for media probing, thumbnails, waveform generation, import, export, progress, cancellation, save/load, and FFmpeg checks.
 - Photo editor export command.

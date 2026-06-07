@@ -673,6 +673,53 @@ html.light {
   line-height: 1.35;
 }
 
+.ve-effect-param-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 10px;
+  margin-top: 10px;
+}
+
+.ve-effect-param {
+  min-width: 0;
+}
+
+.ve-effect-param--wide {
+  grid-column: 1 / -1;
+}
+
+.ve-effect-param-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.ve-effect-param .ve-slider-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-effect-param .ve-slider,
+.ve-effect-param .ve-speed-select,
+.ve-effect-param .ve-effect-textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.ve-effect-color-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid var(--ve-border);
+  border-radius: 4px;
+  padding: 0;
+  background: none;
+}
+
 .ve-two-col {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -822,10 +869,37 @@ html.light {
 
 .ve-timeline-headers::-webkit-scrollbar { display: none; }
 
+.ve-timeline-header-resizer {
+  width: 8px;
+  flex: 0 0 8px;
+  margin-left: -4px;
+  margin-right: -4px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 15;
+}
+
+.ve-timeline-header-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.ve-timeline-header-resizer:hover::after {
+  background: rgba(250, 204, 21, 0.35);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.22);
+}
+
 .ve-timeline-scroll {
   flex: 1;
   overflow: auto;
   position: relative;
+  min-width: 0;
 }
 
 .ve-timeline-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -1532,6 +1606,13 @@ html.light {
   transition: background 120ms, border-color 120ms, color 120ms;
 }
 
+.ve-keyframe-add-btn--wide {
+  flex-basis: 100%;
+  justify-content: center;
+  border-color: rgba(250,204,21,0.28);
+  background: rgba(250,204,21,0.07);
+}
+
 .ve-keyframe-add-btn:hover {
   border-color: rgba(250,204,21,0.45);
   background: rgba(250,204,21,0.1);
@@ -1638,6 +1719,16 @@ html.light {
 
 .ve-keyframe-control {
   margin-bottom: 7px;
+}
+
+.ve-keyframe-instant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 8px;
+}
+
+.ve-keyframe-instant-grid .ve-keyframe-control {
+  min-width: 0;
 }
 
 .ve-keyframe-control-head {
@@ -2708,5 +2799,116 @@ html.light .ve-new-project-footer {
 
   .ve-new-project-body {
     grid-template-columns: 1fr;
+  }
+}
+.ve-edit-package-modal {
+  width: min(760px, calc(100vw - 48px));
+  max-width: min(760px, calc(100vw - 48px));
+}
+
+.ve-edit-package-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr);
+  gap: 16px;
+  max-height: min(68vh, 620px);
+  overflow: hidden;
+}
+
+.ve-edit-package-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ve-edit-package-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(120px, 0.55fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--ve-border);
+  border-radius: 8px;
+  color: var(--ve-text);
+  background: var(--ve-bg-surface);
+  text-align: left;
+}
+
+.ve-edit-package-row.active {
+  border-color: rgba(250,204,21,0.55);
+  background: rgba(250,204,21,0.08);
+}
+
+.ve-edit-package-row-index {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #111;
+  background: var(--ve-accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ve-edit-package-row-main,
+.ve-edit-package-row-media {
+  min-width: 0;
+}
+
+.ve-edit-package-row-main strong,
+.ve-edit-package-row-main small,
+.ve-edit-package-row-media {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-edit-package-row-main strong {
+  font-size: 12px;
+}
+
+.ve-edit-package-row-main small,
+.ve-edit-package-row-media {
+  color: var(--ve-text-muted);
+  font-size: 10px;
+}
+
+.ve-edit-package-mapper {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ve-border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+}
+
+.ve-edit-package-mapper .dd-select {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.ve-edit-package-readonly {
+  margin-top: 12px;
+  color: var(--ve-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .ve-edit-package-body {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .ve-edit-package-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .ve-edit-package-row-media {
+    grid-column: 2;
   }
 }

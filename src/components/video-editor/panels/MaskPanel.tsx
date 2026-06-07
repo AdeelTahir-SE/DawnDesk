@@ -1,6 +1,7 @@
 import { useVideoEditor } from '../../../engine/video-editor/VideoEditorContext';
 import { Layers, Square, Circle, PenTool, Scissors, RotateCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import type { Mask, MaskType } from '../../../engine/video-editor/types';
 
 function Slider({ label, value, min, max, step, onChange }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void;
@@ -13,6 +14,54 @@ function Slider({ label, value, min, max, step, onChange }: {
       <span className="ve-slider-value">{value.toFixed(step && step < 1 ? 1 : 0)}</span>
     </div>
   );
+}
+
+function defaultMaskPoints(type: MaskType): Mask['points'] {
+  switch (type) {
+    case 'freehand':
+      return [
+        { x: 0.28, y: 0.25 },
+        { x: 0.40, y: 0.18 },
+        { x: 0.58, y: 0.22 },
+        { x: 0.70, y: 0.36 },
+        { x: 0.66, y: 0.58 },
+        { x: 0.51, y: 0.74 },
+        { x: 0.34, y: 0.66 },
+        { x: 0.23, y: 0.47 },
+      ];
+    case 'pen':
+      return [
+        { x: 0.30, y: 0.26 },
+        { x: 0.50, y: 0.16 },
+        { x: 0.70, y: 0.32 },
+        { x: 0.66, y: 0.64 },
+        { x: 0.40, y: 0.72 },
+        { x: 0.24, y: 0.48 },
+      ];
+    default:
+      return [];
+  }
+}
+
+function createMask(type: MaskType): Mask {
+  return {
+    id: `mask-${Date.now()}`,
+    type,
+    points: defaultMaskPoints(type),
+    feather: 10,
+    opacity: 100,
+    expansion: 0,
+    inverted: false,
+    keyframes: [],
+    chromaKey: { enabled: false, keyColor: '#00ff00', tolerance: 40, edgeSoft: 10, spillSuppression: 50 },
+  };
+}
+
+function maskTypeLabel(type: MaskType) {
+  return type
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 export default function MaskPanel() {
@@ -39,13 +88,8 @@ export default function MaskPanel() {
           ].map(m => (
             <button key={m.type} className="ve-effect-card" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
               onClick={() => dispatch({
-                type: 'SET_MASK', payload: {
-                  id: `mask-${Date.now()}`,
-                  type: m.type as 'rectangle' | 'ellipse' | 'freehand' | 'pen',
-                  points: [], feather: 10, opacity: 100, expansion: 0, inverted: false,
-                  keyframes: [],
-                  chromaKey: { enabled: false, keyColor: '#00ff00', tolerance: 40, edgeSoft: 10, spillSuppression: 50 },
-                },
+                type: 'SET_MASK',
+                payload: createMask(m.type as MaskType),
               })}>
               <m.icon size={14} style={{ color: '#FACC15' }} />
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>{m.label}</span>
@@ -59,7 +103,7 @@ export default function MaskPanel() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span className="ve-panel-section-title">Mask — {mask.type}</span>
+        <span className="ve-panel-section-title">Mask — {maskTypeLabel(mask.type)}</span>
         <button className="ve-tool-btn" style={{ width: 24, height: 24 }} title="Reset Mask"
           onClick={() => dispatch({ type: 'SET_MASK', payload: null })}>
           <RotateCw size={12} />

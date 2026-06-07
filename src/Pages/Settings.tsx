@@ -54,7 +54,6 @@ const ENABLE_RELEASE_MEDIA_AI_SETTINGS = false;
 
 const defaultSettings = {
   theme: "dark",
-  autoLaunch: false,
   hardwareAcceleration: true,
   notifications: true,
 };
@@ -106,13 +105,10 @@ export default function Settings() {
     } else {
       setSettings((current) => ({ ...current, theme: savedTheme }));
     }
-    void Promise.all([
-      invoke<boolean>("get_auto_launch"),
-      invoke<boolean>("get_hardware_acceleration"),
-    ])
-      .then(([autoLaunch, hardwareAcceleration]) => {
+    void invoke<boolean>("get_hardware_acceleration")
+      .then((hardwareAcceleration) => {
         setSettings((current) => {
-          const nextSettings = { ...current, autoLaunch, hardwareAcceleration };
+          const nextSettings = { ...current, hardwareAcceleration };
           localStorage.setItem("dawndesk_global_settings", JSON.stringify(nextSettings));
           return nextSettings;
         });
@@ -167,19 +163,6 @@ export default function Settings() {
       const resolvedTheme = applyDawnDeskTheme(value);
       persistSettings({ ...nextSettings, theme: resolvedTheme });
       logSuccess("Settings", `${resolvedTheme === "light" ? "Light" : "Dark"} theme applied`, { source: "settings" });
-      return;
-    }
-
-    if (key === "autoLaunch" && typeof value === "boolean") {
-      try {
-        const autoLaunch = await invoke<boolean>("set_auto_launch", { enabled: value });
-        persistSettings({ ...nextSettings, autoLaunch });
-        logSuccess("Settings", "DawnDesk startup launch disabled", { source: "settings" });
-      } catch (error) {
-        setNativeSettingsNote(String(error));
-        persistSettings({ ...nextSettings, autoLaunch: !value });
-        logError("Settings", `Could not update launch on startup: ${String(error)}`, { source: "settings" });
-      }
       return;
     }
 

@@ -87,10 +87,14 @@ function EffectsAppliedPanel() {
     updateParam: (param: EffectParam, value: EffectParam['value']) => void
   ) => (
     effect.params.length > 0 && (
-      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="ve-effect-param-grid">
         {effect.params.map(param => (
-          <div key={param.key} onClick={(event) => event.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+          <div
+            key={param.key}
+            className={`ve-effect-param ${isWideEffectParam(param) ? 've-effect-param--wide' : ''}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="ve-effect-param-head">
               <span className="ve-slider-label">{param.label}</span>
               {param.type === 'number' && (
                 <span className="ve-slider-value">{Number(param.value).toFixed((param.step ?? 1) < 1 ? 1 : 0)}</span>
@@ -110,7 +114,6 @@ function EffectsAppliedPanel() {
             {param.type === 'select' && (
               <select
                 className="ve-speed-select"
-                style={{ width: '100%' }}
                 value={String(param.value)}
                 onChange={(event) => updateParam(param, event.target.value)}
               >
@@ -133,10 +136,10 @@ function EffectsAppliedPanel() {
             )}
             {param.type === 'color' && (
               <input
+                className="ve-effect-color-input"
                 type="color"
                 value={String(param.value)}
                 onChange={(event) => updateParam(param, event.target.value)}
-                style={{ width: 28, height: 28, border: '1px solid var(--ve-border)', borderRadius: 4, padding: 0, background: 'none' }}
               />
             )}
           </div>
@@ -300,9 +303,8 @@ function formatControlValue(value: number, step = 1) {
   return Number(value).toFixed(step < 0.1 ? 2 : step < 1 ? 1 : 0);
 }
 
-function keyframePropertyLabel(effect: Effect, property: string) {
-  if (property === 'position') return 'Position';
-  return effect.params.find(param => param.key === property)?.label ?? property;
+function isWideEffectParam(param: EffectParam) {
+  return param.type === 'text' || param.key === 'text';
 }
 
 function KeyframeSlider({
@@ -351,6 +353,30 @@ function KeyframeSlider({
   );
 }
 
+type KeyframeInstantGroup = {
+  id: string;
+  time: number;
+  keyframes: Keyframe[];
+};
+
+function keyframeGroupKey(time: number) {
+  return time.toFixed(3);
+}
+
+function groupKeyframesByInstant(keyframes: Keyframe[]): KeyframeInstantGroup[] {
+  const groups = new Map<string, KeyframeInstantGroup>();
+  keyframes.forEach(keyframe => {
+    const id = keyframeGroupKey(keyframe.time);
+    const existing = groups.get(id);
+    if (existing) {
+      existing.keyframes.push(keyframe);
+    } else {
+      groups.set(id, { id, time: keyframe.time, keyframes: [keyframe] });
+    }
+  });
+  return [...groups.values()];
+}
+
 function EffectKeyframes({
   clipId,
   effect,
@@ -366,49 +392,72 @@ function EffectKeyframes({
   const numericParams = effect.params.filter(param => param.type === 'number');
   const instantDuration = Math.max(0.1, effect.duration ?? clipDuration);
   const keyframes = effect.keyframes;
+  const instantGroups = groupKeyframesByInstant(keyframes);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [collapsedKeyframeIds, setCollapsedKeyframeIds] = useState<Set<string>>(() => new Set());
 
-  const addNumericInstant = (param: EffectParam) => {
-    const boundedTime = Math.max(0, Math.min(instantDuration, effectLocalTime));
-    const keyframe: Keyframe = {
+  const createKeyframe = (
+    property: string,
+    value: Keyframe['value'],
+    boundedTime = Math.max(0, Math.min(instantDuration, effectLocalTime))
+  ): Keyframe => ({
       id: `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       time: boundedTime,
-      property: param.key,
-      value: Number(param.value) || 0,
+      property,
+      value,
       interpolation: 'ease-in-out',
       handleOut: { x: 0.42, y: 0 },
       handleIn: { x: 0.58, y: 1 },
-    };
-    dispatch({ type: 'ADD_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframe } });
-  };
+  });
 
-  const addTextPositionInstant = () => {
+  const addAllCurrentInstants = () => {
     const boundedTime = Math.max(0, Math.min(instantDuration, effectLocalTime));
-    const keyframe: Keyframe = {
-      id: `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      time: boundedTime,
-      property: 'position',
-      value: {
-        x: effectParamNumber(effect, 'x', 50),
-        y: effectParamNumber(effect, 'y', 50),
-      },
-      interpolation: 'ease-in-out',
-      handleOut: { x: 0.42, y: 0 },
-      handleIn: { x: 0.58, y: 1 },
-    };
-    dispatch({ type: 'ADD_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframe } });
+    const keyframesToAdd: Keyframe[] = [
+      ...numericParams.map(param => createKeyframe(param.key, Number(param.value) || 0, boundedTime)),
+    ];
+
+    if (effect.type === 'text-overlay') {
+      keyframesToAdd.push(createKeyframe(
+        'position',
+        {
+          x: effectParamNumber(effect, 'x', 50),
+          y: effectParamNumber(effect, 'y', 50),
+        },
+        boundedTime
+      ));
+    }
+
+    keyframesToAdd.forEach(keyframe => {
+      dispatch({ type: 'ADD_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframe } });
+    });
   };
 
-  const updateKeyframe = (keyframeId: string, updates: Partial<Keyframe>) => {
-    dispatch({ type: 'UPDATE_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframeId, updates } });
+  const updateInstant = (group: KeyframeInstantGroup, updates: Partial<Keyframe>) => {
+    group.keyframes.forEach(keyframe => {
+      dispatch({ type: 'UPDATE_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframeId: keyframe.id, updates } });
+    });
   };
 
-  const toggleKeyframeCollapsed = (keyframeId: string) => {
+  const updateInstantValue = (group: KeyframeInstantGroup, property: string, value: Keyframe['value']) => {
+    const existing = group.keyframes.find(keyframe => keyframe.property === property);
+    if (existing) {
+      dispatch({ type: 'UPDATE_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframeId: existing.id, updates: { value } } });
+      return;
+    }
+    dispatch({ type: 'ADD_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframe: createKeyframe(property, value, group.time) } });
+  };
+
+  const removeInstant = (group: KeyframeInstantGroup) => {
+    group.keyframes.forEach(keyframe => {
+      dispatch({ type: 'REMOVE_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframeId: keyframe.id } });
+    });
+  };
+
+  const toggleKeyframeCollapsed = (groupId: string) => {
     setCollapsedKeyframeIds(previous => {
       const next = new Set(previous);
-      if (next.has(keyframeId)) next.delete(keyframeId);
-      else next.add(keyframeId);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
       return next;
     });
   };
@@ -416,10 +465,10 @@ function EffectKeyframes({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = keyframes.findIndex(keyframe => keyframe.id === active.id);
-    const newIndex = keyframes.findIndex(keyframe => keyframe.id === over.id);
+    const oldIndex = instantGroups.findIndex(group => group.id === active.id);
+    const newIndex = instantGroups.findIndex(group => group.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    const nextIds = arrayMove(keyframes.map(keyframe => keyframe.id), oldIndex, newIndex);
+    const nextIds = arrayMove(instantGroups, oldIndex, newIndex).flatMap(group => group.keyframes.map(keyframe => keyframe.id));
     dispatch({ type: 'REORDER_EFFECT_KEYFRAMES', payload: { clipId, effectId: effect.id, keyframeIds: nextIds } });
   };
 
@@ -427,19 +476,13 @@ function EffectKeyframes({
     <div className="ve-effect-keyframes">
       <div className="ve-effect-keyframes-head">
         <div className="ve-panel-section-title">Keyframe Instants</div>
-        <span>{keyframes.length}</span>
+        <span>{instantGroups.length}</span>
       </div>
       <div className="ve-keyframe-add-row">
-        {numericParams.map(param => (
-          <button key={param.key} className="ve-keyframe-add-btn" onClick={() => addNumericInstant(param)}>
+        {(numericParams.length > 0 || effect.type === 'text-overlay') && (
+          <button className="ve-keyframe-add-btn ve-keyframe-add-btn--wide" onClick={addAllCurrentInstants}>
             <Plus size={12} />
-            <span>{param.label}</span>
-          </button>
-        ))}
-        {effect.type === 'text-overlay' && (
-          <button className="ve-keyframe-add-btn" onClick={addTextPositionInstant}>
-            <Plus size={12} />
-            <span>Position</span>
+            <span>Add text instant with all values</span>
           </button>
         )}
       </div>
@@ -447,20 +490,22 @@ function EffectKeyframes({
         <div className="ve-keyframe-empty">Add an instant, move the playhead, then add another to animate the value.</div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={keyframes.map(keyframe => keyframe.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={instantGroups.map(group => group.id)} strategy={verticalListSortingStrategy}>
             <div className="ve-keyframe-list">
-              {keyframes.map((keyframe, index) => (
-                <SortableKeyframeCard
-                  key={keyframe.id}
+              {instantGroups.map((group, index) => (
+                <SortableInstantCard
+                  key={group.id}
                   clipId={clipId}
                   effect={effect}
-                  keyframe={keyframe}
+                  group={group}
                   index={index}
                   color={keyframeColor(index)}
                   instantDuration={instantDuration}
-                  collapsed={collapsedKeyframeIds.has(keyframe.id)}
-                  onToggleCollapsed={() => toggleKeyframeCollapsed(keyframe.id)}
-                  onUpdate={updateKeyframe}
+                  collapsed={collapsedKeyframeIds.has(group.id)}
+                  onToggleCollapsed={() => toggleKeyframeCollapsed(group.id)}
+                  onUpdateInstant={updateInstant}
+                  onUpdateValue={updateInstantValue}
+                  onRemove={removeInstant}
                 />
               ))}
             </div>
@@ -471,35 +516,47 @@ function EffectKeyframes({
   );
 }
 
-function SortableKeyframeCard({
-  clipId,
+function SortableInstantCard({
   effect,
-  keyframe,
+  group,
   index,
   color,
   instantDuration,
   collapsed,
   onToggleCollapsed,
-  onUpdate,
+  onUpdateInstant,
+  onUpdateValue,
+  onRemove,
 }: {
   clipId: string;
   effect: Effect;
-  keyframe: Keyframe;
+  group: KeyframeInstantGroup;
   index: number;
   color: string;
   instantDuration: number;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onUpdate: (keyframeId: string, updates: Partial<Keyframe>) => void;
+  onUpdateInstant: (group: KeyframeInstantGroup, updates: Partial<Keyframe>) => void;
+  onUpdateValue: (group: KeyframeInstantGroup, property: string, value: Keyframe['value']) => void;
+  onRemove: (group: KeyframeInstantGroup) => void;
 }) {
-  const { dispatch } = useVideoEditor();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: keyframe.id });
-  const isPoint = typeof keyframe.value === 'object' && keyframe.value !== null && 'x' in keyframe.value && 'y' in keyframe.value;
-  const point = isPoint ? keyframe.value as { x: number; y: number } : null;
-  const param = effect.params.find(item => item.key === keyframe.property);
-  const valueStep = param?.step ?? 0.1;
-  const valueMin = param?.min ?? 0;
-  const valueMax = param?.max ?? Math.max(100, Number(keyframe.value) || 100);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
+  const primaryKeyframe = group.keyframes[0];
+  const positionKeyframe = group.keyframes.find(keyframe => keyframe.property === 'position');
+  const positionValue = (
+    positionKeyframe &&
+    typeof positionKeyframe.value === 'object' &&
+    positionKeyframe.value !== null &&
+    'x' in positionKeyframe.value &&
+    'y' in positionKeyframe.value
+  )
+    ? positionKeyframe.value as { x: number; y: number }
+    : { x: effectParamNumber(effect, 'x', 50), y: effectParamNumber(effect, 'y', 50) };
+
+  const valueForParam = (param: EffectParam) => {
+    const keyframe = group.keyframes.find(item => item.property === param.key);
+    return Number(keyframe?.value ?? param.value ?? 0) || 0;
+  };
 
   return (
     <div
@@ -516,13 +573,13 @@ function SortableKeyframeCard({
             {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
           </button>
           <i className="ve-keyframe-color-dot" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}66` }} />
-          {index + 1}. {keyframePropertyLabel(effect, keyframe.property)}
+          {effect.type === 'text-overlay' ? 'Text Instant' : 'Instant'} {index + 1}
         </span>
         <button
           className="ve-tool-btn"
           style={{ width: 22, height: 22 }}
-          onClick={() => dispatch({ type: 'REMOVE_EFFECT_KEYFRAME', payload: { clipId, effectId: effect.id, keyframeId: keyframe.id } })}
-          title="Remove keyframe"
+          onClick={() => onRemove(group)}
+          title="Remove instant"
         >
           <X size={13} />
         </button>
@@ -534,68 +591,72 @@ function SortableKeyframeCard({
             min={0}
             max={instantDuration}
             step={0.05}
-            value={Number(keyframe.time)}
-            onChange={value => onUpdate(keyframe.id, { time: value })}
+            value={Number(group.time)}
+            onChange={value => onUpdateInstant(group, { time: value })}
           />
-          {isPoint && point ? (
-            <>
+          <div className="ve-keyframe-instant-grid">
+            {effect.type === 'text-overlay' && (
+              <>
               <KeyframeSlider
                 label="X"
                 min={0}
                 max={100}
                 step={1}
-                value={point.x}
-                onChange={value => onUpdate(keyframe.id, { value: { ...point, x: value } })}
+                value={positionValue.x}
+                onChange={value => onUpdateValue(group, 'position', { ...positionValue, x: value })}
               />
               <KeyframeSlider
                 label="Y"
                 min={0}
                 max={100}
                 step={1}
-                value={point.y}
-                onChange={value => onUpdate(keyframe.id, { value: { ...point, y: value } })}
+                value={positionValue.y}
+                onChange={value => onUpdateValue(group, 'position', { ...positionValue, y: value })}
               />
-            </>
-          ) : (
-            <KeyframeSlider
-              label="Value"
-              min={valueMin}
-              max={valueMax}
-              step={valueStep}
-              value={Number(keyframe.value)}
-              onChange={value => onUpdate(keyframe.id, { value })}
-            />
-          )}
+              </>
+            )}
+            {effect.params.filter(param => param.type === 'number').map(param => (
+              <KeyframeSlider
+                key={param.key}
+                label={param.label}
+                min={param.min ?? 0}
+                max={param.max ?? Math.max(100, valueForParam(param))}
+                step={param.step ?? 1}
+                value={valueForParam(param)}
+                onChange={value => onUpdateValue(group, param.key, value)}
+              />
+            ))}
+          </div>
           <div className="ve-keyframe-select-row">
             <span className="ve-slider-label">Function</span>
             <select
               className="ve-speed-select"
-              value={keyframe.interpolation}
-              onChange={event => onUpdate(keyframe.id, { interpolation: event.target.value as KeyframeInterpolation })}
+              value={primaryKeyframe.interpolation}
+              onChange={event => onUpdateInstant(group, { interpolation: event.target.value as KeyframeInterpolation })}
             >
               {['linear', 'ease-in', 'ease-out', 'ease-in-out', 'bezier', 'hold'].map(option => (
                 <option key={option} value={option}>{option}</option>
               ))}
             </select>
           </div>
-          <KeyframeCurveGraph keyframe={keyframe} color={color} onUpdate={updates => onUpdate(keyframe.id, updates)} />
-          {keyframe.interpolation === 'bezier' && (
+          <KeyframeCurveGraph keyframe={primaryKeyframe} color={color} onUpdate={updates => onUpdateInstant(group, updates)} />
+          {primaryKeyframe.interpolation === 'bezier' && (
             <>
               <KeyframeSlider
                 label="Bezier X"
                 min={0}
                 max={1}
                 step={0.01}
-                value={keyframe.handleOut?.x ?? 0.42}
-                onChange={value => onUpdate(keyframe.id, { handleOut: { x: value, y: keyframe.handleOut?.y ?? 0 } })}
+                value={primaryKeyframe.handleOut?.x ?? 0.42}
+                onChange={value => onUpdateInstant(group, { handleOut: { x: value, y: primaryKeyframe.handleOut?.y ?? 0 } })}
               />
               <KeyframeSlider
                 label="Bezier Y"
                 min={0}
                 max={1}
                 step={0.01}
-                value={keyframe.handleOut?.y ?? 0}
-                onChange={value => onUpdate(keyframe.id, { handleOut: { x: keyframe.handleOut?.x ?? 0.42, y: value } })}
+                value={primaryKeyframe.handleOut?.y ?? 0}
+                onChange={value => onUpdateInstant(group, { handleOut: { x: primaryKeyframe.handleOut?.x ?? 0.42, y: value } })}
               />
             </>
           )}

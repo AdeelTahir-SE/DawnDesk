@@ -577,9 +577,7 @@ flowchart LR
   page --> browserPrefs["localStorage dawndesk_theme + dawndesk_global_settings"]
   page --> supabaseAuth["Supabase auth session/signOut"]
   page --> invoke["@tauri-apps/api/core invoke"]
-  invoke --> nativeAutoLaunch["get/set_auto_launch"]
   invoke --> nativeGpu["get/set_hardware_acceleration"]
-  nativeAutoLaunch --> startupScript["Windows Startup DawnDesk.cmd"]
   nativeGpu --> settingsJson["native-settings.json"]
 ```
 
@@ -597,7 +595,6 @@ flowchart TB
   account --> supabaseAuth["Supabase auth"]
   nativeSettings --> appConfig["App config directory"]
   appConfig --> nativeJson["native-settings.json"]
-  appConfig --> startup["Windows Startup script"]
 ```
 
 ## Auth and Public Entry Screens

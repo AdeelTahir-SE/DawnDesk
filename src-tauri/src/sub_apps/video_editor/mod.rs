@@ -598,6 +598,16 @@ fn ffmpeg_color(value: &str) -> String {
     }
 }
 
+fn last_non_empty_line(value: &str) -> String {
+    value
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("FFmpeg exited without a detailed error.")
+        .to_string()
+}
+
 fn effect_filter_chain(effects: &[serde_json::Value]) -> String {
     let mut filters: Vec<String> = Vec::new();
 
@@ -1046,6 +1056,198 @@ fn subtitle_filters(project: &serde_json::Value, duration: f64) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn active_text_overlay_filter(settings: &serde_json::Value, duration: f64) -> Option<String> {
+    let text = settings.get("activeTextOverlay")?;
+    let content = text.get("text").and_then(|value| value.as_str()).unwrap_or("").trim();
+    if content.is_empty() {
+        return None;
+    }
+
+    let font_size = value_f64(text, "fontSize", 48.0).clamp(8.0, 220.0);
+    let font = escape_drawtext_text(text.get("fontFamily").and_then(|value| value.as_str()).unwrap_or("Sora"));
+    let color = ffmpeg_color(text.get("color").and_then(|value| value.as_str()).unwrap_or("#ffffff"));
+    let opacity = value_f64(text, "opacity", 1.0).clamp(0.0, 1.0);
+    let x = value_f64(text, "x", 0.5).clamp(0.0, 1.0);
+    let y = value_f64(text, "y", 0.5).clamp(0.0, 1.0);
+    let align = text.get("alignment").and_then(|value| value.as_str()).unwrap_or("center");
+    let x_anchor = match align {
+        "left" => format!("w*{:.6}", x),
+        "right" => format!("w*{:.6}-text_w", x),
+        _ => format!("w*{:.6}-text_w/2", x),
+    };
+    let y_anchor = format!("h*{:.6}-text_h/2", y);
+    let animation = text.get("animation").and_then(|value| value.as_str()).unwrap_or("none");
+    let anim_duration = value_f64(text, "animationDuration", 0.5).clamp(0.05, duration.max(0.05));
+    let progress = format!("min(1,t/{:.6})", anim_duration);
+    let eased = format!("(1-pow(1-{},2))", progress);
+    let hidden = format!("(1-{})", eased);
+    let alpha = if animation == "fade" || animation == "blur" {
+        format!("{:.4}*{}", opacity, eased)
+    } else {
+        format!("{:.4}", opacity)
+    };
+    let x_expr = match animation {
+        "slide-left" => format!("{}+{}*48", x_anchor, hidden),
+        "slide-right" => format!("{}-{}*48", x_anchor, hidden),
+        _ => x_anchor,
+    };
+    let y_expr = match animation {
+        "slide-up" => format!("{}+{}*36", y_anchor, hidden),
+        "slide-down" => format!("{}-{}*36", y_anchor, hidden),
+        _ => y_anchor,
+    };
+    let animated_size = match animation {
+        "scale" => format!("{:.3}*(0.82+{}*0.18)", font_size, eased),
+        "bounce" => format!("{:.3}*(1+sin({}*PI)*0.12)", font_size, eased),
+        _ => format!("{:.0}", font_size),
+    };
+
+    let background = text.get("backgroundColor").and_then(|value| value.as_str()).unwrap_or("transparent");
+    let background_opacity = value_f64(text, "backgroundOpacity", 0.0).clamp(0.0, 1.0);
+    let box_args = if background != "transparent" && background_opacity > 0.0 {
+        format!(
+            ":box=1:boxcolor={}@{:.3}:boxborderw=20",
+            ffmpeg_color(background),
+            background_opacity
+        )
+    } else {
+        String::new()
+    };
+    let outline = text.get("outline").unwrap_or(&serde_json::Value::Null);
+    let border_args = if outline.get("enabled").and_then(|value| value.as_bool()).unwrap_or(false) {
+        format!(
+            ":borderw={:.0}:bordercolor={}",
+            value_f64(outline, "width", 2.0).clamp(0.0, 20.0),
+            ffmpeg_color(outline.get("color").and_then(|value| value.as_str()).unwrap_or("#000000"))
+        )
+    } else {
+        String::new()
+    };
+
+    Some(format!(
+        "drawtext=text='{}':font='{}':fontsize={}:fontcolor={}@{}:x='{}':y='{}'{}{}:enable='between(t,0,{:.6})'",
+        escape_drawtext_text(content),
+        font,
+        animated_size,
+        color,
+        alpha,
+        x_expr,
+        y_expr,
+        box_args,
+        border_args,
+        duration
+    ))
+}
+
+fn transition_ease(progress: f64, easing: &str) -> f64 {
+    let t = progress.clamp(0.0, 1.0);
+    match easing {
+        "ease-in" => t * t,
+        "ease-out" => 1.0 - (1.0 - t) * (1.0 - t),
+        "ease-in-out" => {
+            if t < 0.5 {
+                2.0 * t * t
+            } else {
+                1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+            }
+        }
+        _ => t,
+    }
+}
+
+fn transition_visible_progress(transition: &serde_json::Value, absolute_time: f64, clip_start: f64, clip_duration: f64) -> Option<f64> {
+    let transition_duration = value_f64(transition, "duration", 0.0).clamp(0.05, clip_duration.max(0.05));
+    let edge = transition.get("edge").and_then(|value| value.as_str()).unwrap_or("start");
+    let raw = if edge == "start" {
+        if absolute_time < clip_start || absolute_time > clip_start + transition_duration {
+            return None;
+        }
+        (absolute_time - clip_start) / transition_duration
+    } else {
+        let transition_start = clip_start + clip_duration - transition_duration;
+        if absolute_time < transition_start || absolute_time > clip_start + clip_duration {
+            return None;
+        }
+        1.0 - (absolute_time - transition_start) / transition_duration
+    };
+    let easing = transition.get("easing").and_then(|value| value.as_str()).unwrap_or("linear");
+    Some(transition_ease(raw, easing))
+}
+
+fn push_transition_boundaries(boundaries: &mut Vec<f64>, transition: Option<&serde_json::Value>, clip_start: f64, clip_end: f64) {
+    let Some(transition) = transition else {
+        return;
+    };
+    let clip_duration = (clip_end - clip_start).max(0.0);
+    if clip_duration <= 0.0 {
+        return;
+    }
+    let duration = value_f64(transition, "duration", 0.0).clamp(0.05, clip_duration);
+    let edge = transition.get("edge").and_then(|value| value.as_str()).unwrap_or("start");
+    let start = if edge == "start" { clip_start } else { clip_end - duration };
+    let end = if edge == "start" { clip_start + duration } else { clip_end };
+    boundaries.push(start.clamp(clip_start, clip_end));
+    boundaries.push(end.clamp(clip_start, clip_end));
+    let mut sample_time = start;
+    while sample_time < end {
+        boundaries.push(sample_time.clamp(clip_start, clip_end));
+        sample_time += 0.1;
+    }
+}
+
+fn apply_transition_values(
+    transition: Option<&serde_json::Value>,
+    absolute_time: f64,
+    clip_start: f64,
+    clip_duration: f64,
+    opacity: &mut f64,
+    position_x: &mut f64,
+    position_y: &mut f64,
+    scale: &mut f64,
+) {
+    let Some(transition) = transition else {
+        return;
+    };
+    let Some(visible) = transition_visible_progress(transition, absolute_time, clip_start, clip_duration) else {
+        return;
+    };
+    let hidden = 1.0 - visible;
+    let transition_type = transition.get("type").and_then(|value| value.as_str()).unwrap_or("");
+    match transition_type {
+        "cross-dissolve" | "dip-to-black" | "dip-to-white" | "light-leak" | "film-burn" | "morph-cut" => {
+            *opacity *= visible;
+        }
+        "wipe-left" | "slide-left" | "push-left" => {
+            *opacity *= visible;
+            *position_x -= hidden * 2.0;
+        }
+        "wipe-right" | "slide-right" | "push-right" => {
+            *opacity *= visible;
+            *position_x += hidden * 2.0;
+        }
+        "wipe-up" | "slide-up" => {
+            *opacity *= visible;
+            *position_y -= hidden * 2.0;
+        }
+        "wipe-down" | "slide-down" => {
+            *opacity *= visible;
+            *position_y += hidden * 2.0;
+        }
+        "zoom-in" => {
+            *opacity *= visible;
+            *scale *= 0.82 + visible * 0.18;
+        }
+        "zoom-out" => {
+            *opacity *= visible;
+            *scale *= 1.18 - visible * 0.18;
+        }
+        "spin" | "glitch" => {
+            *opacity *= visible;
+        }
+        _ => {}
+    }
+}
+
 fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
     let mut clips = Vec::new();
     let mut timeline_effects: Vec<(f64, f64, serde_json::Value)> = Vec::new();
@@ -1124,6 +1326,8 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                     let clip_start = value_f64(clip, "startTime", 0.0).max(0.0);
                     let clip_end = clip_start + duration;
                     let mut boundaries = vec![clip_start, clip_end];
+                    let transition = clip.get("transition").filter(|value| !value.is_null());
+                    push_transition_boundaries(&mut boundaries, transition, clip_start, clip_end);
                     for (effect_start, effect_end, _) in &timeline_effects {
                         if *effect_start < clip_end && *effect_end > clip_start {
                             boundaries.push(effect_start.clamp(clip_start, clip_end));
@@ -1199,6 +1403,7 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                         let mut effective_scale = value_f64(clip, "scale", 1.0).clamp(0.1, 4.0);
                         let mut effective_position_x = value_f64(clip, "positionX", 0.0);
                         let mut effective_position_y = value_f64(clip, "positionY", 0.0);
+                        let mut effective_opacity = value_f64(clip, "opacity", 1.0).clamp(0.0, 1.0);
                         let crop = clip.get("crop");
                         let crop_left = crop.and_then(|value| value.get("left")).and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 0.9);
                         let crop_right = crop.and_then(|value| value.get("right")).and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 0.9);
@@ -1224,6 +1429,16 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                                 effective_position_y += 2.0 * (0.5 - center_y) * (zoom_scale - 1.0);
                             }
                         }
+                        apply_transition_values(
+                            transition,
+                            segment_start,
+                            clip_start,
+                            duration,
+                            &mut effective_opacity,
+                            &mut effective_position_x,
+                            &mut effective_position_y,
+                            &mut effective_scale,
+                        );
 
                         clips.push(RenderClip {
                             path: path.to_string(),
@@ -1232,7 +1447,7 @@ fn collect_render_clips(project: &serde_json::Value) -> Vec<RenderClip> {
                             start_time: segment_start,
                             duration: segment_duration,
                             in_point: base_in_point + (segment_start - clip_start),
-                            opacity: value_f64(clip, "opacity", 1.0).clamp(0.0, 1.0),
+                            opacity: effective_opacity.clamp(0.0, 1.0),
                             volume: if muted { 0.0 } else { (value_f64(clip, "volume", 1.0) * track_volume).clamp(0.0, 4.0) },
                             position_x: effective_position_x,
                             position_y: effective_position_y,
@@ -1304,6 +1519,15 @@ pub async fn ve_export_project(
         .and_then(|p| p.as_str())
         .unwrap_or("export.mp4")
         .to_string();
+    if out_path.trim().is_empty() {
+        return Err("Choose an export location first.".into());
+    }
+    if let Some(parent) = std::path::Path::new(&out_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Could not create export folder: {}", e))?;
+        }
+    }
     let width = settings
         .get("width")
         .and_then(|v| v.as_u64())
@@ -1547,6 +1771,15 @@ pub async fn ve_export_project(
             }
         }
 
+        if let Some(text_filter) = active_text_overlay_filter(&settings, duration) {
+            let output_label = "active_text0".to_string();
+            filter_parts.push(format!(
+                "[{}]{}[{}]",
+                previous_label, text_filter, output_label
+            ));
+            previous_label = output_label;
+        }
+
         let global_video_filters = global_video_filter_chain(&settings, width, height);
         if !global_video_filters.is_empty() {
             let output_label = "graded0".to_string();
@@ -1588,6 +1821,7 @@ pub async fn ve_export_project(
         args.push("+faststart".to_string());
 
         let mut success = false;
+        let mut export_error = String::new();
 
         for codec in codec_candidates(&v_codec) {
             let mut current_args = args.clone();
@@ -1621,11 +1855,27 @@ pub async fn ve_export_project(
 
             use tauri_plugin_shell::process::CommandEvent;
 
+            let mut codec_error = String::new();
             if let Ok((mut rx, _child)) = command.spawn() {
                 while let Some(event) = rx.recv().await {
                     match event {
                         CommandEvent::Stderr(line_bytes) => {
                             let line_str = String::from_utf8_lossy(&line_bytes);
+                            let trimmed = line_str.trim();
+                            if !trimmed.is_empty() {
+                                codec_error.push_str(trimmed);
+                                codec_error.push('\n');
+                                if codec_error.len() > 4000 {
+                                    codec_error = codec_error
+                                        .chars()
+                                        .rev()
+                                        .take(3000)
+                                        .collect::<String>()
+                                        .chars()
+                                        .rev()
+                                        .collect();
+                                }
+                            }
                             // Parse "time=00:00:05.12"
                             if let Some(time_idx) = line_str.find("time=") {
                                 let time_str = &line_str[time_idx + 5..];
@@ -1653,6 +1903,10 @@ pub async fn ve_export_project(
                         CommandEvent::Terminated(payload) => {
                             if payload.code.unwrap_or(-1) == 0 {
                                 success = true;
+                            } else if !codec_error.trim().is_empty() {
+                                export_error = format!("{} failed: {}", codec, last_non_empty_line(&codec_error));
+                            } else {
+                                export_error = format!("{} failed with exit code {}.", codec, payload.code.unwrap_or(-1));
                             }
                             break;
                         }
@@ -1663,6 +1917,8 @@ pub async fn ve_export_project(
                 if success {
                     break;
                 }
+            } else {
+                export_error = format!("Could not start FFmpeg with {}.", codec);
             }
         }
 
@@ -1670,7 +1926,12 @@ pub async fn ve_export_project(
             let _ = app_clone.emit("export-progress", 100);
             let _ = app_clone.emit("export-complete", out_path.clone());
         } else {
-            let _ = app_clone.emit("export-error", "All codec fallbacks failed.");
+            let message = if export_error.trim().is_empty() {
+                "All codec fallbacks failed.".to_string()
+            } else {
+                export_error
+            };
+            let _ = app_clone.emit("export-error", message);
         }
     });
 

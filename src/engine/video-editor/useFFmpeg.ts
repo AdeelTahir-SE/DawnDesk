@@ -1,6 +1,7 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { MediaItem, MediaProbeResult, ExportSettings } from './types';
 import { useVideoEditor } from './VideoEditorContext';
 import { useRef } from 'react';
@@ -15,6 +16,20 @@ function exportExtension(settings: ExportSettings) {
 
 function withExportExtension(path: string, extension: string) {
   return /\.[a-z0-9]{2,5}$/i.test(path) ? path : `${path}.${extension}`;
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function safeFileName(value: string) {
+  return value.trim().replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-').replace(/\.+$/g, '').slice(0, 80) || 'dawndesk-edit-package';
+}
+
+function normalizePackageItems(parsed: unknown): any[] {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).items)) return (parsed as any).items;
+  throw new Error('This file is not a DawnDesk video edit package.');
 }
 
 export function useFFmpeg() {
@@ -168,6 +183,7 @@ export function useFFmpeg() {
         audioEffects: state.audioEffects,
         colorGrading: state.colorGrading,
         activeMask: state.activeMask,
+        activeTextOverlay: state.activeTextOverlay,
       };
       dispatch({
         type: 'ADD_RENDER_JOB',
@@ -204,7 +220,7 @@ export function useFFmpeg() {
         unlistenProgress();
         unlistenComplete();
         unlistenRef.current = null;
-        dispatch({ type: 'SET_EXPORT_SETTINGS', payload: { ...state.exportSettings, outputPath: undefined } }); // reset
+        dispatch({ type: 'SET_EXPORT_SETTINGS', payload: { ...state.exportSettings, outputPath: '' } }); // reset
         logSuccess('Export complete', 'Your video was exported successfully.');
       });
 
@@ -229,12 +245,13 @@ export function useFFmpeg() {
 
       await invoke('ve_export_project', { settings: exportRuntimeSettings, project: state.project });
     } catch (e) {
-      logError('Export failed', 'DawnDesk could not export this project.');
-      dispatch({ type: 'EXPORT_ERROR', payload: String(e) });
+      const message = String(e || 'DawnDesk could not export this project.');
+      logError('Export failed', message);
+      dispatch({ type: 'EXPORT_ERROR', payload: message });
       const jobId = state.renderQueue.length > 0 ? state.renderQueue[state.renderQueue.length - 1].id : `render-${Date.now()}`;
       dispatch({
         type: 'UPDATE_RENDER_JOB',
-        payload: { jobId, updates: { status: 'error', error: String(e), endTime: Date.now() } },
+        payload: { jobId, updates: { status: 'error', error: message, endTime: Date.now() } },
       });
       if (unlistenRef.current) {
         unlistenRef.current();
@@ -309,6 +326,116 @@ export function useFFmpeg() {
     }
   };
 
+  const exportEditPackage = async () => {
+    try {
+      const project = state.project;
+      if (!project) {
+        logError('Package export unavailable', 'Open or create a video project first.');
+        return;
+      }
+
+      const mediaById = new Map(project.mediaPool.map(media => [media.id, media]));
+      const timelineEffects = project.tracks.flatMap(track => (track.effects ?? []).map(effect => ({ ...effect, trackId: track.id })));
+      const packageItems = project.tracks.flatMap(track => track.clips.map(clip => {
+        const media = mediaById.get(clip.mediaId);
+        const keyframes = clip.effects.flatMap(effect => effect.keyframes.map(keyframe => ({
+          ...cloneJson(keyframe),
+          effectId: effect.id,
+          effectType: effect.type,
+        })));
+        return {
+          schema: 'dawndesk.video-edit-package',
+          version: 1,
+          media: media?.path ?? clip.path ?? '',
+          mediaId: media?.id ?? clip.mediaId,
+          mediaName: media?.name ?? clip.mediaName,
+          type: media?.type ?? clip.mediaType,
+          mediaItem: media ? cloneJson(media) : null,
+          track: cloneJson({ ...track, clips: [], effects: track.effects ?? [] }),
+          clip: cloneJson(clip),
+          transform: {
+            startTime: clip.startTime,
+            duration: clip.duration,
+            inPoint: clip.inPoint,
+            outPoint: clip.outPoint,
+            speed: clip.speed,
+            reversed: clip.reversed,
+            volume: clip.volume,
+            opacity: clip.opacity,
+            positionX: clip.positionX,
+            positionY: clip.positionY,
+            scale: clip.scale,
+            rotation: clip.rotation,
+            crop: cloneJson(clip.crop ?? { left: 0, right: 0, top: 0, bottom: 0 }),
+            blendMode: clip.blendMode ?? 'normal',
+          },
+          effects: cloneJson(clip.effects),
+          transitions: clip.transition ? [cloneJson(clip.transition)] : [],
+          keyframes,
+          masks: state.activeMask ? [cloneJson(state.activeMask)] : [],
+          text: [
+            ...clip.effects.filter(effect => effect.type === 'text-overlay').map(effect => cloneJson(effect)),
+            ...(state.activeTextOverlay ? [cloneJson(state.activeTextOverlay)] : []),
+          ],
+          timelineEffects: cloneJson(timelineEffects),
+          subtitles: cloneJson(project.subtitles ?? []),
+          globals: {
+            projectSettings: cloneJson(project.settings),
+            colorGrading: cloneJson(state.colorGrading),
+            audioEffects: cloneJson(state.audioEffects),
+            masterVolume: state.masterVolume,
+            activeMask: cloneJson(state.activeMask),
+            activeTextOverlay: cloneJson(state.activeTextOverlay),
+            markers: cloneJson(project.markers),
+            notes: project.notes,
+          },
+        };
+      }));
+
+      const path = await save({
+        title: 'Export DawnDesk edit package JSON',
+        defaultPath: `${safeFileName(project.name)}-edit-package.json`,
+        filters: [{ name: 'DawnDesk Edit Package', extensions: ['json'] }],
+        canCreateDirectories: true,
+      });
+      if (!path) return;
+
+      await writeTextFile(path, JSON.stringify(packageItems, null, 2));
+      logSuccess('Edit package exported', 'Effects, transitions, keyframes, text, masks, and timeline data were saved to JSON.');
+    } catch (e) {
+      logError('Package export failed', String(e || 'DawnDesk could not export the edit package.'));
+    }
+  };
+
+  const importEditPackage = async () => {
+    try {
+      const currentProject = state.project;
+      if (!currentProject) {
+        logError('Package import unavailable', 'Open or create a video project first.');
+        return;
+      }
+
+      const path = await open({
+        multiple: false,
+        directory: false,
+        title: 'Import DawnDesk edit package JSON',
+        filters: [{ name: 'DawnDesk Edit Package', extensions: ['json'] }],
+      });
+      if (!path || Array.isArray(path)) return;
+
+      const items = normalizePackageItems(JSON.parse(await readTextFile(path)));
+      if (items.length === 0) {
+        logError('Package import failed', 'The selected edit package is empty.');
+        return;
+      }
+
+      dispatch({ type: 'SET_PENDING_EDIT_PACKAGE', payload: { sourcePath: path, items } });
+      logInfo('Edit package loaded', 'Choose Media Bin assets for the imported package rows.');
+    } catch (e) {
+      logError('Package import failed', String(e || 'DawnDesk could not import the edit package.'));
+    }
+  };
+
   return {
     checkFFmpeg,
     importMedia,
@@ -319,5 +446,7 @@ export function useFFmpeg() {
     saveProject,
     saveProjectAs,
     loadProject,
+    exportEditPackage,
+    importEditPackage,
   };
 }

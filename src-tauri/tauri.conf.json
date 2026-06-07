@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "dawndesk",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "identifier": "dawndesk",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "dawndesk",
+        "theme": "Dark",
         "width": 800,
         "height": 600
       }
@@ -55,6 +56,14 @@
     "externalBin": [
       "binaries/ffmpeg",
       "binaries/ffprobe"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    }
   }
 }

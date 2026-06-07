@@ -620,6 +620,7 @@ export interface VideoEditorState {
   clipboard: Clip[];
   showProjectSettings: boolean;
   showNewProjectModal: boolean;
+  pendingEditPackage: { sourcePath: string; items: any[] } | null;
   _historyLabel?: string;
   _historyGroup?: string;
 }
@@ -640,6 +641,14 @@ export type VideoEditorAction =
   // Project
   | { type: 'NEW_PROJECT'; payload: { project: Project; projectPath?: string | null } }
   | { type: 'LOAD_PROJECT'; payload: Project }
+  | { type: 'APPLY_EDIT_PACKAGE'; payload: {
+      project: Project;
+      colorGrading?: ColorGradingState;
+      activeTextOverlay?: TextOverlay | null;
+      masterVolume?: number;
+      audioEffects?: AudioEffects;
+      activeMask?: Mask | null;
+    } }
   | { type: 'CLOSE_PROJECT' }
   | { type: 'SET_PROJECT_NAME'; payload: string }
   | { type: 'SET_PROJECT_PATH'; payload: string | null }
@@ -814,5 +823,6 @@ export type VideoEditorAction =
   | { type: 'SET_IMPORTING'; payload: boolean }
   | { type: 'TOGGLE_PROJECT_SETTINGS' }
   | { type: 'TOGGLE_NEW_PROJECT_MODAL' }
+  | { type: 'SET_PENDING_EDIT_PACKAGE'; payload: VideoEditorState['pendingEditPackage'] }
   | { type: 'SET_CONTEXT_MENU'; payload: VideoEditorState['contextMenu'] }
   | { type: 'CLOSE_CONTEXT_MENU' };

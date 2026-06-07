@@ -6,8 +6,6 @@ use serde_json::{json, Value};
 use std::{env, fs, path::PathBuf};
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
-
-const STARTUP_SCRIPT_NAME: &str = "DawnDesk.cmd";
 const NATIVE_SETTINGS_FILE: &str = "native-settings.json";
 const AI_SETTINGS_FILE: &str = "ai-settings.json";
 const OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
@@ -385,38 +383,6 @@ fn write_native_settings(settings: &NativeSettings) -> Result<(), String> {
     }
     let contents = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
     fs::write(path, contents).map_err(|error| error.to_string())
-}
-
-fn startup_script_path() -> Result<PathBuf, String> {
-    let appdata = env::var_os("APPDATA")
-        .ok_or_else(|| "Windows APPDATA directory is not available.".to_string())?;
-    Ok(PathBuf::from(appdata)
-        .join("Microsoft")
-        .join("Windows")
-        .join("Start Menu")
-        .join("Programs")
-        .join("Startup")
-        .join(STARTUP_SCRIPT_NAME))
-}
-
-#[tauri::command]
-fn get_auto_launch() -> Result<bool, String> {
-    remove_startup_script()?;
-    Ok(false)
-}
-
-#[tauri::command]
-fn set_auto_launch(_enabled: bool) -> Result<bool, String> {
-    remove_startup_script()?;
-    Ok(false)
-}
-
-fn remove_startup_script() -> Result<(), String> {
-    let path = startup_script_path()?;
-    if path.exists() {
-        fs::remove_file(&path).map_err(|error| error.to_string())?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -974,8 +940,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             get_auth_deep_link_arg,
-            get_auto_launch,
-            set_auto_launch,
             get_hardware_acceleration,
             set_hardware_acceleration,
             get_ai_settings,

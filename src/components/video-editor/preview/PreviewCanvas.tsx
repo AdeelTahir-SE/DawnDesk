@@ -247,7 +247,22 @@ function drawMaskPath(ctx: CanvasRenderingContext2D, mask: Mask, width: number, 
   ctx.beginPath();
   if (mask.points.length >= 2) {
     ctx.moveTo(mask.points[0].x * width, mask.points[0].y * height);
-    for (const point of mask.points.slice(1)) ctx.lineTo(point.x * width, point.y * height);
+    if (mask.type === 'pen' && mask.points.length >= 3) {
+      for (let index = 1; index < mask.points.length - 1; index++) {
+        const current = mask.points[index];
+        const next = mask.points[index + 1];
+        ctx.quadraticCurveTo(
+          current.x * width,
+          current.y * height,
+          ((current.x + next.x) / 2) * width,
+          ((current.y + next.y) / 2) * height
+        );
+      }
+      const last = mask.points[mask.points.length - 1];
+      ctx.lineTo(last.x * width, last.y * height);
+    } else {
+      for (const point of mask.points.slice(1)) ctx.lineTo(point.x * width, point.y * height);
+    }
     ctx.closePath();
   } else if (mask.type === 'ellipse') {
     ctx.ellipse(width / 2, height / 2, rectW / 2, rectH / 2, 0, 0, Math.PI * 2);
@@ -773,6 +788,7 @@ export default function PreviewCanvas() {
 
   // Cache elements to avoid reloading them on every frame
   const mediaCache = useRef<Record<string, HTMLVideoElement | HTMLImageElement | HTMLAudioElement>>({});
+  const videoFrameCache = useRef<Record<string, HTMLCanvasElement>>({});
   const effectPlanCache = useRef(new Map<string, { signature: string; plan: PreviewEffectPlan }>());
   const grainCache = useRef<{
     canvas: HTMLCanvasElement;
@@ -832,6 +848,7 @@ export default function PreviewCanvas() {
           el.load();
         }
         delete mediaCache.current[key];
+        delete videoFrameCache.current[key];
       }
     }
     for (const key of effectPlanCache.current.keys()) {
@@ -892,6 +909,29 @@ export default function PreviewCanvas() {
       }
       grainCache.current = { canvas: grain, width, height, amount, size: normalizedSize, generatedAt: now };
       return grain;
+    };
+
+    const requestPreviewRender = () => {
+      if (!isActive || !renderFrameRef.current || frameRef.current != null) return;
+      frameRef.current = requestAnimationFrame(renderFrameRef.current);
+    };
+
+    const cacheVideoFrame = (clipId: string, video: HTMLVideoElement) => {
+      const sourceW = video.videoWidth || 0;
+      const sourceH = video.videoHeight || 0;
+      if (sourceW <= 0 || sourceH <= 0 || video.readyState < 2) return videoFrameCache.current[clipId] ?? null;
+      const frame = videoFrameCache.current[clipId] ?? document.createElement('canvas');
+      if (frame.width !== sourceW) frame.width = sourceW;
+      if (frame.height !== sourceH) frame.height = sourceH;
+      const frameCtx = frame.getContext('2d', { alpha: false });
+      if (!frameCtx) return videoFrameCache.current[clipId] ?? null;
+      try {
+        frameCtx.drawImage(video, 0, 0, sourceW, sourceH);
+        videoFrameCache.current[clipId] = frame;
+        return frame;
+      } catch {
+        return videoFrameCache.current[clipId] ?? null;
+      }
     };
 
     const getRenderTime = (now: number) => {
@@ -1039,8 +1079,11 @@ export default function PreviewCanvas() {
               continue;
             }
             let img = mediaCache.current[clip.id] as HTMLImageElement;
-            if (!img) {
+            if (!img || img.dataset.ddSrc !== src) {
               img = new Image();
+              img.dataset.ddSrc = src;
+              img.onload = requestPreviewRender;
+              img.onerror = requestPreviewRender;
               img.src = src;
               mediaCache.current[clip.id] = img;
             }
@@ -1064,11 +1107,30 @@ export default function PreviewCanvas() {
               continue;
             }
             let vid = mediaCache.current[clip.id] as HTMLVideoElement;
-            if (!vid) {
+            if (!vid || vid.dataset.ddSrc !== src) {
+              if (vid) {
+                vid.pause();
+                delete videoFrameCache.current[clip.id];
+              }
               vid = document.createElement('video');
               vid.crossOrigin = 'anonymous';
+              vid.dataset.ddSrc = src;
               vid.src = src;
               vid.preload = 'auto';
+              vid.onloadedmetadata = requestPreviewRender;
+              vid.onloadeddata = () => {
+                cacheVideoFrame(clip.id, vid);
+                requestPreviewRender();
+              };
+              vid.oncanplay = () => {
+                cacheVideoFrame(clip.id, vid);
+                requestPreviewRender();
+              };
+              vid.onseeked = () => {
+                cacheVideoFrame(clip.id, vid);
+                requestPreviewRender();
+              };
+              vid.onerror = requestPreviewRender;
               vid.load();
               mediaCache.current[clip.id] = vid;
             }
@@ -1088,14 +1150,17 @@ export default function PreviewCanvas() {
               vid.pause();
             }
 
-            if (vid.readyState >= 2 && track.type === 'video') { // HAVE_CURRENT_DATA
-              const sourceW = vid.videoWidth || w;
-              const sourceH = vid.videoHeight || h;
+            const cachedVideoFrame = videoFrameCache.current[clip.id];
+            const drawableVideo = vid.readyState >= 2 && (!vid.seeking || !cachedVideoFrame) ? vid : cachedVideoFrame;
+            if (drawableVideo && track.type === 'video') { // HAVE_CURRENT_DATA or cached still
+              if (vid.readyState >= 2 && !vid.seeking) cacheVideoFrame(clip.id, vid);
+              const sourceW = drawableVideo instanceof HTMLVideoElement ? (drawableVideo.videoWidth || w) : drawableVideo.width;
+              const sourceH = drawableVideo instanceof HTMLVideoElement ? (drawableVideo.videoHeight || h) : drawableVideo.height;
               const sx = sourceW * crop.left;
               const sy = sourceH * crop.top;
               const sw = Math.max(1, sourceW * (1 - crop.left - crop.right));
               const sh = Math.max(1, sourceH * (1 - crop.top - crop.bottom));
-              drawWithTransform(() => offCtx.drawImage(vid, sx, sy, sw, sh, -drawW / 2, -drawH / 2, drawW, drawH));
+              drawWithTransform(() => offCtx.drawImage(drawableVideo, sx, sy, sw, sh, -drawW / 2, -drawH / 2, drawW, drawH));
               activeClipEffects
                 .filter(effect => effect.enabled && effect.type === 'text-overlay')
                 .forEach(effect => drawTextOverlayEffect(offCtx, effect, w, h, previewScale, Math.max(0, clipLocalTime - (effect.startOffset ?? 0))));

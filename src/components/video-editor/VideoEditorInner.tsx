@@ -9,6 +9,7 @@ import RightPanel from './panels/RightPanel';
 import Timeline from './timeline/Timeline';
 import StatusBar from './StatusBar';
 import ExportDialog from './export/ExportDialog';
+import EditPackageImportDialog from './import/EditPackageImportDialog';
 import PlaybackEngine from './preview/PlaybackEngine';
 import NewProjectModal from './NewProjectModal';
 import { Film, FolderOpen, Plus } from 'lucide-react';
@@ -204,6 +205,7 @@ export default function VideoEditorInner() {
           <Timeline />
           <StatusBar />
           {state.showExportDialog && <ExportDialog />}
+          {state.pendingEditPackage && <EditPackageImportDialog />}
           {state.contextMenu && (
             <div className="ve-context-menu" style={{ left: state.contextMenu.x, top: state.contextMenu.y }}
               onClick={() => dispatch({ type: 'CLOSE_CONTEXT_MENU' })}>
