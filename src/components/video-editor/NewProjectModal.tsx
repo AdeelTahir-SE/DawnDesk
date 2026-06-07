@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useVideoEditor } from '../../engine/video-editor/VideoEditorContext';
+import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
 import { Film, Monitor, Music2, Timer, X } from 'lucide-react';
+import { createVideoProject, useVideoEditor } from '../../engine/video-editor/VideoEditorContext';
 import type { ProjectSettings } from '../../engine/video-editor/types';
 
 const RESOLUTIONS = [
@@ -16,26 +18,54 @@ const FRAME_RATES = [24, 25, 30, 50, 60];
 
 const SAMPLE_RATES = [44100, 48000, 96000];
 
+function defaultProjectFileName(name: string): string {
+  const sanitized = name.trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').replace(/\.+$/g, '');
+  return `${sanitized || 'Untitled Project'}.ddvp`;
+}
+
 export default function NewProjectModal() {
   const { state, dispatch } = useVideoEditor();
   const [name, setName] = useState('Untitled Project');
   const [resolutionIdx, setResolutionIdx] = useState(1); // 1920x1080
   const [frameRate, setFrameRate] = useState(30);
   const [sampleRate, setSampleRate] = useState(48000);
+  const [isChoosingLocation, setIsChoosingLocation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!state.showNewProjectModal) return null;
 
-  const handleCreate = () => {
-    const res = RESOLUTIONS[resolutionIdx];
-    const settings: ProjectSettings = {
-      name,
-      width: res.width,
-      height: res.height,
-      frameRate,
-      sampleRate,
-      backgroundColor: '#000000',
-    };
-    dispatch({ type: 'NEW_PROJECT', payload: settings });
+  const handleCreate = async () => {
+    const projectName = name.trim() || 'Untitled Project';
+    setError(null);
+    setIsChoosingLocation(true);
+
+    try {
+      const projectPath = await save({
+        title: 'Choose where to store this DawnDesk project',
+        defaultPath: defaultProjectFileName(projectName),
+        filters: [{ name: 'DawnDesk Project', extensions: ['ddvp'] }],
+      });
+
+      if (!projectPath) return;
+
+      const res = RESOLUTIONS[resolutionIdx];
+      const settings: ProjectSettings = {
+        name: projectName,
+        width: res.width,
+        height: res.height,
+        frameRate,
+        sampleRate,
+        backgroundColor: '#000000',
+      };
+      const project = createVideoProject(settings);
+
+      await invoke('ve_save_project', { path: projectPath, projectData: JSON.stringify(project) });
+      dispatch({ type: 'NEW_PROJECT', payload: { project, projectPath } });
+    } catch {
+      setError('Choose a writable project location before creating the timeline.');
+    } finally {
+      setIsChoosingLocation(false);
+    }
   };
 
   return (
@@ -65,6 +95,12 @@ export default function NewProjectModal() {
               className="dd-input"
             />
           </div>
+
+          {error && (
+            <div className="ve-new-project-field ve-new-project-field-wide rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100">
+              {error}
+            </div>
+          )}
 
           <div className="ve-new-project-field ve-new-project-field-wide">
             <label className="dd-form-label"><Monitor size={13} /> Resolution</label>
@@ -116,8 +152,9 @@ export default function NewProjectModal() {
           <button 
             className="dd-btn-primary" 
             onClick={handleCreate}
+            disabled={isChoosingLocation}
           >
-            Create Project
+            {isChoosingLocation ? 'Choosing Location...' : 'Create Project'}
           </button>
         </div>
       </div>

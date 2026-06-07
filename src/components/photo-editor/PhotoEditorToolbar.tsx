@@ -162,7 +162,6 @@ function ToolGroupButton({ group, activeTool, selectedInGroup, onSelectTool }: T
             e.preventDefault();
             e.stopPropagation();
             onSelectTool(displayTool.type);
-            setOpen(true);
           }}
           title={`${displayTool.name} (${displayTool.shortcut})`}
         >

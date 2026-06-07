@@ -71,6 +71,7 @@ export default function PhotoEditorOptionsBar() {
       case 'eraser':
       case 'clone-stamp':
       case 'healing-brush':
+      case 'spot-heal':
       case 'quick-selection':
         return (
           <>

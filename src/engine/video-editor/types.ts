@@ -638,7 +638,7 @@ export interface ContextMenuItem {
 
 export type VideoEditorAction =
   // Project
-  | { type: 'NEW_PROJECT'; payload: ProjectSettings }
+  | { type: 'NEW_PROJECT'; payload: { project: Project; projectPath?: string | null } }
   | { type: 'LOAD_PROJECT'; payload: Project }
   | { type: 'CLOSE_PROJECT' }
   | { type: 'SET_PROJECT_NAME'; payload: string }

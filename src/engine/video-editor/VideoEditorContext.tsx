@@ -12,6 +12,8 @@ import type {
   TimelineEffect,
   MediaItem,
   HistorySnapshot,
+  Project,
+  ProjectSettings,
 } from './types';
 import {
   DEFAULT_COLOR_GRADING,
@@ -302,6 +304,23 @@ function applyAudioBalance(tracks: Track[], targetIds: Set<string>): Track[] {
   }));
 }
 
+export function createVideoProject(settings: ProjectSettings): Project {
+  return {
+    id: generateId(),
+    name: settings.name,
+    settings: { ...settings },
+    tracks: [],
+    mediaPool: [],
+    mediaFolders: [],
+    markers: [],
+    subtitles: [],
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    duration: 0,
+    notes: '',
+  };
+}
+
 /* ── Initial State ─────────────────────────────────────────────────────── */
 
 export const initialState: VideoEditorState = {
@@ -402,24 +421,12 @@ function baseReducer(state: VideoEditorState, action: VideoEditorAction): VideoE
 
     // ── Project ─────────────────────────────────────────────────────────
     case 'NEW_PROJECT': {
-      const newProject = {
-        id: generateId(),
-        name: action.payload.name,
-        settings: { ...action.payload },
-        tracks: [],
-        mediaPool: [],
-        mediaFolders: [],
-        markers: [],
-        subtitles: [],
-        createdAt: Date.now(),
-        modifiedAt: Date.now(),
-        duration: 0,
-        notes: '',
-      };
+      const { project: newProject, projectPath = null } = action.payload;
       return {
         ...initialState,
         ffmpegStatus: state.ffmpegStatus,
         project: newProject,
+        projectPath,
         isDirty: false,
         history: [],
         historyIndex: -1,

@@ -535,7 +535,12 @@ export default function PhotoEditorCanvas() {
       if (!editImageData || !activeDocument?.imageData) return;
       const coords = getImageCoords(e);
 
-      if (isDrawing.current && lastPoint.current && drawCanvas.current) {
+      if (
+        isDrawing.current &&
+        lastPoint.current &&
+        drawCanvas.current &&
+        (state.activeTool === 'brush' || state.activeTool === 'pencil' || state.activeTool === 'eraser')
+      ) {
         const tmpCtx = drawCanvas.current.getContext('2d')!;
         const { opacity } = state.brushOptions;
         const size = state.activeTool === 'pencil' ? 1 : state.brushOptions.size;
@@ -1212,12 +1217,11 @@ function spotHeal(imageData: ImageData, x: number, y: number, size: number) {
   const ctx = canvas.getContext('2d')!;
   ctx.putImageData(imageData, 0, 0);
   const radius = Math.max(2, Math.round(size / 2));
-  const sample = ctx.getImageData(
-    Math.max(0, Math.round(x - radius * 2)),
-    Math.max(0, Math.round(y - radius * 2)),
-    Math.min(imageData.width, radius * 4),
-    Math.min(imageData.height, radius * 4)
-  ).data;
+  const sampleX = Math.max(0, Math.round(x - radius * 2));
+  const sampleY = Math.max(0, Math.round(y - radius * 2));
+  const sampleWidth = Math.max(1, Math.min(imageData.width - sampleX, radius * 4));
+  const sampleHeight = Math.max(1, Math.min(imageData.height - sampleY, radius * 4));
+  const sample = ctx.getImageData(sampleX, sampleY, sampleWidth, sampleHeight).data;
   let r = 0, g = 0, b = 0, count = 0;
   for (let i = 0; i < sample.length; i += 4) {
     r += sample[i]; g += sample[i + 1]; b += sample[i + 2]; count++;
