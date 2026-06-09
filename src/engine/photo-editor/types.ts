@@ -255,7 +255,7 @@ export type EditorAction =
   | { type: 'UPDATE_ADJUSTMENT'; payload: { key: keyof AdjustmentState; value: number } }
   | { type: 'COMMIT_ADJUSTMENT' }
   | { type: 'RESET_ADJUSTMENTS' }
-  | { type: 'APPLY_TOOL_RESULT'; payload: { imageData: ImageData; label: string } }
+  | { type: 'APPLY_TOOL_RESULT'; payload: { imageData: ImageData; label: string; targetLayerId?: string } }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'SET_ZOOM'; payload: number }

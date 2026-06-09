@@ -8,6 +8,7 @@ import type { LayerInfo } from '../../engine/photo-editor/types';
 type LayerBounds = { x: number; y: number; width: number; height: number };
 type TransformMode = 'move' | 'nw' | 'ne' | 'se' | 'sw';
 type TransformDrag = {
+  layerId: string;
   mode: TransformMode;
   start: { x: number; y: number };
   originalBounds: LayerBounds;
@@ -326,32 +327,18 @@ export default function PhotoEditorCanvas() {
       if (e.button !== 0) return;
 
       if (state.activeTool === 'move') {
-        // Auto-select: pick topmost visible layer under cursor
-        if (state.autoSelect && activeDocument) {
-          for (let i = 0; i < state.layers.length; i++) {
-            const layer = state.layers[i];
-            if (!layer.visible || !layer.imageData) continue;
-            const px = Math.floor(coords.x);
-            const py = Math.floor(coords.y);
-            if (px < 0 || py < 0 || px >= layer.imageData.width || py >= layer.imageData.height) continue;
-            const idx = (py * layer.imageData.width + px) * 4;
-            if (layer.imageData.data[idx + 3] > 0) {
-              if (layer.id !== state.activeLayerId) {
-                dispatch({ type: 'SET_ACTIVE_LAYER', payload: layer.id });
-              }
-              break;
-            }
-          }
+        const pickedLayer = state.autoSelect ? findTopLayerAtPoint(state.layers, coords) : null;
+        if (pickedLayer && pickedLayer.id !== state.activeLayerId) {
+          dispatch({ type: 'SET_ACTIVE_LAYER', payload: pickedLayer.id });
         }
 
-        const currentEditLayer = state.autoSelect
-          ? state.layers.find((l) => !l.locked && l.visible && l.imageData)
-          : editableLayer;
+        const currentEditLayer = pickedLayer && !pickedLayer.locked ? pickedLayer : editableLayer;
         const currentEditImageData = currentEditLayer?.imageData ?? editImageData;
         const currentBounds = currentEditImageData ? getLayerBounds(currentEditImageData) : activeLayerBounds;
 
         if (currentEditImageData && currentBounds && pointInBounds(coords, currentBounds)) {
           transformDrag.current = {
+            layerId: currentEditLayer!.id,
             mode: 'move',
             start: coords,
             originalBounds: currentBounds,
@@ -510,7 +497,22 @@ export default function PhotoEditorCanvas() {
         }
       }
     },
-    [activeDocument, activeLayer, activeLayerBounds, editImageData, state.activeTool, state.brushOptions, state.foregroundColor, getImageCoords, dispatch, zoom]
+    [
+      activeDocument,
+      activeLayer,
+      activeLayerBounds,
+      editableLayer,
+      editImageData,
+      state.activeTool,
+      state.autoSelect,
+      state.activeLayerId,
+      state.brushOptions,
+      state.foregroundColor,
+      state.layers,
+      getImageCoords,
+      dispatch,
+      zoom,
+    ]
   );
 
   // ─── Pointer Move ───────────────────────────────────────────────
@@ -609,17 +611,18 @@ export default function PhotoEditorCanvas() {
 
       if (transformDrag.current && activeDocument) {
         const drag = transformDrag.current;
-        if (activeLayer?.text) {
+        const draggedLayer = state.layers.find((layer) => layer.id === drag.layerId);
+        if (draggedLayer?.text) {
           const scale = drag.originalBounds.height > 0 ? drag.currentBounds.height / drag.originalBounds.height : 1;
           dispatch({
             type: 'UPDATE_TEXT_LAYER',
             payload: {
-              id: activeLayer.id,
+              id: draggedLayer.id,
               text: {
                 x: drag.currentBounds.x,
                 y: drag.currentBounds.y,
                 style: {
-                  fontSize: Math.max(1, Math.round(activeLayer.text.style.fontSize * scale)),
+                  fontSize: Math.max(1, Math.round(draggedLayer.text.style.fontSize * scale)),
                 },
               },
             },
@@ -629,7 +632,7 @@ export default function PhotoEditorCanvas() {
           return;
         }
         const transformed = transformLayerImageData(drag.imageData, drag.originalBounds, drag.currentBounds, activeDocument.width, activeDocument.height);
-        dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: transformed, label: 'Transform Layer' } });
+        dispatch({ type: 'APPLY_TOOL_RESULT', payload: { imageData: transformed, label: 'Transform Layer', targetLayerId: drag.layerId } });
         transformDrag.current = null;
         setPreviewLayerBounds(null);
         return;
@@ -715,7 +718,7 @@ export default function PhotoEditorCanvas() {
         setSelStart(null);
       }
     },
-    [activeDocument, activeLayer, editImageData, state.activeTool, state.shapeOptions, dispatch, getImageCoords, selStart]
+    [activeDocument, activeLayer, editImageData, state.activeTool, state.shapeOptions, state.layers, dispatch, getImageCoords, selStart]
   );
 
   // ─── Text commit handler ────────────────────────────────────────
@@ -783,11 +786,12 @@ export default function PhotoEditorCanvas() {
   };
 
   const startLayerResize = (mode: TransformMode, e: React.MouseEvent) => {
-    if (!editImageData || !activeLayerBounds) return;
+    if (!editableLayer || !editImageData || !activeLayerBounds) return;
     e.preventDefault();
     e.stopPropagation();
     const coords = getImageCoords(e);
     transformDrag.current = {
+      layerId: editableLayer.id,
       mode,
       start: coords,
       originalBounds: activeLayerBounds,
@@ -842,7 +846,7 @@ export default function PhotoEditorCanvas() {
               }}
             />
 
-            {state.activeTool === 'move' && state.showTransformControls && activeLayerBounds && editableLayer && (
+            {state.activeTool === 'move' && activeLayerBounds && editableLayer && (
               <div
                 className="pe-layer-transform"
                 style={{
@@ -981,6 +985,20 @@ function pointInBounds(point: { x: number; y: number }, bounds: LayerBounds) {
     point.x <= bounds.x + bounds.width &&
     point.y >= bounds.y &&
     point.y <= bounds.y + bounds.height;
+}
+
+function findTopLayerAtPoint(layers: LayerInfo[], point: { x: number; y: number }) {
+  const px = Math.floor(point.x);
+  const py = Math.floor(point.y);
+
+  for (const layer of layers) {
+    if (!layer.visible || !layer.imageData) continue;
+    if (px < 0 || py < 0 || px >= layer.imageData.width || py >= layer.imageData.height) continue;
+    const idx = (py * layer.imageData.width + px) * 4;
+    if (layer.imageData.data[idx + 3] > 0) return layer;
+  }
+
+  return null;
 }
 
 function nextTransformBounds(

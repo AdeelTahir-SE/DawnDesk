@@ -1,4 +1,11 @@
+import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../../engine/photo-editor/EditorContext';
+import {
+  BUILT_IN_TEXT_FONTS,
+  getAvailableTextFonts,
+  loadTextFontFile,
+  type PhotoEditorFont,
+} from '../../engine/photo-editor/fontRegistry';
 
 const numberInputStyle = {
   width: 56,
@@ -14,9 +21,27 @@ const numberInputStyle = {
 
 export default function PhotoEditorOptionsBar() {
   const { state, dispatch, activeDocument } = useEditor();
+  const fontInputRef = useRef<HTMLInputElement>(null);
+  const [fonts, setFonts] = useState<PhotoEditorFont[]>(BUILT_IN_TEXT_FONTS);
+  const [fontMenuOpen, setFontMenuOpen] = useState(false);
+  const [fontStatus, setFontStatus] = useState('');
   const activeLayer = state.layers.find((layer) => layer.id === state.activeLayerId);
   const activeTextLayer = activeLayer?.text ? activeLayer : null;
   const textOptions = activeTextLayer?.text?.style ?? state.textOptions;
+  const selectedFont = fonts.find((font) => font.family === textOptions.fontFamily)
+    ?? { id: textOptions.fontFamily, name: textOptions.fontFamily, family: textOptions.fontFamily, source: 'built-in' as const };
+
+  useEffect(() => {
+    let mounted = true;
+    getAvailableTextFonts()
+      .then((availableFonts) => {
+        if (mounted) setFonts(availableFonts);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const updateTextOptions = (patch: Partial<typeof state.textOptions>) => {
     dispatch({ type: 'SET_TEXT_OPTIONS', payload: patch });
@@ -42,6 +67,21 @@ export default function PhotoEditorOptionsBar() {
     });
   };
 
+  const loadFontFile = async (file: File | null | undefined) => {
+    if (!file) return;
+    setFontStatus('Loading font...');
+    try {
+      const font = await loadTextFontFile(file);
+      setFonts((current) => [...current.filter((item) => item.name !== font.name), font]);
+      updateTextOptions({ fontFamily: font.family });
+      setFontStatus(`Loaded ${font.name}.`);
+    } catch (err) {
+      setFontStatus(String(err));
+    } finally {
+      if (fontInputRef.current) fontInputRef.current.value = '';
+    }
+  };
+
   const resizeActiveDocument = () => {
     const width = Number((document.getElementById('pe-resize-width') as HTMLInputElement)?.value);
     const height = Number((document.getElementById('pe-resize-height') as HTMLInputElement)?.value);
@@ -58,10 +98,6 @@ export default function PhotoEditorOptionsBar() {
             <label className="pe-options-bar__checkbox">
               <input checked={state.autoSelect} type="checkbox" onChange={(e) => dispatch({ type: 'SET_AUTO_SELECT', payload: e.target.checked })} />
               Auto-Select
-            </label>
-            <label className="pe-options-bar__checkbox">
-              <input checked={state.showTransformControls} type="checkbox" onChange={(e) => dispatch({ type: 'SET_SHOW_TRANSFORM_CONTROLS', payload: e.target.checked })} />
-              Transform Controls
             </label>
           </>
         );
@@ -101,9 +137,46 @@ export default function PhotoEditorOptionsBar() {
                 <div className="pe-options-bar__separator" />
               </>
             )}
-            <select className="pe-options-bar__select" value={textOptions.fontFamily} onChange={(e) => updateTextOptions({ fontFamily: e.target.value })}>
-              {['Arial', 'Helvetica', 'Georgia', 'Times New Roman', 'Courier New', 'Verdana', 'Impact'].map((font) => <option key={font} value={font}>{font}</option>)}
-            </select>
+            <div className="pe-font-picker">
+              <button
+                className="pe-font-picker__trigger"
+                type="button"
+                onClick={() => setFontMenuOpen((open) => !open)}
+                title="Choose a font"
+              >
+                <span className="pe-font-picker__name">{selectedFont.name}</span>
+                <span className="pe-font-picker__preview" style={{ fontFamily: selectedFont.family }}>Preview</span>
+              </button>
+              {fontMenuOpen && (
+                <div className="pe-font-picker__menu">
+                  {fonts.map((font) => (
+                    <button
+                      key={font.id}
+                      className={`pe-font-picker__option ${font.family === textOptions.fontFamily ? 'pe-font-picker__option--active' : ''}`}
+                      type="button"
+                      onClick={() => {
+                        updateTextOptions({ fontFamily: font.family });
+                        setFontMenuOpen(false);
+                      }}
+                    >
+                      <span className="pe-font-picker__option-name">{font.name}</span>
+                      <span className="pe-font-picker__option-preview" style={{ fontFamily: font.family }}>Preview</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              ref={fontInputRef}
+              type="file"
+              accept=".ttf,.otf,font/ttf,font/otf"
+              style={{ display: 'none' }}
+              onChange={(event) => loadFontFile(event.target.files?.[0])}
+            />
+            <button className="pe-action-button" type="button" onClick={() => fontInputRef.current?.click()}>
+              Load Font
+            </button>
+            {fontStatus && <span className="pe-options-bar__label">{fontStatus}</span>}
             <select className="pe-options-bar__select" value={textOptions.fontWeight} onChange={(e) => updateTextOptions({ fontWeight: e.target.value as 'normal' | 'bold' })}>
               <option value="normal">Regular</option>
               <option value="bold">Bold</option>

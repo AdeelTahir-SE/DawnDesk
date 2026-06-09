@@ -1060,7 +1060,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
     case 'APPLY_TOOL_RESULT': {
       const stateWithHistory = pushHistory(state, action.payload.label);
-      const activeLayer = stateWithHistory.layers.find((layer) => layer.id === stateWithHistory.activeLayerId);
+      const targetLayerId = action.payload.targetLayerId ?? stateWithHistory.activeLayerId;
+      const activeLayer = stateWithHistory.layers.find((layer) => layer.id === targetLayerId);
       if (!activeLayer || activeLayer.locked) return state;
       const layers = activeLayer
         ? stateWithHistory.layers.map((layer) =>
@@ -1074,6 +1075,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         : action.payload.imageData;
       return {
         ...stateWithHistory,
+        activeLayerId: activeLayer.id,
         layers,
         documents: stateWithHistory.documents.map((d) =>
           d.id === stateWithHistory.activeDocumentId
